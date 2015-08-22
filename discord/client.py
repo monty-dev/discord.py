@@ -25,9 +25,10 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import requests
-import json, re
+import json, re, time
 import endpoints
 from collections import deque
+from threading import Timer
 from ws4py.client.threadedclient import WebSocketClient
 from sys import platform as sys_platform
 from errors import InvalidEventName, InvalidDestination
@@ -38,6 +39,20 @@ from message import Message
 
 def _null_event(*args, **kwargs):
     pass
+
+def _keep_alive_handler(seconds, ws):
+    def wrapper():
+        _keep_alive_handler(seconds, ws)
+        payload = {
+            'op': 1,
+            'd': int(time.time())
+        }
+
+        ws.send(json.dumps(payload))
+
+    t =  Timer(seconds, wrapper)
+    t.start()
+    return t
 
 class Client(object):
     """Represents a client connection that connects to Discord.
@@ -78,7 +93,8 @@ class Client(object):
             'on_error': _null_event,
             'on_response': _null_event,
             'on_message': _null_event,
-            'on_message_delete': _null_event
+            'on_message_delete': _null_event,
+            'on_message_edit': _null_event
         }
 
         self.ws = WebSocketClient(endpoints.WEBSOCKET_HUB, protocols=['http-only', 'chat'])
@@ -98,6 +114,17 @@ class Client(object):
         self.headers = {
             'authorization': self.token,
         }
+
+    def _get_message(self, msg_id):
+        return next((m for m in self.messages if m.id == msg_id), None)
+
+    def _resolve_mentions(self, content, mentions):
+        if isinstance(mentions, list):
+            return [user.id for user in mentions]
+        elif mentions == True:
+            return re.findall(r'@<(\d+)>', content)
+        else:
+            return []
 
     def _received_message(self, msg):
         response = json.loads(str(msg))
@@ -124,7 +151,8 @@ class Client(object):
                 self.private_channels.append(PrivateChannel(id=pm['id'], user=User(**pm['recipient'])))
 
             # set the keep alive interval..
-            self.ws.heartbeat_freq = data.get('heartbeat_interval')
+            interval = data.get('heartbeat_interval') / 1000.0
+            self.keep_alive = _keep_alive_handler(interval, self.ws)
 
             # we're all ready
             self.events['on_ready']()
@@ -136,16 +164,29 @@ class Client(object):
         elif event == 'MESSAGE_DELETE':
             channel = self.get_channel(data.get('channel_id'))
             message_id = data.get('id')
-            found = next((m for m in self.messages if m.id == message_id), None)
+            found = self._get_message(message_id)
             if found is not None:
                 self.events['on_message_delete'](found)
                 self.messages.remove(found)
+        elif event == 'MESSAGE_UPDATE':
+            # {u'edited_timestamp': u'2015-08-22T01:19:23.002892+00:00', u'attachments': [], u'channel_id': u'81840769509363712', u'tts': False, u'timestamp': u'2015-08-22T01:19:20.377000+00:00', u'author': {u'username': u'Danny', u'discriminator': u'9173', u'id': u'80088516616269824', u'avatar': u'd9dab18704d8cdcf5a022f9e913420fa'}, u'content': u'goodbye', u'embeds': [], u'mention_everyone': False, u'mentions': [], u'id': u'84456339153092608'}
+            older_message = self._get_message(data.get('id'))
+            if older_message is not None:
+                message = Message(channel=older_message.channel, **data)
+                self.events['on_message_edit'](older_message, message)
+                older_message.edited_timestamp = message.edited_timestamp
+            else:
+                # if we couldn't find the message in our cache, just add it to the list
+                channel = self.get_channel(data.get('channel_id'))
+                message = Message(channel=channel, **data)
+                self.messages.append(message)
+
 
     def _opened(self):
-        print('Opened!')
+        print('Opened at {}'.format(int(time.time())))
 
     def _closed(self, code, reason=None):
-        print('closed with ', code, reason)
+        print('Closed with {} ("{}") at {}'.format(code, reason, int(time.time())))
 
     def run(self):
         """Runs the client and allows it to receive messages and events."""
@@ -205,6 +246,7 @@ class Client(object):
         :param destination: The location to send the message.
         :param content: The content of the message to send.
         :param mentions: A list of :class:`User` to mention in the message or a boolean. Ignored for private messages.
+        :return: The :class:`Message` sent or None if error occurred.
         """
 
         channel_id = ''
@@ -224,13 +266,7 @@ class Client(object):
             raise InvalidDestination('Destination must be Channel, PrivateChannel, or User')
 
         content = str(content)
-
-        if isinstance(mentions, list):
-            mentions = [user.id for user in mentions]
-        elif mentions == True:
-            mentions = re.findall(r'@<(\d+)>', content)
-        else:
-            mentions = []
+        mentions = self._resolve_mentions(content, mentions)
 
         url = '{base}/{id}/messages'.format(base=endpoints.CHANNELS, id=channel_id)
         payload = {
@@ -241,6 +277,46 @@ class Client(object):
             payload['mentions'] = mentions
 
         response = requests.post(url, json=payload, headers=self.headers)
+        if response.status_code == 200:
+            data = response.json()
+            channel = self.get_channel(data.get('channel_id'))
+            message = Message(channel=channel, **data)
+            return message
+
+    def delete_message(self, message):
+        """Deletes a :class:`Message`
+
+        A fairly straightforward function.
+
+        :param message: The :class:`Message` to delete.
+        """
+        url = '{}/{}/messages/{}'.format(endpoints.CHANNELS, message.channel.id, message.id)
+        response = requests.delete(url, headers=self.headers)
+
+    def edit_message(self, message, new_content, mentions=True):
+        """Edits a :class:`Message` with the new message content.
+
+        The new_content must be able to be transformed into a string via ``str(new_content)``.
+
+        :param message: The :class:`Message` to edit.
+        :param new_content: The new content to replace the message with.
+        :param mentions: The mentions for the user. Same as :meth:`send_message`.
+        :return: The new edited message or None if an error occurred."""
+        channel = message.channel
+        content = str(new_content)
+
+        url = '{}/{}/messages/{}'.format(endpoints.CHANNELS, channel.id, message.id)
+        payload = {
+            'content': content
+        }
+
+        if not channel.is_private:
+            payload['mentions'] = self._resolve_mentions(content, mentions)
+
+        response = requests.patch(url, headers=self.headers, json=payload)
+        if response.status_code == 200:
+            data = response.json()
+            return Message(channel=channel, **data)
 
 
     def login(self, email, password):
@@ -270,16 +346,43 @@ class Client(object):
                     'token': self.token,
                     'properties': {
                         '$os': sys_platform,
-                        '$browser': 'pydiscord',
-                        '$device': 'pydiscord',
+                        '$browser': 'discord.py',
+                        '$device': 'discord.py',
                         '$referrer': '',
                         '$referring_domain': ''
-                    }
+                    },
+                    'v': 2
                 }
             }
 
             self.ws.send(json.dumps(second_payload))
             self._is_logged_in = True
+
+    def logs_from(self, channel, limit=500):
+        """A generator that obtains logs from a specified channel.
+
+        Yielding from the generator returns a :class:`Message` object with the message data.
+
+        Example: ::
+
+            for message in client.logs_from(channel):
+                if message.content.startswith('!hello'):
+                    client.edit_message(message, 'goodbye')
+
+
+        :param channel: The :class:`Channel` to obtain the logs from.
+        :param limit: The number of messages to retrieve.
+        """
+
+        url = '{}/{}/messages'.format(endpoints.CHANNELS, channel.id)
+        params = {
+            'limit': limit
+        }
+        response = requests.get(url, params=params, headers=self.headers)
+        if response.status_code == 200:
+            messages = response.json()
+            for message in messages:
+                yield Message(channel=channel, **message)
 
     def event(self, function):
         """A decorator that registers an event to listen to.
