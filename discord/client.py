@@ -94,7 +94,10 @@ class Client(object):
             'on_response': _null_event,
             'on_message': _null_event,
             'on_message_delete': _null_event,
-            'on_message_edit': _null_event
+            'on_message_edit': _null_event,
+            'on_status': _null_event,
+            'on_channel_delete': _null_event,
+            'on_channel_creation': _null_event,
         }
 
         self.ws = WebSocketClient(endpoints.WEBSOCKET_HUB, protocols=['http-only', 'chat'])
@@ -126,12 +129,18 @@ class Client(object):
         else:
             return []
 
+    def _invoke_event(self, event_name, *args, **kwargs):
+        try:
+            self.events[event_name](*args, **kwargs)
+        except Exception as e:
+            pass
+
     def _received_message(self, msg):
         response = json.loads(str(msg))
         if response.get('op') != 0:
             return
 
-        self.events['on_response'](response)
+        self._invoke_event('on_response', response)
         event = response.get('t')
         data = response.get('d')
 
@@ -155,7 +164,7 @@ class Client(object):
             self.keep_alive = _keep_alive_handler(interval, self.ws)
 
             # we're all ready
-            self.events['on_ready']()
+            self._invoke_event('on_ready')
         elif event == 'MESSAGE_CREATE':
             channel = self.get_channel(data.get('channel_id'))
             message = Message(channel=channel, **data)
@@ -169,17 +178,43 @@ class Client(object):
                 self.events['on_message_delete'](found)
                 self.messages.remove(found)
         elif event == 'MESSAGE_UPDATE':
-            # {u'edited_timestamp': u'2015-08-22T01:19:23.002892+00:00', u'attachments': [], u'channel_id': u'81840769509363712', u'tts': False, u'timestamp': u'2015-08-22T01:19:20.377000+00:00', u'author': {u'username': u'Danny', u'discriminator': u'9173', u'id': u'80088516616269824', u'avatar': u'd9dab18704d8cdcf5a022f9e913420fa'}, u'content': u'goodbye', u'embeds': [], u'mention_everyone': False, u'mentions': [], u'id': u'84456339153092608'}
             older_message = self._get_message(data.get('id'))
             if older_message is not None:
                 message = Message(channel=older_message.channel, **data)
-                self.events['on_message_edit'](older_message, message)
+                self._invoke_event('on_message_edit', older_message, message)
                 older_message.edited_timestamp = message.edited_timestamp
             else:
                 # if we couldn't find the message in our cache, just add it to the list
                 channel = self.get_channel(data.get('channel_id'))
                 message = Message(channel=channel, **data)
                 self.messages.append(message)
+        elif event == 'PRESENCE_UPDATE':
+            guild_id = data.get('guild_id')
+            server = next((s for s in self.servers if s.id == guild_id), None)
+            if server is not None:
+                status = data.get('status')
+                user = User(**data.get('user'))
+                # check to see if the member is in our server list of members
+                member = next((u for u in server.members if u == user), None)
+                if status == 'online':
+                    if member is None:
+                        server.members.append(user)
+                if status == 'offline':
+                    server.members.remove(user)
+
+                # call the event now
+                self._invoke_event('on_status', server, user, status, data.get('game_id'))
+        elif event == 'USER_UPDATE':
+            self.user = User(**data)
+        elif event == 'CHANNEL_DELETE':
+            guild_id = data.get('guild_id')
+            server =  next((s for s in self.servers if s.id == guild_id), None)
+            if server is not None:
+                channel_id = data.get('id')
+                channel = next((c for c in server.channels if c.id == channel_id), None)
+                server.channels.remove(channel)
+                self._invoke_event('on_channel_delete', channel)
+
 
 
     def _opened(self):
@@ -367,7 +402,8 @@ class Client(object):
 
             for message in client.logs_from(channel):
                 if message.content.startswith('!hello'):
-                    client.edit_message(message, 'goodbye')
+                    if message.author == client.user:
+                        client.edit_message(message, 'goodbye')
 
 
         :param channel: The :class:`Channel` to obtain the logs from.

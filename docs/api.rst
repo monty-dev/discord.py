@@ -18,6 +18,7 @@ Event Reference
 ~~~~~~~~~~~~~~~~
 
 This page outlines the different types of events listened to by :meth:`Client.event`.
+All events are 'sandboxed', in that if an exception is thrown while the event is called then it is caught and then ignored.
 
 
 .. function:: on_ready()
@@ -34,7 +35,8 @@ This page outlines the different types of events listened to by :meth:`Client.ev
 .. function:: on_response(response)
 
     Called whenever a message is received from the websocket. Used mainly for debugging purposes.
-    The parameter passed is raw data that was parsed via ``json.loads``.
+    The parameter passed is raw data that was parsed via ``json.loads``. Note that this is called
+    before the :class:`Client` processes the event.
 
     :param response: The received message response after gone through ``json.loads``.
 
@@ -50,6 +52,24 @@ This page outlines the different types of events listened to by :meth:`Client.ev
     :param before: A :class:`Message` of the previous version of the message.
     :param after: A :class:`Message` of the current version of the message.
 
+.. function:: on_status(server, user, status, game_id):
+
+    Called whenever a user changes their status or game playing status.
+
+    The status is usually either "idle", "online" or "offline".
+
+    :param server: The :class:`Server` the user belongs to.
+    :param user: The :class:`User` whose status changed.
+    :param status: The new status of the user.
+    :param game_id: The game ID that the user is playing. Can be None.
+
+.. function:: on_channel_delete(channel)
+
+    Called whenever a channel is removed from a server.
+
+    Note that you can get the server from :attr:`Channel.server`.
+
+    :param channel: The :class:`Channel` that got deleted.
 
 Data Classes
 --------------
