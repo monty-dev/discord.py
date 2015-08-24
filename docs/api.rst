@@ -26,6 +26,10 @@ All events are 'sandboxed', in that if an exception is thrown while the event is
     Called when the client is done preparing the data received from Discord. Usually after login is successful
     and the :attr:`Client.servers` and co. are filled up.
 
+.. function:: on_disconnect()
+
+    Called when the client disconnects for whatever reason. Be it error or manually.
+
 .. function:: on_message(message)
 
     Called when a message is created and sent to a server.
@@ -64,12 +68,15 @@ All events are 'sandboxed', in that if an exception is thrown while the event is
     :param game_id: The game ID that the user is playing. Can be None.
 
 .. function:: on_channel_delete(channel)
+              on_channel_create(channel)
 
-    Called whenever a channel is removed from a server.
+    Called whenever a channel is removed or added from a server.
 
     Note that you can get the server from :attr:`Channel.server`.
+    :func:`on_channel_create` could also pass in a :class:`PrivateChannel` depending
+    on the value of :attr:`Channel.is_private`.
 
-    :param channel: The :class:`Channel` that got deleted.
+    :param channel: The :class:`Channel` that got added or deleted.
 
 Data Classes
 --------------

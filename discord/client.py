@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import requests
-import json, re, time
+import json, re, time, copy
 import endpoints
 from collections import deque
 from threading import Timer
@@ -97,7 +97,7 @@ class Client(object):
             'on_message_edit': _null_event,
             'on_status': _null_event,
             'on_channel_delete': _null_event,
-            'on_channel_creation': _null_event,
+            'on_channel_create': _null_event,
         }
 
         self.ws = WebSocketClient(endpoints.WEBSOCKET_HUB, protocols=['http-only', 'chat'])
@@ -110,7 +110,6 @@ class Client(object):
         self.ws.opened = self._opened
         self.ws.closed = self._closed
         self.ws.received_message = self._received_message
-        self.ws.connect()
 
         # the actual headers for the request...
         # we only override 'authorization' since the rest could use the defaults.
@@ -180,14 +179,21 @@ class Client(object):
         elif event == 'MESSAGE_UPDATE':
             older_message = self._get_message(data.get('id'))
             if older_message is not None:
-                message = Message(channel=older_message.channel, **data)
+                # create a copy of the new message
+                message = copy.deepcopy(older_message)
+                # update the new update
+                for attr in data:
+                    if attr == 'channel_id':
+                        continue
+                    value = data[attr]
+                    if 'time' in attr:
+                        setattr(message, attr, message._parse_time(value))
+                    else:
+                        setattr(message, attr, value)
                 self._invoke_event('on_message_edit', older_message, message)
-                older_message.edited_timestamp = message.edited_timestamp
-            else:
-                # if we couldn't find the message in our cache, just add it to the list
-                channel = self.get_channel(data.get('channel_id'))
-                message = Message(channel=channel, **data)
-                self.messages.append(message)
+                # update the older message
+                older_message = message
+
         elif event == 'PRESENCE_UPDATE':
             guild_id = data.get('guild_id')
             server = next((s for s in self.servers if s.id == guild_id), None)
@@ -214,14 +220,29 @@ class Client(object):
                 channel = next((c for c in server.channels if c.id == channel_id), None)
                 server.channels.remove(channel)
                 self._invoke_event('on_channel_delete', channel)
+        elif event == 'CHANNEL_CREATE':
+            is_private = data.get('is_private', False)
+            channel = None
+            if is_private:
+                recipient = User(**data.get('recipient'))
+                pm_id = data.get('id')
+                channel = PrivateChannel(id=pm_id, user=recipient)
+                self.private_channels.append(channel)
+            else:
+                guild_id = data.get('guild_id')
+                server = next((s for s in self.servers if s.id == guild_id), None)
+                if server is not None:
+                    channel = Channel(server=server, **data)
+                    server.channels.append(channel)
 
-
+            self._invoke_event('on_channel_create', channel)
 
     def _opened(self):
         print('Opened at {}'.format(int(time.time())))
 
     def _closed(self, code, reason=None):
         print('Closed with {} ("{}") at {}'.format(code, reason, int(time.time())))
+        self._invoke_event('on_disconnect')
 
     def run(self):
         """Runs the client and allows it to receive messages and events."""
@@ -353,9 +374,9 @@ class Client(object):
             data = response.json()
             return Message(channel=channel, **data)
 
-
     def login(self, email, password):
-        """Logs in the user with the following credentials.
+        """Logs in the user with the following credentials and initialises
+        the connection to Discord.
 
         After this function is called, :attr:`is_logged_in` returns True if no
         errors occur.
@@ -363,6 +384,8 @@ class Client(object):
         :param str email: The email used to login.
         :param str password: The password used to login.
         """
+
+        self.ws.connect()
 
         payload = {
             'email': email,
@@ -392,6 +415,13 @@ class Client(object):
 
             self.ws.send(json.dumps(second_payload))
             self._is_logged_in = True
+
+    def logout(self):
+        """Logs out of Discord and closes all connections."""
+        response = requests.post(endpoints.LOGOUT)
+        self.ws.close()
+        self._is_logged_in = False
+        self.keep_alive.cancel()
 
     def logs_from(self, channel, limit=500):
         """A generator that obtains logs from a specified channel.
@@ -437,4 +467,35 @@ class Client(object):
 
         self.events[function.__name__] = function
         return function
+
+    def create_channel(self, server, name, type='text'):
+        """Creates a channel in the specified server.
+
+        In order to create the channel the client must have the proper permissions.
+
+        :param server: The :class:`Server` to create the channel from.
+        :param name: The name of the channel to create.
+        :param type: The type of channel to create. Valid values are 'text' or 'voice'.
+        :returns: The recently created :class:`Channel`.
+        """
+        url = '{}/{}/channels'.format(endpoints.SERVERS, server.id)
+        payload = {
+            'name': name,
+            'type': type
+        }
+        response = requests.post(url, json=payload, headers=self.headers)
+        if response.status_code == 200:
+            channel = Channel(server=server, **response.json())
+            return channel
+
+    def delete_channel(self, channel):
+        """Deletes a channel.
+
+        In order to delete the channel, the client must have the proper permissions
+        in the server the channel belongs to.
+
+        :param channel: The :class:`Channel` to delete.
+        """
+        url = '{}/{}'.format(endpoints.CHANNELS, channel.id)
+        response = requests.delete(url, headers=self.headers)
 
