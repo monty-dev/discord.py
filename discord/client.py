@@ -34,7 +34,7 @@ from sys import platform as sys_platform
 from errors import InvalidEventName, InvalidDestination
 from user import User
 from channel import Channel, PrivateChannel
-from server import Server
+from server import Server, Member, Permissions, Role
 from message import Message
 
 def _null_event(*args, **kwargs):
@@ -148,8 +148,8 @@ class Client(object):
             guilds = data.get('guilds')
 
             for guild in guilds:
-                guild['roles'] = [role.get('name') for role in guild['roles']]
-                guild['members'] = [User(**member['user']) for member in guild['members']]
+                guild['roles'] = [Role(**role) for role in guild['roles']]
+                guild['members'] = [Member(**member) for member in guild['members']]
 
                 self.servers.append(Server(**guild))
                 channels = [Channel(server=self.servers[-1], **channel) for channel in guild['channels']]
@@ -205,7 +205,7 @@ class Client(object):
                 if status == 'online':
                     if member is None:
                         server.members.append(user)
-                if status == 'offline':
+                if status == 'offline' and user in server.members:
                     server.members.remove(user)
 
                 # call the event now
@@ -281,7 +281,7 @@ class Client(object):
             'recipient_id': user.id
         }
 
-        r = response.post('{}/{}/channels'.format(endpoints.USERS, self.user.id), json=payload, headers=self.headers)
+        r = requests.post('{}/{}/channels'.format(endpoints.USERS, self.user.id), json=payload, headers=self.headers)
         if r.status_code == 200:
             data = r.json()
             self.private_channels.append(PrivateChannel(id=data['id'], user=user))
