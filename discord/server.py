@@ -68,16 +68,28 @@ class Member(User):
         An array of :class:`Role` that the member belongs to.
     .. attribute:: joined_at
 
-        A datetime object that specifies the date and time that the member joined the server for
+        A datetime object that specifies the date and time in UTC that the member joined the server for
         the first time.
+    ,, attribute:: status
+
+        A string that denotes the user's status. Can be 'online', 'offline' or 'idle'.
+    .. attribute:: game_id
+
+        The game ID that the user is currently playing. Could be None if no game is being played.
+    .. attribute:: server
+
+        The :class:`Server` that the member belongs to.
     """
 
-    def __init__(self, deaf, joined_at, user, roles, mute):
+    def __init__(self, deaf, joined_at, user, roles, mute, **kwargs):
         super(Member, self).__init__(**user)
         self.deaf = deaf
         self.mute = mute
         self.joined_at = datetime.datetime(*map(int, re.split(r'[^\d]', joined_at.replace('+00:00', ''))))
         self.roles = roles
+        self.status = 'offline'
+        self.game_id = kwargs.get('game_id', None)
+        self.server = kwargs.get('server', None)
 
 class Server(object):
     """Represents a Discord server.

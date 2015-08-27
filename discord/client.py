@@ -31,7 +31,7 @@ from collections import deque
 from threading import Timer
 from ws4py.client.threadedclient import WebSocketClient
 from sys import platform as sys_platform
-from errors import InvalidEventName, InvalidDestination
+from errors import InvalidEventName, InvalidDestination, GatewayNotFound
 from user import User
 from channel import Channel, PrivateChannel
 from server import Server, Member, Permissions, Role
@@ -98,9 +98,19 @@ class Client(object):
             'on_status': _null_event,
             'on_channel_delete': _null_event,
             'on_channel_create': _null_event,
+            'on_member_join': _null_event,
+            'on_member_remove': _null_event,
         }
 
-        self.ws = WebSocketClient(endpoints.WEBSOCKET_HUB, protocols=['http-only', 'chat'])
+        gateway = requests.get(endpoints.GATEWAY)
+        if gateway.status_code != 200:
+            raise GatewayNotFound()
+        gateway_js = gateway.json()
+        url = gateway_js.get('url')
+        if url is None:
+            raise GatewayNotFound()
+
+        self.ws = WebSocketClient(url, protocols=['http-only', 'chat'])
 
         # this is kind of hacky, but it's to avoid deadlocks.
         # i.e. python does not allow me to have the current thread running if it's self
@@ -119,6 +129,9 @@ class Client(object):
 
     def _get_message(self, msg_id):
         return next((m for m in self.messages if m.id == msg_id), None)
+
+    def _get_server(self, guild_id):
+        return next((s for s in self.servers if s.id == guild_id), None)
 
     def _resolve_mentions(self, content, mentions):
         if isinstance(mentions, list):
@@ -149,11 +162,60 @@ class Client(object):
 
             for guild in guilds:
                 guild['roles'] = [Role(**role) for role in guild['roles']]
-                guild['members'] = [Member(**member) for member in guild['members']]
+                # guild['members'] = [Member(**member) for member in guild['members']]
+                members = guild['members']
+                for i, member in enumerate(members):
+                    roles = member['roles']
+                    for j, roleid in enumerate(roles):
+                        role = next((r for r in guild['roles'] if r.id == roleid), None)
+                        if role is not None:
+                            roles[j] = role
+                    members[i] = Member(**member)
 
-                self.servers.append(Server(**guild))
-                channels = [Channel(server=self.servers[-1], **channel) for channel in guild['channels']]
-                self.servers[-1].channels = channels
+                for presence in guild['presences']:
+                    user_id = presence['user']['id']
+                    member = next((m for m in members if m.id == user_id), None)
+                    if member is not None:
+                        member.status = presence['status']
+                        member.game_id = presence['game_id']
+
+
+                server = Server(**guild)
+
+                # give all the members their proper server
+                for member in server.members:
+                    member.server = server
+
+                for channel in guild['channels']:
+                    changed_roles = []
+                    permission_overwrites = channel['permission_overwrites']
+
+                    for overridden in permission_overwrites:
+                        # this is pretty inefficient due to the deep nested loops unfortunately
+                        role = next((role for role in guild['roles'] if role.id == overridden['id']), None)
+                        if role is None:
+                            continue
+                        denied = overridden.get('deny', 0)
+                        allowed = overridden.get('allow', 0)
+                        override = copy.deepcopy(role)
+
+                        # Basically this is what's happening here.
+                        # We have an original bit array, e.g. 1010
+                        # Then we have another bit array that is 'denied', e.g. 1111
+                        # And then we have the last one which is 'allowed', e.g. 0101
+                        # We want original OP denied to end up resulting in whatever is in denied to be set to 0.
+                        # So 1010 OP 1111 -> 0000
+                        # Then we take this value and look at the allowed values. And whatever is allowed is set to 1.
+                        # So 0000 OP2 0101 -> 0101
+                        # The OP is (base ^ denied) & ~denied.
+                        # The OP2 is base | allowed.
+                        override.permissions.value = ((override.permissions.value ^ denied) & ~denied) | allowed
+                        changed_roles.append(override)
+
+                    channel['permission_overwrites'] = changed_roles
+                channels = [Channel(server=server, **channel) for channel in guild['channels']]
+                server.channels = channels
+                self.servers.append(server)
 
             for pm in data.get('private_channels'):
                 self.private_channels.append(PrivateChannel(id=pm['id'], user=User(**pm['recipient'])))
@@ -195,26 +257,20 @@ class Client(object):
                 older_message = message
 
         elif event == 'PRESENCE_UPDATE':
-            guild_id = data.get('guild_id')
-            server = next((s for s in self.servers if s.id == guild_id), None)
+            server = self._get_server(data.get('guild_id'))
             if server is not None:
                 status = data.get('status')
-                user = User(**data.get('user'))
-                # check to see if the member is in our server list of members
-                member = next((u for u in server.members if u == user), None)
-                if status == 'online':
-                    if member is None:
-                        server.members.append(user)
-                if status == 'offline' and user in server.members:
-                    server.members.remove(user)
-
-                # call the event now
-                self._invoke_event('on_status', server, user, status, data.get('game_id'))
+                member_id = data['user']['id']
+                member = next((u for u in server.members if u.id == member_id), None)
+                if member is not None:
+                    member.status = data.get('status')
+                    member.game_id = data.get('game_id')
+                    # call the event now
+                    self._invoke_event('on_status', member)
         elif event == 'USER_UPDATE':
             self.user = User(**data)
         elif event == 'CHANNEL_DELETE':
-            guild_id = data.get('guild_id')
-            server =  next((s for s in self.servers if s.id == guild_id), None)
+            server =  self._get_server(data.get('guild_id'))
             if server is not None:
                 channel_id = data.get('id')
                 channel = next((c for c in server.channels if c.id == channel_id), None)
@@ -229,13 +285,23 @@ class Client(object):
                 channel = PrivateChannel(id=pm_id, user=recipient)
                 self.private_channels.append(channel)
             else:
-                guild_id = data.get('guild_id')
-                server = next((s for s in self.servers if s.id == guild_id), None)
+                server = self._get_server(data.get('guild_id'))
                 if server is not None:
                     channel = Channel(server=server, **data)
                     server.channels.append(channel)
 
             self._invoke_event('on_channel_create', channel)
+        elif event == 'GUILD_MEMBER_ADD':
+            server = self._get_server(data.get('guild_id'))
+            member = Member(deaf=False, mute=False, **data)
+            server.members.append(member)
+            self._invoke_event('on_member_join', member)
+        elif event == 'GUILD_MEMBER_REMOVE':
+            server = self._get_server(data.get('guild_id'))
+            user_id = data['user']['id']
+            member = next((m for m in server.members if m.id == user_id), None)
+            server.members.remove(member)
+            self._invoke_event('on_member_remove', member)
 
     def _opened(self):
         print('Opened at {}'.format(int(time.time())))
