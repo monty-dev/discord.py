@@ -15,13 +15,13 @@ __title__ = 'discord'
 __author__ = 'Rapptz'
 __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Rapptz'
-__version__ = '0.3.1'
-__build__ = 0x003010
+__version__ = '0.4.1'
+__build__ = 0x004010
 
-from client import Client
-from user import User
-from channel import Channel, PrivateChannel
-from server import Server, Member, Permissions, Role
-from message import Message
-from errors import *
-from permissions import Permissions
+from .client import Client
+from .user import User
+from .channel import Channel, PrivateChannel
+from .server import Server, Member, Permissions, Role
+from .message import Message
+from .errors import *
+from .permissions import Permissions
