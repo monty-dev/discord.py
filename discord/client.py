@@ -76,6 +76,9 @@ class Client(object):
      .. attribute:: messages
 
         A deque_ of :class:`Message` that the client has received from all servers and private messages.
+    .. attribute:: email
+
+        The email used to login. This is only set if login is successful, otherwise it's None.
 
     .. _deque: https://docs.python.org/3.4/library/collections.html#collections.deque
     """
@@ -83,6 +86,7 @@ class Client(object):
     def __init__(self, **kwargs):
         self._is_logged_in = False
         self.user = None
+        self.email = None
         self.servers = []
         self.private_channels = []
         self.token = ''
@@ -100,26 +104,9 @@ class Client(object):
             'on_channel_create': _null_event,
             'on_member_join': _null_event,
             'on_member_remove': _null_event,
+            'on_server_create': _null_event,
+            'on_server_delete': _null_event,
         }
-
-        gateway = requests.get(endpoints.GATEWAY)
-        if gateway.status_code != 200:
-            raise GatewayNotFound()
-        gateway_js = gateway.json()
-        url = gateway_js.get('url')
-        if url is None:
-            raise GatewayNotFound()
-
-        self.ws = WebSocketClient(url, protocols=['http-only', 'chat'])
-
-        # this is kind of hacky, but it's to avoid deadlocks.
-        # i.e. python does not allow me to have the current thread running if it's self
-        # it throws a 'cannot join current thread' RuntimeError
-        # So instead of doing a basic inheritance scheme, we're overriding the member functions.
-
-        self.ws.opened = self._opened
-        self.ws.closed = self._closed
-        self.ws.received_message = self._received_message
 
         # the actual headers for the request...
         # we only override 'authorization' since the rest could use the defaults.
@@ -132,6 +119,62 @@ class Client(object):
 
     def _get_server(self, guild_id):
         return next((s for s in self.servers if s.id == guild_id), None)
+
+    def _add_server(self, guild):
+        guild['roles'] = [Role(**role) for role in guild['roles']]
+        members = guild['members']
+        for i, member in enumerate(members):
+            roles = member['roles']
+            for j, roleid in enumerate(roles):
+                role = next((r for r in guild['roles'] if r.id == roleid), None)
+                if role is not None:
+                    roles[j] = role
+            members[i] = Member(**member)
+
+        for presence in guild['presences']:
+            user_id = presence['user']['id']
+            member = next((m for m in members if m.id == user_id), None)
+            if member is not None:
+                member.status = presence['status']
+                member.game_id = presence['game_id']
+
+
+        server = Server(**guild)
+
+        # give all the members their proper server
+        for member in server.members:
+            member.server = server
+
+        for channel in guild['channels']:
+            changed_roles = []
+            permission_overwrites = channel['permission_overwrites']
+
+            for overridden in permission_overwrites:
+                # this is pretty inefficient due to the deep nested loops unfortunately
+                role = next((role for role in guild['roles'] if role.id == overridden['id']), None)
+                if role is None:
+                    continue
+                denied = overridden.get('deny', 0)
+                allowed = overridden.get('allow', 0)
+                override = copy.deepcopy(role)
+
+                # Basically this is what's happening here.
+                # We have an original bit array, e.g. 1010
+                # Then we have another bit array that is 'denied', e.g. 1111
+                # And then we have the last one which is 'allowed', e.g. 0101
+                # We want original OP denied to end up resulting in whatever is in denied to be set to 0.
+                # So 1010 OP 1111 -> 0000
+                # Then we take this value and look at the allowed values. And whatever is allowed is set to 1.
+                # So 0000 OP2 0101 -> 0101
+                # The OP is (base ^ denied) & ~denied.
+                # The OP2 is base | allowed.
+                override.permissions.value = ((override.permissions.value ^ denied) & ~denied) | allowed
+                changed_roles.append(override)
+
+            channel['permission_overwrites'] = changed_roles
+        channels = [Channel(server=server, **channel) for channel in guild['channels']]
+        server.channels = channels
+        self.servers.append(server)
 
     def _resolve_mentions(self, content, mentions):
         if isinstance(mentions, list):
@@ -161,60 +204,7 @@ class Client(object):
             guilds = data.get('guilds')
 
             for guild in guilds:
-                guild['roles'] = [Role(**role) for role in guild['roles']]
-                members = guild['members']
-                for i, member in enumerate(members):
-                    roles = member['roles']
-                    for j, roleid in enumerate(roles):
-                        role = next((r for r in guild['roles'] if r.id == roleid), None)
-                        if role is not None:
-                            roles[j] = role
-                    members[i] = Member(**member)
-
-                for presence in guild['presences']:
-                    user_id = presence['user']['id']
-                    member = next((m for m in members if m.id == user_id), None)
-                    if member is not None:
-                        member.status = presence['status']
-                        member.game_id = presence['game_id']
-
-
-                server = Server(**guild)
-
-                # give all the members their proper server
-                for member in server.members:
-                    member.server = server
-
-                for channel in guild['channels']:
-                    changed_roles = []
-                    permission_overwrites = channel['permission_overwrites']
-
-                    for overridden in permission_overwrites:
-                        # this is pretty inefficient due to the deep nested loops unfortunately
-                        role = next((role for role in guild['roles'] if role.id == overridden['id']), None)
-                        if role is None:
-                            continue
-                        denied = overridden.get('deny', 0)
-                        allowed = overridden.get('allow', 0)
-                        override = copy.deepcopy(role)
-
-                        # Basically this is what's happening here.
-                        # We have an original bit array, e.g. 1010
-                        # Then we have another bit array that is 'denied', e.g. 1111
-                        # And then we have the last one which is 'allowed', e.g. 0101
-                        # We want original OP denied to end up resulting in whatever is in denied to be set to 0.
-                        # So 1010 OP 1111 -> 0000
-                        # Then we take this value and look at the allowed values. And whatever is allowed is set to 1.
-                        # So 0000 OP2 0101 -> 0101
-                        # The OP is (base ^ denied) & ~denied.
-                        # The OP2 is base | allowed.
-                        override.permissions.value = ((override.permissions.value ^ denied) & ~denied) | allowed
-                        changed_roles.append(override)
-
-                    channel['permission_overwrites'] = changed_roles
-                channels = [Channel(server=server, **channel) for channel in guild['channels']]
-                server.channels = channels
-                self.servers.append(server)
+                self._add_server(guild)
 
             for pm in data.get('private_channels'):
                 self.private_channels.append(PrivateChannel(id=pm['id'], user=User(**pm['recipient'])))
@@ -228,14 +218,14 @@ class Client(object):
         elif event == 'MESSAGE_CREATE':
             channel = self.get_channel(data.get('channel_id'))
             message = Message(channel=channel, **data)
-            self.events['on_message'](message)
+            self._invoke_event('on_message', message)
             self.messages.append(message)
         elif event == 'MESSAGE_DELETE':
             channel = self.get_channel(data.get('channel_id'))
             message_id = data.get('id')
             found = self._get_message(message_id)
             if found is not None:
-                self.events['on_message_delete'](found)
+                self._invoke_event('on_message_delete', found)
                 self.messages.remove(found)
         elif event == 'MESSAGE_UPDATE':
             older_message = self._get_message(data.get('id'))
@@ -301,6 +291,13 @@ class Client(object):
             member = next((m for m in server.members if m.id == user_id), None)
             server.members.remove(member)
             self._invoke_event('on_member_remove', member)
+        elif event == 'GUILD_CREATE':
+            self._add_server(data)
+            self._invoke_event('on_server_create', self.servers[-1])
+        elif event == 'GUILD_DELETE':
+            server = self._get_server(data.get('id'))
+            self.servers.remove(server)
+            self._invoke_event('on_server_delete', server)
 
     def _opened(self):
         print('Opened at {}'.format(int(time.time())))
@@ -450,8 +447,6 @@ class Client(object):
         :param str password: The password used to login.
         """
 
-        self.ws.connect()
-
         payload = {
             'email': email,
             'password': password
@@ -460,9 +455,32 @@ class Client(object):
         r = requests.post(endpoints.LOGIN, json=payload)
 
         if r.status_code == 200:
+            self.email = email
+
             body = r.json()
             self.token = body['token']
             self.headers['authorization'] = self.token
+
+            gateway = requests.get(endpoints.GATEWAY, headers=self.headers)
+            if gateway.status_code != 200:
+                raise GatewayNotFound()
+            gateway_js = gateway.json()
+            url = gateway_js.get('url')
+            if url is None:
+                raise GatewayNotFound()
+
+            self.ws = WebSocketClient(url, protocols=['http-only', 'chat'])
+
+            # this is kind of hacky, but it's to avoid deadlocks.
+            # i.e. python does not allow me to have the current thread running if it's self
+            # it throws a 'cannot join current thread' RuntimeError
+            # So instead of doing a basic inheritance scheme, we're overriding the member functions.
+
+            self.ws.opened = self._opened
+            self.ws.closed = self._closed
+            self.ws.received_message = self._received_message
+            self.ws.connect()
+
             second_payload = {
                 'op': 2,
                 'd': {
@@ -564,3 +582,38 @@ class Client(object):
         url = '{}/{}'.format(endpoints.CHANNELS, channel.id)
         response = requests.delete(url, headers=self.headers)
 
+    def kick(self, server, user):
+        """Kicks a :class:`User` from their respective :class:`Server`.
+
+        You must have the proper permissions to kick a user in the server.
+
+        :param server: The :class:`Server` to kick the member from.
+        :param user: The :class:`User` to kick.
+        """
+
+        url = '{base}/{server}/members/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
+        response = requests.delete(url, headers=self.headers)
+
+    def ban(self, server, user):
+        """Bans a :class:`User` from their respective :class:`Server`.
+
+        You must have the proper permissions to ban a user in the server.
+
+        :param server: The :class:`Server` to ban the member from.
+        :param user: The :class:`User` to ban.
+        """
+
+        url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
+        response = requests.put(url, headers=self.headers)
+
+    def unban(self, server, name):
+        """Unbans a :class:`User` from their respective :class:`Server`.
+
+        You must have the proper permissions to unban a user in the server.
+
+        :param server: The :class:`Server` to unban the member from.
+        :param user: The :class:`User` to unban.
+        """
+
+        url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
+        response = requests.delete(url, headers=self.headers)
