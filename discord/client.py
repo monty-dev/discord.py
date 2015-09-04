@@ -617,3 +617,69 @@ class Client(object):
 
         url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.delete(url, headers=self.headers)
+
+    def edit_profile(self, password, **fields):
+        """Edits the current profile of the client.
+
+        All fields except password are optional.
+
+        :param password: The current password for the client's account.
+        :param new_password: The new password you wish to change to.
+        :param email: The new email you wish to change to.
+        :param username: The new username you wish to change to.
+        """
+
+        payload = {
+            'password': password,
+            'new_password': fields.get('new_password'),
+            'email': fields.get('email', self.email),
+            'username': fields.get('username', self.user.name),
+            'avatar': self.user.avatar
+        }
+
+        url = '{0}/@me'.format(endpoints.USERS)
+        response = requests.patch(url, headers=self.headers, json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            self.token = data['token']
+            self.email = data['email']
+            self.headers['authorization'] = self.token
+            self.user = User(**data)
+
+    def create_channel(self, server, name, type='text'):
+        """Creates a :class:`Channel` in the specified :class:`Server`.
+
+        Note that you need the proper permissions to create the channel.
+
+        :param server: The :class:`Server` to create the channel in.
+        :param name: The channel's name.
+        :param type: The type of channel to create. 'text' or 'voice'.
+        :returns: The newly created :class:`Channel` if successful, else None.
+        """
+
+        payload = {
+            'name': name,
+            'type': type
+        }
+
+        url = '{0}/{1.id}/channels'.format(endpoints.SERVERS, server)
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code in (200, 201):
+            data = response.json()
+            channel = Channel(server=server, **data)
+            # We don't append it to server.channels because CHANNEL_CREATE handles it for us.
+            return channel
+
+        return None
+
+    def delete_channel(self, channel):
+        """Deletes a :class:`Channel` from its respective :class:`Server`.
+
+        Note that you need proper permissions to delete the channel.
+
+        :param channel: The :class:`Channel` to delete.
+        """
+
+        url = '{0}/{1.id}'.format(endpoints.CHANNELS, channel)
+        requests.delete(url, headers=self.headers)
