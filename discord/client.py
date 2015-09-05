@@ -24,18 +24,21 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-import requests
-import json, re, time, copy
-from collections import deque
-from threading import Timer
-from ws4py.client.threadedclient import WebSocketClient
-from sys import platform as sys_platform
 from . import endpoints
 from .errors import InvalidEventName, InvalidDestination, GatewayNotFound
 from .user import User
 from .channel import Channel, PrivateChannel
 from .server import Server, Member, Permissions, Role
 from .message import Message
+from .utils import parse_time
+from .invite import Invite
+
+import requests
+import json, re, time, copy
+from collections import deque
+from threading import Timer
+from ws4py.client.threadedclient import WebSocketClient
+import sys
 
 def _null_event(*args, **kwargs):
     pass
@@ -76,7 +79,7 @@ class Client(object):
      .. attribute:: messages
 
         A deque_ of :class:`Message` that the client has received from all servers and private messages.
-    .. attribute:: email
+     .. attribute:: email
 
         The email used to login. This is only set if login is successful, otherwise it's None.
 
@@ -104,6 +107,7 @@ class Client(object):
             'on_channel_create': _null_event,
             'on_member_join': _null_event,
             'on_member_remove': _null_event,
+            'on_member_update': _null_event,
             'on_server_create': _null_event,
             'on_server_delete': _null_event,
         }
@@ -123,6 +127,7 @@ class Client(object):
     def _add_server(self, guild):
         guild['roles'] = [Role(**role) for role in guild['roles']]
         members = guild['members']
+        owner = guild['owner_id']
         for i, member in enumerate(members):
             roles = member['roles']
             for j, roleid in enumerate(roles):
@@ -130,6 +135,10 @@ class Client(object):
                 if role is not None:
                     roles[j] = role
             members[i] = Member(**member)
+
+            # found the member that owns the server
+            if members[i].id == owner:
+                owner = members[i]
 
         for presence in guild['presences']:
             user_id = presence['user']['id']
@@ -139,7 +148,7 @@ class Client(object):
                 member.game_id = presence['game_id']
 
 
-        server = Server(**guild)
+        server = Server(owner=owner, **guild)
 
         # give all the members their proper server
         for member in server.members:
@@ -188,7 +197,8 @@ class Client(object):
         try:
             self.events[event_name](*args, **kwargs)
         except Exception as e:
-            pass
+            self.events['on_error'](event_name, *sys.exc_info())
+
 
     def _received_message(self, msg):
         response = json.loads(str(msg))
@@ -238,7 +248,7 @@ class Client(object):
                         continue
                     value = data[attr]
                     if 'time' in attr:
-                        setattr(message, attr, message._parse_time(value))
+                        setattr(message, attr, parse_time(value))
                     else:
                         setattr(message, attr, value)
                 self._invoke_event('on_message_edit', older_message, message)
@@ -291,6 +301,22 @@ class Client(object):
             member = next((m for m in server.members if m.id == user_id), None)
             server.members.remove(member)
             self._invoke_event('on_member_remove', member)
+        elif event == 'GUILD_MEMBER_UPDATE':
+            server = self._get_server(data.get('guild_id'))
+            user_id = data['user']['id']
+            member = next((m for m in server.members if m.id == user_id), None)
+            if member is not None:
+                user = data['user']
+                member.name = user['username']
+                member.discriminator = user['discriminator']
+                member.avatar = user['avatar']
+                member.roles = []
+                # update the roles
+                for role in server.roles:
+                    if role.id in data['roles']:
+                        member.roles.append(role)
+
+                self._invoke_event('on_member_update', member)
         elif event == 'GUILD_CREATE':
             self._add_server(data)
             self._invoke_event('on_server_create', self.servers[-1])
@@ -486,7 +512,7 @@ class Client(object):
                 'd': {
                     'token': self.token,
                     'properties': {
-                        '$os': sys_platform,
+                        '$os': sys.platform,
                         '$browser': 'discord.py',
                         '$device': 'discord.py',
                         '$referrer': '',
@@ -683,3 +709,53 @@ class Client(object):
 
         url = '{0}/{1.id}'.format(endpoints.CHANNELS, channel)
         requests.delete(url, headers=self.headers)
+
+    def leave_server(self, server):
+        """Leaves a :class:`Server`.
+
+        :param server: The :class:`Server` to leave.
+        """
+
+        url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
+        requests.delete(url, headers=self.headers)
+
+    def create_invite(self, destination, **options):
+        """Creates an invite for the destination which could be either a :class:`Server` or :class:`Channel`.
+
+        The available options are:
+
+        :param destination: The :class:`Server` or :class:`Channel` to create the invite to.
+        :param max_age: How long the invite should last. If it's 0 then the invite doesn't expire. Defaults to 0.
+        :param max_uses: How many uses the invite could be used for. If it's 0 then there are unlimited uses. Defaults to 0.
+        :param temporary: A boolean to denote that the invite grants temporary membership (i.e. they get kicked after they disconnect). Defaults to False.
+        :param xkcd: A boolean to indicate if the invite URL is human readable. Defaults to False.
+        :returns: The :class:`Invite` if creation is successful, None otherwise.
+        """
+
+        payload = {
+            'max_age': options.get('max_age', 0),
+            'max_uses': options.get('max_uses', 0),
+            'temporary': options.get('temporary', False),
+            'xkcdpass': options.get('xkcd', False)
+        }
+
+        url = '{0}/{1.id}/invites'.format(endpoints.CHANNELS, destination)
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code in (200, 201):
+            data = response.json()
+            data['server'] = self._get_server(data['guild']['id'])
+            data['channel'] = next((ch for ch in data['server'].channels if ch.id == data['channel']['id']))
+            return Invite(**data)
+
+        return None
+
+    def accept_invite(self, invite):
+        """Accepts an :class:`Invite`.
+
+        :param invite: The :class:`Invite` to accept.
+        :returns: True if the invite was successfully accepted, False otherwise.
+        """
+
+        url = '{0}/invite/{1.id}'.format(endpoints.API_BASE, invite)
+        response = requests.post(url, headers=self.headers)
+        return response.status_code in (200, 201)

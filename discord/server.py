@@ -26,7 +26,7 @@ DEALINGS IN THE SOFTWARE.
 
 from .user import User
 from .permissions import Permissions
-import datetime, re
+from .utils import parse_time
 
 class Role(object):
     """Represents a Discord role in a :class:`Server`.
@@ -85,7 +85,7 @@ class Member(User):
         super(Member, self).__init__(**user)
         self.deaf = deaf
         self.mute = mute
-        self.joined_at = datetime.datetime(*map(int, re.split(r'[^\d]', joined_at.replace('+00:00', ''))))
+        self.joined_at = parse_time(joined_at)
         self.roles = roles
         self.status = 'offline'
         self.game_id = kwargs.get('game_id', None)
@@ -123,18 +123,18 @@ class Server(object):
     .. attribute:: id
 
         The server's ID.
-    .. attribute:: owner_id
+    .. attribute:: owner
 
-        The ID of the server's owner.
+        The :class:`Member` who owns the server.
     """
 
-    def __init__(self, name, roles, region, afk_timeout, afk_channel_id, members, icon, id, owner_id, **kwargs):
-        self.name = name
-        self.roles = roles
-        self.region = region
-        self.afk_timeout = afk_timeout
-        self.afk_channel_id = afk_channel_id
-        self.members = members
-        self.icon = icon
-        self.id = id
-        self.owner_id = owner_id
+    def __init__(self, **kwargs):
+        self.name = kwargs.get('name')
+        self.roles = kwargs.get('roles')
+        self.region = kwargs.get('region')
+        self.afk_timeout = kwargs.get('afk_timeout')
+        self.afk_channel_id = kwargs.get('afk_channel_id')
+        self.members = kwargs.get('members')
+        self.icon = kwargs.get('icon')
+        self.id = kwargs.get('id')
+        self.owner = kwargs.get('owner')
