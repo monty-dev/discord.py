@@ -114,6 +114,7 @@ class Client(object):
             'on_status': _null_event,
             'on_channel_delete': _null_event,
             'on_channel_create': _null_event,
+            'on_channel_update': _null_event,
             'on_member_join': _null_event,
             'on_member_remove': _null_event,
             'on_member_update': _null_event,
@@ -163,36 +164,44 @@ class Client(object):
         for member in server.members:
             member.server = server
 
-        for channel in guild['channels']:
-            changed_roles = []
-            permission_overwrites = channel['permission_overwrites']
-
-            for overridden in permission_overwrites:
-                # this is pretty inefficient due to the deep nested loops unfortunately
-                role = utils.find(lambda r: r.id == overridden['id'], guild['roles'])
-                if role is None:
-                    continue
-                denied = overridden.get('deny', 0)
-                allowed = overridden.get('allow', 0)
-                override = copy.deepcopy(role)
-
-                # Basically this is what's happening here.
-                # We have an original bit array, e.g. 1010
-                # Then we have another bit array that is 'denied', e.g. 1111
-                # And then we have the last one which is 'allowed', e.g. 0101
-                # We want original OP denied to end up resulting in whatever is in denied to be set to 0.
-                # So 1010 OP 1111 -> 0000
-                # Then we take this value and look at the allowed values. And whatever is allowed is set to 1.
-                # So 0000 OP2 0101 -> 0101
-                # The OP is (base ^ denied) & ~denied.
-                # The OP2 is base | allowed.
-                override.permissions.value = ((override.permissions.value ^ denied) & ~denied) | allowed
-                changed_roles.append(override)
-
-            channel['permission_overwrites'] = changed_roles
         channels = [Channel(server=server, **channel) for channel in guild['channels']]
         server.channels = channels
         self.servers.append(server)
+
+    def _create_websocket(self, url, reconnect=False):
+        if url is None:
+            raise GatewayNotFound()
+        log.info('websocket gateway found')
+        self.ws = WebSocketClient(url, protocols=['http-only', 'chat'])
+
+        # this is kind of hacky, but it's to avoid deadlocks.
+        # i.e. python does not allow me to have the current thread running if it's self
+        # it throws a 'cannot join current thread' RuntimeError
+        # So instead of doing a basic inheritance scheme, we're overriding the member functions.
+
+        self.ws.opened = self._opened
+        self.ws.closed = self._closed
+        self.ws.received_message = self._received_message
+        self.ws.connect()
+        log.info('websocket has connected')
+
+        if reconnect == False:
+            second_payload = {
+                'op': 2,
+                'd': {
+                    'token': self.token,
+                    'properties': {
+                        '$os': sys.platform,
+                        '$browser': 'discord.py',
+                        '$device': 'discord.py',
+                        '$referrer': '',
+                        '$referring_domain': ''
+                    },
+                    'v': 2
+                }
+            }
+
+            self.ws.send(json.dumps(second_payload))
 
     def _resolve_mentions(self, content, mentions):
         if isinstance(mentions, list):
@@ -271,13 +280,18 @@ class Client(object):
             server = self._get_server(data.get('guild_id'))
             if server is not None:
                 status = data.get('status')
-                member_id = data['user']['id']
+                user = data['user']
+                member_id = user['id']
                 member = utils.find(lambda m: m.id == member_id, server.members)
                 if member is not None:
                     member.status = data.get('status')
                     member.game_id = data.get('game_id')
+                    member.name = user.get('username', member.name)
+                    member.avatar = user.get('avatar', member.avatar)
+
                     # call the event now
                     self._invoke_event('on_status', member)
+                    self._invoke_event('on_member_update', member)
         elif event == 'USER_UPDATE':
             self.user = User(**data)
         elif event == 'CHANNEL_DELETE':
@@ -287,6 +301,13 @@ class Client(object):
                 channel = utils.find(lambda c: c.id == channel_id, server.channels)
                 server.channels.remove(channel)
                 self._invoke_event('on_channel_delete', channel)
+        elif event == 'CHANNEL_UPDATE':
+            server = self._get_server(data.get('guild_id'))
+            if server is not None:
+                channel_id = data.get('id')
+                channel = utils.find(lambda c: c.id == channel_id, server.channels)
+                channel.update(server=server, **data)
+                self._invoke_event('on_channel_update', channel)
         elif event == 'CHANNEL_CREATE':
             is_private = data.get('is_private', False)
             channel = None
@@ -451,15 +472,19 @@ class Client(object):
             log.error(request_logging_format.format(name='send_message', response=response))
 
     def delete_message(self, message):
-        """Deletes a :class:`Message`
+        """Deletes a :class:`Message`.
 
-        A fairly straightforward function.
+        Your own messages could be deleted without any proper permissions. However to
+        delete other people's messages, you need the proper permissions to do so.
 
         :param message: The :class:`Message` to delete.
+        :returns: True if the message was deleted successfully, False otherwise.
         """
+
         url = '{}/{}/messages/{}'.format(endpoints.CHANNELS, message.channel.id, message.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(name='delete_message', response=response))
+        return response.status_code == 200
 
     def edit_message(self, message, new_content, mentions=True):
         """Edits a :class:`Message` with the new message content.
@@ -469,7 +494,9 @@ class Client(object):
         :param message: The :class:`Message` to edit.
         :param new_content: The new content to replace the message with.
         :param mentions: The mentions for the user. Same as :meth:`send_message`.
-        :return: The new edited message or None if an error occurred."""
+        :return: The new edited message or None if an error occurred.
+        """
+
         channel = message.channel
         content = str(new_content)
 
@@ -518,40 +545,7 @@ class Client(object):
             gateway = requests.get(endpoints.GATEWAY, headers=self.headers)
             if gateway.status_code != 200:
                 raise GatewayNotFound()
-            gateway_js = gateway.json()
-            url = gateway_js.get('url')
-            if url is None:
-                raise GatewayNotFound()
-
-            log.info('websocket gateway has been found')
-            self.ws = WebSocketClient(url, protocols=['http-only', 'chat'])
-            # this is kind of hacky, but it's to avoid deadlocks.
-            # i.e. python does not allow me to have the current thread running if it's self
-            # it throws a 'cannot join current thread' RuntimeError
-            # So instead of doing a basic inheritance scheme, we're overriding the member functions.
-
-            self.ws.opened = self._opened
-            self.ws.closed = self._closed
-            self.ws.received_message = self._received_message
-            self.ws.connect()
-            log.info('websocket has connected')
-
-            second_payload = {
-                'op': 2,
-                'd': {
-                    'token': self.token,
-                    'properties': {
-                        '$os': sys.platform,
-                        '$browser': 'discord.py',
-                        '$device': 'discord.py',
-                        '$referrer': '',
-                        '$referring_domain': ''
-                    },
-                    'v': 2
-                }
-            }
-
-            self.ws.send(json.dumps(second_payload))
+            self._create_websocket(gateway.json().get('url'), reconnect=False)
             self._is_logged_in = True
         else:
             log.error(request_logging_format.format(name='login', response=response))
@@ -620,10 +614,13 @@ class Client(object):
         in the server the channel belongs to.
 
         :param channel: The :class:`Channel` to delete.
+        :returns: True if channel was deleted successfully, False otherwise.
         """
+
         url = '{}/{}'.format(endpoints.CHANNELS, channel.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response, name='delete_channel'))
+        return response.status_code == 200
 
     def kick(self, server, user):
         """Kicks a :class:`User` from their respective :class:`Server`.
@@ -632,11 +629,13 @@ class Client(object):
 
         :param server: The :class:`Server` to kick the member from.
         :param user: The :class:`User` to kick.
+        :returns: True if kick was successful, False otherwise.
         """
 
         url = '{base}/{server}/members/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response, name='kick'))
+        return response.status_code == 200
 
     def ban(self, server, user):
         """Bans a :class:`User` from their respective :class:`Server`.
@@ -645,11 +644,13 @@ class Client(object):
 
         :param server: The :class:`Server` to ban the member from.
         :param user: The :class:`User` to ban.
+        :returns: True if ban was successful, False otherwise.
         """
 
         url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.put(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response, name='ban'))
+        return response.status_code == 200
 
     def unban(self, server, name):
         """Unbans a :class:`User` from their respective :class:`Server`.
@@ -658,11 +659,13 @@ class Client(object):
 
         :param server: The :class:`Server` to unban the member from.
         :param user: The :class:`User` to unban.
+        :returns: True if unban was successful, False otherwise.
         """
 
         url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response, name='unban'))
+        return response.status_code == 200
 
     def edit_profile(self, password, **fields):
         """Edits the current profile of the client.
@@ -696,6 +699,37 @@ class Client(object):
         else:
             log.debug(request_logging_format.format(response=response, name='edit_profile'))
 
+    def edit_channel(self, channel, **options):
+        """Edits a :class:`Channel`.
+
+        You must have the proper permissions to edit the channel.
+
+        References pointed to the channel will be updated with the new information.
+
+        :param channel: The :class:`Channel` to update.
+        :param name: The new channel name.
+        :param position: The new channel's position in the GUI.
+        :param topic: The new channel's topic.
+        :returns: True if editing was successful, False otherwise.
+        """
+
+        url = '{0}/{1.id}'.format(endpoints.CHANNELS, channel)
+        payload = {
+            'name': options.get('name', channel.name),
+            'topic': options.get('topic', channel.topic),
+            'position': options.get('position', channel.position)
+        }
+
+        response = requests.patch(url, headers=self.headers, json=payload)
+        if response.status_code == 200:
+            data = response.json()
+            log.debug(request_success_log.format(name='edit_channel', response=response, json=payload, data=data))
+            channel.update(server=channel.server, **data)
+            return True
+        else:
+            log.debug(request_logging_format.format(response=response, name='edit_channel'))
+            return False
+
     def create_channel(self, server, name, type='text'):
         """Creates a :class:`Channel` in the specified :class:`Server`.
 
@@ -727,11 +761,13 @@ class Client(object):
         """Leaves a :class:`Server`.
 
         :param server: The :class:`Server` to leave.
+        :returns: True if leaving was successful, False otherwise.
         """
 
         url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
-        requests.delete(url, headers=self.headers)
+        response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response, name='leave_server'))
+        return response.status_code == 200
 
     def create_invite(self, destination, **options):
         """Creates an invite for the destination which could be either a :class:`Server` or :class:`Channel`.

@@ -23,6 +23,9 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+from copy import deepcopy
+from . import utils
+
 class Channel(object):
     """Represents a Discord server channel.
 
@@ -37,6 +40,9 @@ class Channel(object):
     .. attribute:: id
 
         The channel ID.
+    .. attribute:: topic
+
+        The channel's topic. None if it doesn't exist.
     .. attribute:: is_private
 
         ``True`` if the channel is a private channel (i.e. PM). ``False`` in this case.
@@ -53,13 +59,41 @@ class Channel(object):
     """
 
     def __init__(self, **kwargs):
+        self.update(**kwargs)
+
+    def update(self, **kwargs):
         self.name = kwargs.get('name')
         self.server = kwargs.get('server')
         self.id = kwargs.get('id')
+        self.topic = kwargs.get('topic')
         self.is_private = False
         self.position = kwargs.get('position')
         self.type = kwargs.get('type')
-        self.changed_roles = kwargs.get('permission_overwrites', [])
+        self.changed_roles = []
+        for overridden in kwargs.get('permission_overwrites', []):
+            # this is pretty inefficient due to the deep nested loops unfortunately
+            role = utils.find(lambda r: r.id == overridden['id'], self.server.roles)
+            if role is None:
+                continue
+
+            denied = overridden.get('deny', 0)
+            allowed = overridden.get('allow', 0)
+            override = deepcopy(role)
+
+            # Basically this is what's happening here.
+            # We have an original bit array, e.g. 1010
+            # Then we have another bit array that is 'denied', e.g. 1111
+            # And then we have the last one which is 'allowed', e.g. 0101
+            # We want original OP denied to end up resulting in
+            # whatever is in denied to be set to 0.
+            # So 1010 OP 1111 -> 0000
+            # Then we take this value and look at the allowed values.
+            # And whatever is allowed is set to 1.
+            # So 0000 OP2 0101 -> 0101
+            # The OP is (base ^ denied) & ~denied.
+            # The OP2 is base | allowed.
+            override.permissions.value = ((override.permissions.value ^ denied) & ~denied) | allowed
+            self.changed_roles.append(override)
 
 class PrivateChannel(object):
     """Represents a Discord private channel.
