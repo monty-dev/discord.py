@@ -384,7 +384,7 @@ class Client(object):
                         '$referrer': '',
                         '$referring_domain': ''
                     },
-                    'v': 2
+                    'v': 3
                 }
             }
 
@@ -398,14 +398,23 @@ class Client(object):
         else:
             return []
 
+    def _resolve_invite(self, invite):
+        if isinstance(invite, Invite):
+            return invite.id
+        else:
+            rx = r'(?:https?\:\/\/)?discord\.gg\/(.+)'
+            m = re.match(rx, invite)
+            if m:
+                return m.group(1)
+        return None
+
     def on_error(self, event_method, *args, **kwargs):
         msg = 'Caught exception in {} with args (*{}, **{})'
         log.exception(msg.format(event_method, args, kwargs))
 
     # Compatibility shim
     def __getattr__(self, name):
-        if name in ('user', 'email', 'servers', 'private_channels', 'messages',
-                    'get_channel'):
+        if name in ('user', 'email', 'servers', 'private_channels', 'messages'):
             return getattr(self.connection, name)
         else:
             msg = "'{}' object has no attribute '{}'"
@@ -631,14 +640,14 @@ class Client(object):
         occur.
 
         :param str username: The username to register as.
-        :param str invite: The invite to register with.
+        :param invite: An invite URL or :class:`Invite` to register with.
         :param str fingerprint: Unkown API parameter, defaults to None
         """
 
         payload = {
             'fingerprint': fingerprint,
             'username': username,
-            'invite': invite
+            'invite': self._resolve_invite(invite)
         }
 
         r = requests.post(endpoints.REGISTER, json=payload)
@@ -783,6 +792,7 @@ class Client(object):
         :param new_password: The new password you wish to change to.
         :param email: The new email you wish to change to.
         :param username: The new username you wish to change to.
+        :returns: True if profile edit was successful, False otherwise.
         """
 
         payload = {
@@ -803,8 +813,10 @@ class Client(object):
             self.email = data['email']
             self.headers['authorization'] = self.token
             self.user = User(**data)
+            return True
         else:
             log.debug(request_logging_format.format(response=response, name='edit_profile'))
+            return False
 
     def edit_channel(self, channel, **options):
         """Edits a :class:`Channel`.
@@ -917,14 +929,7 @@ class Client(object):
         :returns: True if the invite was successfully accepted, False otherwise.
         """
 
-        destination = None
-        if isinstance(invite, Invite):
-            destination = invite.id
-        else:
-            rx = r'(?:https?\:\/\/)?discord\.gg\/(.+)'
-            m = re.match(rx, invite)
-            if m:
-                destination = m.group(1)
+        destination = self._resolve_invite(invite)
 
         if destination is None:
             return False
