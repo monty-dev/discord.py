@@ -55,6 +55,9 @@ class Role(object):
     """
 
     def __init__(self, **kwargs):
+        self.update(**kwargs)
+
+    def update(self, **kwargs):
         self.id = kwargs.get('id')
         self.name = kwargs.get('name')
         self.permissions = Permissions(kwargs.get('permissions', 0))
@@ -167,6 +170,6 @@ class Server(object):
 
     def get_default_role(self):
         """Gets the @everyone role that all members have by default."""
-        for role in roles:
+        for role in self.roles:
             if role.name == '@everyone':
                 return role

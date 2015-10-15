@@ -113,7 +113,9 @@ class WebSocket(WebSocketBaseClient):
                      'MESSAGE_UPDATE', 'PRESENCE_UPDATE', 'USER_UPDATE',
                      'CHANNEL_DELETE', 'CHANNEL_UPDATE', 'CHANNEL_CREATE',
                      'GUILD_MEMBER_ADD', 'GUILD_MEMBER_REMOVE',
-                     'GUILD_MEMBER_UPDATE', 'GUILD_CREATE', 'GUILD_DELETE'):
+                     'GUILD_MEMBER_UPDATE', 'GUILD_CREATE', 'GUILD_DELETE',
+                     'GUILD_ROLE_CREATE', 'GUILD_ROLE_DELETE', 
+                     'GUILD_ROLE_UPDATE'):
             self.dispatch('socket_update', event, data)
 
         else:
@@ -276,10 +278,11 @@ class ConnectionState(object):
 
     def handle_guild_member_remove(self, data):
         server = self._get_server(data.get('guild_id'))
-        user_id = data['user']['id']
-        member = utils.find(lambda m: m.id == user_id, server.members)
-        server.members.remove(member)
-        self.dispatch('member_remove', member)
+        if server is not None:
+            user_id = data['user']['id']
+            member = utils.find(lambda m: m.id == user_id, server.members)
+            server.members.remove(member)
+            self.dispatch('member_remove', member)
 
     def handle_guild_member_update(self, data):
         server = self._get_server(data.get('guild_id'))
@@ -306,6 +309,28 @@ class ConnectionState(object):
         server = self._get_server(data.get('id'))
         self.servers.remove(server)
         self.dispatch('server_delete', server)
+
+    def handle_guild_role_create(self, data):
+        server = self._get_server(data.get('guild_id'))
+        role = Role(**data.get('role', {}))
+        server.roles.append(role)
+        self.dispatch('server_role_create', server, role)
+
+    def handle_guild_role_delete(self, data):
+        server = self._get_server(data.get('guild_id'))
+        if server is not None:
+            role_id = data.get('role_id')
+            role = utils.find(lambda r: r.id == role_id, server.roles)
+            server.roles.remove(role)
+            self.dispatch('server_role_delete', server, role)
+
+    def handle_guild_role_update(self, data):
+        server = self._get_server(data.get('guild_id'))
+        if server is not None:
+            role_id = data['role']['id']
+            role = utils.find(lambda r: r.id == role_id, server.roles)
+            role.update(**data['role'])
+            self.dispatch('server_role_update', role)
 
     def get_channel(self, id):
         if id is None:

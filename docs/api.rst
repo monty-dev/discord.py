@@ -160,6 +160,20 @@ to handle it, which defaults to log a traceback and ignore the exception.
 
     :param server: The :class:`Server` that got created or deleted.
 
+.. function:: on_server_role_create(server, role)
+              on_server_role_delete(server, role)
+
+    Called when a :class:`Server` creates or deletes a new :class:`Role`.
+
+    :param server: The :class:`Server` that was created or deleted.
+    :param role: The :class:`Role` that was created or deleted.
+
+.. function:: on_server_role_update(role)
+
+    Called when a :class:`Role` is changed server-wide.
+
+    :param role: The :class:`Role` that was updated.
+
 
 Utility Functions
 -----------------
