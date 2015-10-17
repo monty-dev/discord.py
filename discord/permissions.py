@@ -24,8 +24,46 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+def create_permission_masks(cls):
+    cls.NONE = cls(0)
+    cls.ALL = cls(0b00000011111100111111110000111111)
+    cls.ALL_CHANNEL = cls(0b00000011111100111111110000011001)
+    cls.GENERAL = cls(0b00000000000000000000000000111111)
+    cls.TEXT = cls(0b00000000000000111111110000000000)
+    cls.VOICE = cls(0b00000011111100000000000000000000)
+    return cls
+
+@create_permission_masks
 class Permissions(object):
     """Wraps up the Discord permission value.
+
+    Class attributes:
+
+    .. attribute:: NONE
+
+        A :class:`Permission` with all permissions set to False.
+    .. attribute:: ALL
+
+        A :class:`Permission` with all permissions set to True.
+    .. attribute:: ALL_CHANNEL
+
+        A :class:`Permission` with all channel-specific permissions set to True
+        and the server-specific ones set to False. The server-specific permissions
+        are currently:
+
+        - can_manager_server
+        - can_kick_members
+        - can_ban_members
+
+    .. attribute:: GENERAL
+
+        A :class:`Permission` with all "General" permissions set to True.
+    .. attribute:: TEXT
+
+        A :class:`Permission` with all "Text" permissions set to True.
+    .. attribute:: VOICE
+
+        A :class:`Permission` with all "Voice" permissions set to True.
 
     Instance attributes:
 
@@ -39,7 +77,7 @@ class Permissions(object):
     were regular bools. This allows you to edit permissions.
     """
 
-    def __init__(self, permissions, **kwargs):
+    def __init__(self, permissions=0, **kwargs):
         self.value = permissions
 
     def _bit(self, index):
@@ -52,6 +90,21 @@ class Permissions(object):
             self.value &= ~(1 << index)
         else:
             raise TypeError('Value to set for Permissions must be a bool.')
+
+    def handle_overwrite(self, allow, deny):
+        # Basically this is what's happening here.
+        # We have an original bit array, e.g. 1010
+        # Then we have another bit array that is 'denied', e.g. 1111
+        # And then we have the last one which is 'allowed', e.g. 0101
+        # We want original OP denied to end up resulting in
+        # whatever is in denied to be set to 0.
+        # So 1010 OP 1111 -> 0000
+        # Then we take this value and look at the allowed values.
+        # And whatever is allowed is set to 1.
+        # So 0000 OP2 0101 -> 0101
+        # The OP is (base ^ denied) & ~denied.
+        # The OP2 is base | allowed.
+        self.value = ((self.value ^ deny) & ~deny) | allow
 
     @property
     def can_create_instant_invite(self):

@@ -96,8 +96,9 @@ class Member(User):
             # we joined a channel
             self.voice_channel.voice_members.append(self)
         elif old_channel is not None and self.voice_channel is None:
-            # we left a channel
-            old_channel.voice_members.remove(self)
+            if self in old_channel.voice_members:
+                # we left a channel
+                old_channel.voice_members.remove(self)
 
 
 class Server(object):
@@ -151,5 +152,5 @@ class Server(object):
     def get_default_role(self):
         """Gets the @everyone role that all members have by default."""
         for role in self.roles:
-            if role.name == '@everyone':
+            if role.is_everyone():
                 return role
