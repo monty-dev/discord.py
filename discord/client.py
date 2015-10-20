@@ -478,8 +478,7 @@ class Client(object):
             raise InvalidDestination('Destination must be Channel, PrivateChannel, User, or str')
 
     def on_error(self, event_method, *args, **kwargs):
-        msg = 'Caught exception in {} with args (*{}, **{})'
-        log.exception(msg.format(event_method, args, kwargs))
+        logging.exception('Ignoring exception in {}'.format(event_method))
 
     # Compatibility shim
     def __getattr__(self, name):
@@ -1001,7 +1000,7 @@ class Client(object):
         if is_response_successful(response):
             data = response.json()
             log.debug(request_success_log.format(name='create_invite', json=payload, response=response, data=data))
-            data['server'] = self._get_server(data['guild']['id'])
+            data['server'] = self.connection._get_server(data['guild']['id'])
             channel_id = data['channel']['id']
             data['channel'] = utils.find(lambda ch: ch.id == channel_id, data['server'].channels)
             return Invite(**data)
