@@ -24,6 +24,8 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+from __future__ import print_function
+
 from . import endpoints
 from .errors import InvalidEventName, InvalidDestination, GatewayNotFound
 from .user import User
@@ -34,6 +36,7 @@ from .message import Message
 from . import utils
 from .invite import Invite
 
+import traceback
 import requests
 import json, re, time, copy
 from collections import deque
@@ -158,7 +161,7 @@ class ConnectionState(object):
         return member
 
     def _add_server(self, guild):
-        guild['roles'] = [Role(**role) for role in guild['roles']]
+        guild['roles'] = [Role(everyone=(guild['id'] == role['id']), **role) for role in guild['roles']]
         members = guild['members']
         owner = guild['owner_id']
         for i, member in enumerate(members):
@@ -334,7 +337,9 @@ class ConnectionState(object):
 
     def handle_guild_role_create(self, data):
         server = self._get_server(data.get('guild_id'))
-        role = Role(**data.get('role', {}))
+        role_data = data.get('role', {})
+        everyone = server.id == role_data.get('id')
+        role = Role(everyone=everyone, **role_data)
         server.roles.append(role)
         self.dispatch('server_role_create', server, role)
 
@@ -480,7 +485,8 @@ class Client(object):
             raise InvalidDestination('Destination must be Channel, PrivateChannel, User, or str')
 
     def on_error(self, event_method, *args, **kwargs):
-        logging.exception('Ignoring exception in {}'.format(event_method))
+        print('Ignoring exception in {}'.format(event_method), file=sys.stderr)
+        traceback.print_exc()
 
     # Compatibility shim
     def __getattr__(self, name):
@@ -1034,6 +1040,13 @@ class Client(object):
         .. versionchanged:: 0.8.0
             Editing now uses keyword arguments instead of editing the :class:`Role` object directly.
 
+        .. note::
+
+            At the moment, the Discord API allows you to set the colour to any
+            RGB value. This will change in the future so it is recommended that
+            you use the constants in the :class:`Colour` instead such as
+            :attr:`Colour.NAVY_BLUE`.
+
         :param server: The :class:`Server` the role belongs to.
         :param role: The :class:`Role` to edit.
         :param name: The new role name to change to. (optional)
@@ -1183,7 +1196,8 @@ class Client(object):
 
         if is_response_successful(response):
             data = response.json()
-            role = Role(**data)
+            everyone = server.id == data.get('id')
+            role = Role(everyone=everyone, **data)
             if self.edit_role(server, role, **fields):
                 # we have to call edit because you can't pass a payload to the
                 # http request currently.
