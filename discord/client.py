@@ -27,14 +27,16 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import print_function
 
 from . import endpoints
-from .errors import InvalidEventName, InvalidDestination, GatewayNotFound
+from .errors import *
 from .user import User
 from .channel import Channel, PrivateChannel
-from .server import Server, Member
+from .server import Server
+from .member import Member
 from .role import Role, Permissions
 from .message import Message
 from . import utils
 from .invite import Invite
+from .object import Object
 
 import traceback
 import requests
@@ -483,7 +485,7 @@ class Client(object):
             return []
 
     def _resolve_invite(self, invite):
-        if isinstance(invite, Invite):
+        if isinstance(invite, Invite) or isinstance(invite, Object):
             return invite.id
         else:
             rx = r'(?:https?\:\/\/)?discord\.gg\/(.+)'
@@ -494,21 +496,20 @@ class Client(object):
 
     def _resolve_destination(self, destination):
         if isinstance(destination, Channel) or isinstance(destination, PrivateChannel):
-            return (destination.id, destination.is_private)
+            return destination.id
         elif isinstance(destination, User):
             found = utils.find(lambda pm: pm.user == destination, self.private_channels)
             if found is None:
                 # Couldn't find the user, so start a PM with them first.
                 self.start_private_message(destination)
                 channel_id = self.private_channels[-1].id
-                return (channel_id, True)
+                return channel_id
             else:
-                return (found.id, True)
-        elif isinstance(destination, str):
-            channel_id = destination
-            return (destination, True)
+                return found.id
+        elif isinstance(destination, Object):
+            return destination.id
         else:
-            raise InvalidDestination('Destination must be Channel, PrivateChannel, User, or str')
+            raise ClientException('Destination must be Channel, PrivateChannel, User, or Object')
 
     def on_error(self, event_method, *args, **kwargs):
         print('Ignoring exception in {}'.format(event_method), file=sys.stderr)
@@ -546,7 +547,10 @@ class Client(object):
         getattr(self.connection, method)(data)
 
     def run(self):
-        """Runs the client and allows it to receive messages and events."""
+        """Runs the client and allows it to receive messages and events.
+
+        This function can raise a :exc:`GatewayNotFound` exception while attempting
+        to reconnect."""
         log.info('Client is being run')
         self.ws.run()
 
@@ -600,14 +604,19 @@ class Client(object):
 
         The destination could be a :class:`Channel` or a :class:`PrivateChannel`. For convenience
         it could also be a :class:`User`. If it's a :class:`User` or :class:`PrivateChannel` then it
-        sends the message via private message, otherwise it sends the message to the channel. If it's
-        a ``str`` instance, then it assumes it's a channel ID and uses that for its destination.
+        sends the message via private message, otherwise it sends the message to the channel. If it is
+        a :class:`Object` instance then it is assumed to be the destination ID.
+
+        .. versionchanged:: 0.9.0
+            ``str`` being allowed was removed and replaced with :class:`Object`.
 
         The content must be a type that can convert to a string through ``str(content)``.
 
         The mentions must be either an array of :class:`User` to mention or a boolean. If
         ``mentions`` is ``True`` then all the users mentioned in the content are mentioned, otherwise
         no one is mentioned. Note that to mention someone in the content, you should use :meth:`User.mention`.
+
+        If the destination parameter is invalid, then this function raises :exc:`ClientException`.
 
         :param destination: The location to send the message.
         :param content: The content of the message to send.
@@ -616,7 +625,7 @@ class Client(object):
         :return: The :class:`Message` sent or None if error occurred.
         """
 
-        channel_id, is_private_message = self._resolve_destination(destination)
+        channel_id = self._resolve_destination(destination)
 
         content = str(content)
         mentions = self._resolve_mentions(content, mentions)
@@ -624,10 +633,8 @@ class Client(object):
         url = '{base}/{id}/messages'.format(base=endpoints.CHANNELS, id=channel_id)
         payload = {
             'content': content,
+            'mentions': mentions
         }
-
-        if not is_private_message:
-            payload['mentions'] = mentions
 
         if tts:
             payload['tts'] = True
@@ -654,7 +661,7 @@ class Client(object):
         :return: The :class:`Message` sent or None if an error occurred.
         """
 
-        channel_id, is_private_message = self._resolve_destination(destination)
+        channel_id = self._resolve_destination(destination)
 
         url = '{base}/{id}/messages'.format(base=endpoints.CHANNELS, id=channel_id)
         response = None
@@ -726,6 +733,9 @@ class Client(object):
         After this function is called, :attr:`is_logged_in` returns True if no
         errors occur.
 
+        This function raises :exc:`GatewayNotFound` if it was unavailable to connect
+        to a websocket gateway.
+
         :param str email: The email used to login.
         :param str password: The password used to login.
         """
@@ -760,9 +770,12 @@ class Client(object):
         user created and :attr:`is_logged_in` returns True if no errors
         occur.
 
+        This function raises :exc:`GatewayNotFound` if the gateway to
+        connect the websocket is not found.
+
         :param str username: The username to register as.
         :param invite: An invite URL or :class:`Invite` to register with.
-        :param str fingerprint: Unkown API parameter, defaults to None
+        :param str fingerprint: Unknown API parameter, defaults to None
         """
 
         payload = {

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 """
 The MIT License (MIT)
 
@@ -24,22 +23,24 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-class DiscordException(Exception):
-    """Base exception class for discord.py
+class Object(object):
+    """Represents a generic Discord object.
 
-    Ideally speaking, this could be caught to handle any exceptions thrown from this library.
+    The purpose of this class is to allow you to create 'miniature'
+    versions of data classes if you want to pass in just an ID. All functions
+    that take in a specific data class with an ID can also take in this class
+    as a substitute instead. Note that even though this is the case, not all
+    objects (if any) actually inherit from this class.
+
+    There are also some cases where some websocket events are received
+    in :issue:`strange order <21>` and when such events happened you would
+    receive this class rather than the actual data class. These cases are
+    extremely rare.
+
+    .. attribute:: id
+
+        The ID of the object.
     """
-    pass
 
-class ClientException(DiscordException):
-    """Exception that's thrown when an operation in the :class:`Client` fails.
-
-    These are usually for exceptions that happened due to user input.
-    """
-    pass
-
-class GatewayNotFound(DiscordException):
-    """Thrown when the gateway hub for the :class:`Client` websocket is not found."""
-    def __init__(self):
-        message = 'The gateway to connect to discord was not found.'
-        super(GatewayNotFound, self).__init__(message)
+    def __init__(self, id):
+        self.id = id
