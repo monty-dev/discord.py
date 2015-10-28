@@ -282,9 +282,14 @@ Exceptions
 
 The following exceptions are thrown by the library.
 
-.. autoclass:: DiscordException
+.. autoexception:: DiscordException
 
-.. autoclass:: ClientException
+.. autoexception:: ClientException
 
-.. autoclass:: GatewayNotFound
+.. autoexception:: HTTPException
+    :members:
+
+.. autoexception:: InvalidArgument
+
+.. autoexception:: GatewayNotFound
 
