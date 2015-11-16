@@ -333,7 +333,8 @@ class ConnectionState(object):
             self.dispatch('member_update', member)
 
     def handle_guild_create(self, data):
-        if data.get('unavailable') is not None:
+        unavailable = data.get('unavailable')
+        if unavailable == False:
             # GUILD_CREATE with unavailable in the response
             # usually means that the server has become available
             # and is therefore in the cache
@@ -343,6 +344,10 @@ class ConnectionState(object):
                 self.dispatch('server_available', server)
                 return
 
+        if unavailable == True:
+            # joined a server with unavailable == True so..
+            return
+
             # if we're at this point then it was probably
             # unavailable during the READY event and is now
             # available, so it isn't in the cache...
@@ -351,18 +356,17 @@ class ConnectionState(object):
         self.dispatch('server_join', self.servers[-1])
 
     def handle_guild_delete(self, data):
-        if data.get('unavailable', False):
+        server = self._get_server(data.get('id'))
+        if data.get('unavailable', False) and server is not None:
             # GUILD_DELETE with unavailable being True means that the
             # server that was available is now currently unavailable
-            server = self._get_server(data.get('id'))
-            if server is not None:
-                server.unavailable = True
-                self.dispatch('server_unavailable', server)
-                return
+            server.unavailable = True
+            self.dispatch('server_unavailable', server)
+            return
 
-        server = self._get_server(data.get('id'))
-        self.servers.remove(server)
-        self.dispatch('server_remove', server)
+        if server in self.servers:
+            self.servers.remove(server)
+            self.dispatch('server_remove', server)
 
     def handle_guild_role_create(self, data):
         server = self._get_server(data.get('guild_id'))
@@ -906,7 +910,7 @@ class Client(object):
         log.debug(request_logging_format.format(response=response))
         _verify_successful_response(response)
 
-    def unban(self, server, name):
+    def unban(self, server, user):
         """Unbans a :class:`User` from their respective :class:`Server`.
 
         You must have the proper permissions to unban a user in the server.
