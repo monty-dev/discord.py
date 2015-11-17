@@ -816,10 +816,44 @@ class Client(object):
         self._is_logged_in = False
         log.debug(request_logging_format.format(response=response))
 
-    def logs_from(self, channel, limit=100):
+    def get_all_channels(self):
+        """Returns a generator with every :class:`Channel` the client can 'access'.
+
+        This is equivalent to: ::
+
+            for server in client.servers:
+                for channel in server.channels:
+                    yield channel
+
+        Note that just because you receive a :class:`Channel` does not mean that
+        you can communicate in said channel. :meth:`Channel.permissions_for` should
+        be used for that.
+        """
+
+        for server in self.servers:
+            for channel in server.channels:
+                yield channel
+
+    def get_all_members(self):
+        """Returns a generator with every :class:`Member` the client can see.
+
+        This is equivalent to: ::
+
+            for server in client.servers:
+                for member in server.members:
+                    yield member
+
+        """
+        for server in self.servers:
+            for member in server.members:
+                yield member
+
+    def logs_from(self, channel, limit=100, before=None, after=None):
         """A generator that obtains logs from a specified channel.
 
         Yielding from the generator returns a :class:`Message` object with the message data.
+
+        Will return the newest messages within the specified range, up to `limit` messages.
 
         This function raises :exc:`HTTPException` if the request failed.
 
@@ -833,12 +867,19 @@ class Client(object):
 
         :param channel: The :class:`Channel` to obtain the logs from.
         :param limit: The number of messages to retrieve.
+        :param before: :class:`Message` before which all returned messages must be.
+        :param after: :class:`Message` after which all returned messages must be.
         """
 
         url = '{}/{}/messages'.format(endpoints.CHANNELS, channel.id)
         params = {
             'limit': limit
         }
+        if before:
+            params['before'] = before.id
+        if after:
+            params['after'] = after.id
+
         response = requests.get(url, params=params, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
         _verify_successful_response(response)
