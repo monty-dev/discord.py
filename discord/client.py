@@ -311,8 +311,11 @@ class ConnectionState(object):
         if server is not None:
             user_id = data['user']['id']
             member = utils.find(lambda m: m.id == user_id, server.members)
-            if member in server.members:
+            try:
                 server.members.remove(member)
+            except ValueError:
+                return
+            else:
                 self.dispatch('member_remove', member)
 
     def handle_guild_member_update(self, data):
@@ -364,8 +367,11 @@ class ConnectionState(object):
             self.dispatch('server_unavailable', server)
             return
 
-        if server in self.servers:
+        try:
             self.servers.remove(server)
+        except ValueError:
+            return
+        else:
             self.dispatch('server_remove', server)
 
     def handle_guild_role_create(self, data):
@@ -655,6 +661,24 @@ class Client(object):
         message = Message(channel=channel, **data)
         return message
 
+    def send_typing(self, destination):
+        """Send a "typing" status to the destination.
+
+        "Typing" status will go away after 10 seconds, or after a message is sent.
+
+        The destination parameter follows the same rules as :meth:`send_message`.
+
+        :param destination: The location to send the typing update.
+        """
+
+        channel_id = self._resolve_destination(destination)
+
+        url = '{base}/{id}/typing'.format(base=endpoints.CHANNELS, id=channel_id)
+
+        response = requests.post(url, headers=self.headers)
+        log.debug(request_logging_format.format(response=response))
+        _verify_successful_response(response)
+
     def send_file(self, destination, filename):
         """Sends a message to the destination given with the file given.
 
@@ -678,6 +702,38 @@ class Client(object):
                 'file': (filename, f)
             }
             response = requests.post(url, files=files, headers=self.headers)
+
+        log.debug(request_logging_format.format(response=response))
+        _verify_successful_response(response)
+        data = response.json()
+        log.debug(request_success_log.format(response=response, json=response.text, data=filename))
+        channel = self.get_channel(data.get('channel_id'))
+        message = Message(channel=channel, **data)
+        return message
+
+    def send_raw_file(self, destination, filename, file):
+        """Sends a message to the destination given with the file object given.
+
+        The destination parameter follows the same rules as :meth:`send_message`.
+
+        Note that this requires proper permissions in order to work.
+        This function raises :exc:`HTTPException` if the request failed.
+
+        :param destination: The location to send the message.
+        :param filename: The name of the file to send.
+        :param file: The file object to send.
+        :return: The :class:`Message` sent.
+        """
+
+        channel_id = self._resolve_destination(destination)
+
+        url = '{base}/{id}/messages'.format(base=endpoints.CHANNELS, id=channel_id)
+        response = None
+
+        files = {
+            'file': (filename, file)
+        }
+        response = requests.post(url, files=files, headers=self.headers)
 
         log.debug(request_logging_format.format(response=response))
         _verify_successful_response(response)

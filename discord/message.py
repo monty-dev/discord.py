@@ -28,6 +28,7 @@ from . import utils
 from .user import User
 from .member import Member
 from .object import Object
+import re
 
 class Message(object):
     """Represents a message from Discord.
@@ -71,6 +72,10 @@ class Message(object):
 
         A list of :class:`Member` that were mentioned. If the message is in a private message
         then the list is always empty.
+    .. attribute:: channel_mentions
+
+        A list of :class:`Channel` that were mentioned. If the message is in a private message
+        then the list is always empty.
     .. attribute:: id
 
         The message ID.
@@ -99,12 +104,41 @@ class Message(object):
 
     def _handle_mentions(self, mentions):
         self.mentions = []
-        if self.channel is not None and not self.channel.is_private:
+        self.channel_mentions = []
+        if getattr(self.channel, 'is_private', True):
+            return
+
+        if self.channel is not None:
             for mention in mentions:
                 id_search = mention.get('id')
                 member = utils.find(lambda m: m.id == id_search, self.server.members)
                 if member is not None:
                     self.mentions.append(member)
+
+        if self.server is not None:
+            channel_mentions = self.get_raw_channel_mentions()
+            for mention in channel_mentions:
+                channel = utils.find(lambda m: m.id == mention, self.server.channels)
+                if channel is not None:
+                    self.channel_mentions.append(channel)
+
+    def get_raw_mentions(self):
+        """Returns an array of user IDs matched with the syntax of
+        <@user_id> in the message content.
+
+        This allows you receive the user IDs of mentioned users
+        even in a private message context.
+        """
+        return re.findall(r'<@(\d+)>', self.content)
+
+    def get_raw_channel_mentions(self):
+        """Returns an array of channel IDs matched with the syntax of
+        <#channel_id> in the message content.
+
+        This allows you receive the channel IDs of mentioned users
+        even in a private message context.
+        """
+        return re.findall(r'<#(\d+)>', self.content)
 
     def _handle_upgrades_and_server(self, channel_id):
         self.server = None
