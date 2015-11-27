@@ -68,6 +68,15 @@ class HTTPException(DiscordException):
             message = httplib.responses.get(response.status_code, 'HTTP error')
 
         message = '{0} (status code: {1.response.status_code})'.format(message, self)
+
+        try:
+            data = response.json()
+            response_error = data['message']
+            if response_error:
+                message = '{}: {}'.format(message, response_error)
+        except:
+            pass
+
         super(HTTPException, self).__init__(message)
 
 class InvalidArgument(ClientException):
@@ -77,5 +86,12 @@ class InvalidArgument(ClientException):
     This could be considered the analogous of ``ValueError`` and
     ``TypeError`` except derived from :exc:`ClientException` and thus
     :exc:`DiscordException`.
+    """
+    pass
+
+class LoginFailure(ClientException):
+    """Exception that's thrown when the :meth:`Client.login` function
+    fails to log you in from improper credentials or some other misc.
+    failure.
     """
     pass

@@ -48,19 +48,11 @@ import sys
 import logging
 import itertools
 import datetime
+from base64 import b64encode
 
 log = logging.getLogger(__name__)
 request_logging_format = '{response.request.method} {response.url} has returned {response.status_code}'
 request_success_log = '{response.url} with {json} received {data}'
-
-def _null_event(*args, **kwargs):
-    pass
-
-def _verify_successful_response(response):
-    code = response.status_code
-    success = code >= 200 and code < 300
-    if not success:
-        raise HTTPException(response)
 
 class KeepAliveHandler(threading.Thread):
     def __init__(self, seconds, socket, **kwargs):
@@ -409,16 +401,15 @@ class ConnectionState(object):
         if channel is not None:
             member = None
             user_id = data.get('user_id')
-            if not getattr(channel, 'is_private', True):
+            is_private = getattr(channel, 'is_private', None)
+            if is_private == None:
+                return
+
+            if is_private:
+                member = channel.user
+            else:
                 members = channel.server.members
                 member = utils.find(lambda m: m.id == user_id, members)
-            else:
-                # At the moment we can make the assumption that if we are
-                # in a private channel then the user belongs to one of our
-                # already existing server member lists.
-                # This might change when we get friend lists.
-                gen = (m for s in self.servers for m in s.members)
-                member = utils.find(lambda m: m.id == user_id, gen)
 
             if member is not None:
                 timestamp = datetime.datetime.utcfromtimestamp(data.get('timestamp'))
@@ -526,7 +517,7 @@ class Client(object):
         return invite
 
     def _resolve_destination(self, destination):
-        if isinstance(destination, Channel) or isinstance(destination, PrivateChannel):
+        if isinstance(destination, (Channel, PrivateChannel, Server)):
             return destination.id
         elif isinstance(destination, User):
             found = utils.find(lambda pm: pm.user == destination, self.private_channels)
@@ -567,9 +558,9 @@ class Client(object):
             log.debug("Dispatching event {}".format(event))
             handle_method = '_'.join(('handle', event))
             event_method = '_'.join(('on', event))
-            getattr(self, handle_method, _null_event)(*args, **kwargs)
+            getattr(self, handle_method, utils._null_event)(*args, **kwargs)
             try:
-                getattr(self, event_method, _null_event)(*args, **kwargs)
+                getattr(self, event_method, utils._null_event)(*args, **kwargs)
             except Exception as e:
                 getattr(self, 'on_error')(event_method, *args, **kwargs)
 
@@ -581,7 +572,14 @@ class Client(object):
         """Runs the client and allows it to receive messages and events.
 
         This function can raise a :exc:`GatewayNotFound` exception while attempting
-        to reconnect."""
+        to reconnect.
+
+        .. note::
+
+            This function attempts to reconnect if the websocket got closed
+            without explicitly calling :meth:`logout`. When this reconnect is
+            triggered, the :func:`discord.on_ready` event is called again.
+        """
         log.info('Client is being run')
         self.ws.run()
 
@@ -626,7 +624,7 @@ class Client(object):
 
         r = requests.post('{}/{}/channels'.format(endpoints.USERS, self.user.id), json=payload, headers=self.headers)
         log.debug(request_logging_format.format(response=r))
-        _verify_successful_response(r)
+        utils._verify_successful_response(r)
         data = r.json()
         log.debug(request_success_log.format(response=r, json=payload, data=data))
         self.private_channels.append(PrivateChannel(id=data['id'], user=user))
@@ -634,10 +632,12 @@ class Client(object):
     def send_message(self, destination, content, mentions=True, tts=False):
         """Sends a message to the destination given with the content given.
 
-        The destination could be a :class:`Channel` or a :class:`PrivateChannel`. For convenience
-        it could also be a :class:`User`. If it's a :class:`User` or :class:`PrivateChannel` then it
-        sends the message via private message, otherwise it sends the message to the channel. If it is
-        a :class:`Object` instance then it is assumed to be the destination ID.
+        The destination could be a :class:`Channel`, :class:`PrivateChannel` or :class:`Server`.
+        For convenience it could also be a :class:`User`. If it's a :class:`User` or :class:`PrivateChannel`
+        then it sends the message via private message, otherwise it sends the message to the channel.
+        If the destination is a :class:`Server` then it's equivalent to calling
+        :meth:`Server.get_default_channel` and sending it there. If it is a :class:`Object`
+        instance then it is assumed to be the destination ID.
 
         .. versionchanged:: 0.9.0
             ``str`` being allowed was removed and replaced with :class:`Object`.
@@ -674,7 +674,7 @@ class Client(object):
 
         response = requests.post(url, json=payload, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
         data = response.json()
         log.debug(request_success_log.format(response=response, json=payload, data=data))
         channel = self.get_channel(data.get('channel_id'))
@@ -697,7 +697,7 @@ class Client(object):
 
         response = requests.post(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def send_file(self, destination, fp, filename=None):
         """Sends a message to the destination given with the file given.
@@ -753,7 +753,7 @@ class Client(object):
             response = requests.post(url, files=files, headers=self.headers)
 
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
         data = response.json()
         log.debug(request_success_log.format(response=response, json=response.text, data=filename))
         channel = self.get_channel(data.get('channel_id'))
@@ -774,7 +774,7 @@ class Client(object):
         url = '{}/{}/messages/{}'.format(endpoints.CHANNELS, message.channel.id, message.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def edit_message(self, message, new_content, mentions=True):
         """Edits a :class:`Message` with the new message content.
@@ -794,15 +794,13 @@ class Client(object):
 
         url = '{}/{}/messages/{}'.format(endpoints.CHANNELS, channel.id, message.id)
         payload = {
-            'content': content
+            'content': content,
+            'mentions': self._resolve_mentions(content, mentions)
         }
-
-        if not channel.is_private:
-            payload['mentions'] = self._resolve_mentions(content, mentions)
 
         response = requests.patch(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
         data = response.json()
         log.debug(request_success_log.format(response=response, json=payload, data=data))
         return Message(channel=channel, **data)
@@ -813,7 +811,7 @@ class Client(object):
 
         After this function is called, :attr:`is_logged_in` returns True if no
         errors occur. If an error occurs during the login process, then
-        :exc:`HTTPException` is raised.
+        :exc:`LoginFailure` or :exc:`HTTPException` is raised.
 
         This function raises :exc:`GatewayNotFound` if it was unavailable to connect
         to a websocket gateway.
@@ -829,7 +827,10 @@ class Client(object):
 
         r = requests.post(endpoints.LOGIN, json=payload)
         log.debug(request_logging_format.format(response=r))
-        _verify_successful_response(r)
+        if r.status_code == 400:
+            raise LoginFailure('Improper credentials have been passed.')
+        elif r.status_code != 200:
+            raise HTTPException(r)
 
         log.info('logging in returned status code {}'.format(r.status_code))
         self.email = email
@@ -867,7 +868,7 @@ class Client(object):
         r = requests.post(endpoints.REGISTER, json=payload)
         log.debug(request_logging_format.format(response=r))
 
-        _verify_successful_response(r)
+        utils._verify_successful_response(r)
         log.info('register returned a successful status code')
         self.email = ''
 
@@ -955,7 +956,7 @@ class Client(object):
 
         response = requests.get(url, params=params, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
         messages = response.json()
         for message in messages:
             yield Message(channel=channel, **message)
@@ -990,7 +991,7 @@ class Client(object):
         url = '{}/{}'.format(endpoints.CHANNELS, channel.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def kick(self, server, user):
         """Kicks a :class:`User` from their respective :class:`Server`.
@@ -1006,7 +1007,7 @@ class Client(object):
         url = '{base}/{server}/members/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def ban(self, server, user):
         """Bans a :class:`User` from their respective :class:`Server`.
@@ -1022,7 +1023,7 @@ class Client(object):
         url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.put(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def unban(self, server, user):
         """Unbans a :class:`User` from their respective :class:`Server`.
@@ -1039,7 +1040,7 @@ class Client(object):
         url = '{base}/{server}/bans/{user}'.format(base=endpoints.SERVERS, server=server.id, user=user.id)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def edit_profile(self, password, **fields):
         """Edits the current profile of the client.
@@ -1048,24 +1049,40 @@ class Client(object):
 
         This function raises :exc:`HTTPException` if the request failed.
 
+        To upload an avatar, a *bytes-like object* must be passed in that
+        represents the image being uploaded. If this is done through a file
+        then the file must be opened via ``open('some_filename', 'rb')`` and
+        the *bytes-like object* is given through the use of ``fp.read()``.
+
+        The only image formats supported for uploading is JPEG and PNG.
+
         :param password: The current password for the client's account.
         :param new_password: The new password you wish to change to.
         :param email: The new email you wish to change to.
         :param username: The new username you wish to change to.
+        :param avatar: A *bytes-like object* representing the image to upload.
         """
+
+        avatar_bytes = fields.get('avatar')
+        avatar = self.user.avatar
+        if avatar_bytes is not None:
+            fmt = 'data:{mime};base64,{data}'
+            mime = utils._get_mime_type_for_image(avatar_bytes)
+            b64 = b64encode(avatar_bytes).decode('ascii')
+            avatar = fmt.format(mime=mime, data=b64)
 
         payload = {
             'password': password,
             'new_password': fields.get('new_password'),
             'email': fields.get('email', self.email),
             'username': fields.get('username', self.user.name),
-            'avatar': self.user.avatar
+            'avatar': avatar
         }
 
         url = '{0}/@me'.format(endpoints.USERS)
         response = requests.patch(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
         data = response.json()
         log.debug(request_success_log.format(response=response, json=payload, data=data))
@@ -1098,7 +1115,7 @@ class Client(object):
 
         response = requests.patch(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
         data = response.json()
         log.debug(request_success_log.format(response=response, json=payload, data=data))
@@ -1125,7 +1142,7 @@ class Client(object):
         url = '{0}/{1.id}/channels'.format(endpoints.SERVERS, server)
         response = requests.post(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
         data = response.json()
         log.debug(request_success_log.format(response=response, data=data, json=payload))
@@ -1144,7 +1161,7 @@ class Client(object):
         url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def create_invite(self, destination, **options):
         """Creates an invite for the destination which could be either a :class:`Server` or :class:`Channel`.
@@ -1172,12 +1189,35 @@ class Client(object):
         response = requests.post(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
 
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
         data = response.json()
         log.debug(request_success_log.format(json=payload, response=response, data=data))
         data['server'] = self.connection._get_server(data['guild']['id'])
         channel_id = data['channel']['id']
         data['channel'] = utils.find(lambda ch: ch.id == channel_id, data['server'].channels)
+        return Invite(**data)
+
+    def get_invite(self, url):
+        """Returns a :class:`Invite` object from the discord.gg invite URL or ID.
+
+        .. note::
+
+            If the server attribute of the returned invite is ``None`` then that means
+            that you have not joined the server.
+
+        """
+
+        destination = self._resolve_invite(url)
+        rurl = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
+        response = requests.get(rurl, headers=self.headers)
+        log.debug(request_logging_format.format(response=response))
+        utils._verify_successful_response(response)
+        data = response.json()
+        server = self.connection._get_server(data['guild']['id'])
+        data['server'] = server
+        ch_id = data['channel']['id']
+        channels = getattr(server, 'channels', [])
+        data['channel'] = utils.find(lambda c: c.id == ch_id, channels)
         return Invite(**data)
 
     def accept_invite(self, invite):
@@ -1200,7 +1240,7 @@ class Client(object):
         url = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
         response = requests.post(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def edit_role(self, server, role, **fields):
         """Edits the specified :class:`Role` for the entire :class:`Server`.
@@ -1239,7 +1279,7 @@ class Client(object):
 
         response = requests.patch(url, json=payload, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
         data = response.json()
         log.debug(request_success_log.format(json=payload, response=response, data=data))
@@ -1258,7 +1298,7 @@ class Client(object):
         url = '{0}/{1.id}/roles/{2.id}'.format(endpoints.SERVERS, server, role)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def add_roles(self, member, *roles):
         """Gives the specified :class:`Member` a number of :class:`Role` s.
@@ -1280,7 +1320,7 @@ class Client(object):
 
         response = requests.patch(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def remove_roles(self, member, *roles):
         """Removes the :class:`Role` s from the :class:`Member`.
@@ -1305,7 +1345,7 @@ class Client(object):
 
         response = requests.patch(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def replace_roles(self, member, *roles):
         """Replaces the :class:`Member`'s roles.
@@ -1331,7 +1371,7 @@ class Client(object):
 
         response = requests.patch(url, headers=self.headers, json=payload)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
         member.roles = list(roles)
 
@@ -1348,7 +1388,7 @@ class Client(object):
         url = '{0}/{1.id}/roles'.format(endpoints.SERVERS, server)
         response = requests.post(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
         data = response.json()
         everyone = server.id == data.get('id')
@@ -1412,7 +1452,7 @@ class Client(object):
 
         response = requests.put(url, json=payload, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def delete_channel_permissions(self, channel, target):
         """Removes a channel specific permission overwrites for a target
@@ -1430,7 +1470,7 @@ class Client(object):
         url = '{0}/{1.id}/permissions/{2.id}'.format(endpoints.CHANNELS, channel, target)
         response = requests.delete(url, headers=self.headers)
         log.debug(request_logging_format.format(response=response))
-        _verify_successful_response(response)
+        utils._verify_successful_response(response)
 
     def change_status(self, game_id=None, idle=False):
         """Changes the client's status.

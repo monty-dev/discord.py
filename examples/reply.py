@@ -1,18 +1,14 @@
 import discord
-import logging
-
-# Set up the logging module to output diagnostic to the console.
-logging.basicConfig()
 
 client = discord.Client()
 client.login('email', 'password')
 
-if not client.is_logged_in:
-    print('Logging in to Discord failed')
-    exit(1)
-
 @client.event
 def on_message(message):
+    # we do not want the bot to reply to itself
+    if message.author == client.user:
+        return
+
     if message.content.startswith('!hello'):
         client.send_message(message.channel, 'Hello {}!'.format(message.author.mention()))
 
