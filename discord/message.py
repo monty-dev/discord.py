@@ -62,16 +62,31 @@ class Message(object):
 
         The :class:`Channel` that the message was sent from. Could be a :class:`PrivateChannel` if it's a private message.
         In :issue:`very rare cases <21>` this could be a :class:`Object` instead.
+
+        For the sake of convenience, this :class:`Object` instance has an attribute ``is_private`` set to ``True``.
     .. attribute:: server
 
         The :class:`Server` that the message belongs to. If not applicable (i.e. a PM) then it's None instead.
     .. attribute:: mention_everyone
 
         A boolean specifying if the message mentions everyone.
+
+        .. note::
+
+            This does not check if the ``@everyone`` text is in the message itself.
+            Rather this boolean indicates if the ``@everyone`` text is in the message
+            **and** it did end up mentioning everyone.
+
     .. attribute:: mentions
 
         A list of :class:`Member` that were mentioned. If the message is in a private message
         then the list is always empty.
+
+        .. warning::
+
+            The order of the mentions list is not in any particular order so you should
+            not rely on it. This is a discord limitation, not one with the library.
+
     .. attribute:: channel_mentions
 
         A list of :class:`Channel` that were mentioned. If the message is in a private message
@@ -144,7 +159,8 @@ class Message(object):
         self.server = None
         if self.channel is None:
             if channel_id is not None:
-                self.channel = Object(channel_id)
+                self.channel = Object(id=channel_id)
+                self.channel.is_private = True
             return
 
         if not self.channel.is_private:
