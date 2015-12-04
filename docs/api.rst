@@ -34,16 +34,38 @@ overriding the specific events. For example: ::
     import discord
 
     class MyClient(discord.Client):
+
+        @asyncio.coroutine
         def on_message(self, message):
-            self.send_message(message.channel, 'Hello World!')
+            yield from self.send_message(message.channel, 'Hello World!')
 
 
 If an event handler raises an exception, :func:`on_error` will be called
 to handle it, which defaults to print a traceback and ignore the exception.
 
+.. warning::
+
+    All the events must be a |corourl|_. If they aren't, then you might get unexpected
+    errors. In order to turn a function into a coroutine they must either be decorated
+    with ``@asyncio.coroutine`` or in Python 3.5+ be defined using the ``async def``
+    declaration.
+
+    The following two functions are examples of coroutine functions: ::
+
+        async def on_ready():
+            pass
+
+        @asyncio.coroutine
+        def on_ready():
+            pass
+
+    Since this can be a potentially common mistake, there is a helper
+    decorator, :meth:`Client.async_event` to convert a basic function
+    into a coroutine and an event at the same time. Note that it is
+    not necessary if you use ``async def``.
+
 .. versionadded:: 0.7.0
     Subclassing to listen to events.
-
 
 .. function:: on_ready()
 
@@ -340,6 +362,10 @@ The following exceptions are thrown by the library.
 
 .. autoexception:: HTTPException
     :members:
+
+.. autoexception:: Forbidden
+
+.. autoexception:: NotFound
 
 .. autoexception:: InvalidArgument
 
