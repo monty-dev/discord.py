@@ -34,6 +34,7 @@ from .object import Object
 from .errors import *
 from .state import ConnectionState
 from . import utils
+from .enums import ChannelType, ServerRegion
 
 import asyncio
 import aiohttp
@@ -105,6 +106,7 @@ class Client:
             'content-type': 'application/json',
         }
         self._closed = False
+        self._is_logged_in = False
 
     # internals
 
@@ -386,8 +388,10 @@ class Client:
         you should run it in an executor or schedule the coroutine to
         be executed later using ``loop.create_task``.
 
-        This function throws :exc:`ClientException` if called before
-        logging in via :meth:`login`.
+        Raises
+        -------
+        ClientException
+            If this is called before :meth:`login` was invoked successfully.
         """
         yield from self._make_websocket()
 
@@ -411,6 +415,28 @@ class Client:
         yield from self.ws.close()
         self.keep_alive.cancel()
         self._closed = True
+
+    @asyncio.coroutine
+    def start(self, email, password):
+        """|coro|
+
+        A shorthand coroutine for :meth:`login` + :meth:`connect`.
+        """
+        yield from self.login(email, password)
+        yield from self.connect()
+
+    def run(self, email, password):
+        """A blocking call that abstracts away the `event loop`_
+        initialisation from you.
+
+        Equivalent to: ::
+
+            loop.run_until_complete(start(email, password))
+            loop.close()
+        """
+
+        self.loop.run_until_complete(self.start(email, password))
+        self.loop.close()
 
     # event registration
 
@@ -939,6 +965,8 @@ class Client:
 
         All fields except ``password`` are optional.
 
+        The profile is **not** edited in place.
+
         Note
         -----
         To upload an avatar, a *bytes-like object* must be passed in that
@@ -960,20 +988,25 @@ class Client:
             The new username you wish to change to.
         avatar : bytes
             A *bytes-like object* representing the image to upload.
+            Could be ``None`` to denote no avatar.
 
         Raises
         ------
         HTTPException
             Editing your profile failed.
+        InvalidArgument
+            Wrong image format passed for ``avatar``.
         """
 
-        avatar_bytes = fields.get('avatar')
-        avatar = None
-        if avatar_bytes is not None:
-            fmt = 'data:{mime};base64,{data}'
-            mime = utils._get_mime_type_for_image(avatar_bytes)
-            b64 = b64encode(avatar_bytes).decode('ascii')
-            avatar = fmt.format(mime=mime, data=b64)
+        try:
+            avatar_bytes = fields['avatar']
+        except KeyError:
+            avatar = self.user.avatar
+        else:
+            if avatar_bytes is not None:
+                avatar = utils._bytes_to_base64_data(avatar_bytes)
+            else:
+                avatar = None
 
         payload = {
             'password': password,
@@ -1051,6 +1084,8 @@ class Client:
 
         You must have the proper permissions to edit the channel.
 
+        The channel is **not** edited in-place.
+
         Parameters
         ----------
         channel : :class:`Channel`
@@ -1085,7 +1120,7 @@ class Client:
         log.debug(request_success_log.format(response=r, json=payload, data=data))
 
     @asyncio.coroutine
-    def create_channel(self, server, name, type='text'):
+    def create_channel(self, server, name, type=None):
         """|coro|
 
         Creates a :class:`Channel` in the specified :class:`Server`.
@@ -1098,8 +1133,8 @@ class Client:
             The server to create the channel in.
         name : str
             The channel's name.
-        type : str
-            The type of channel to create. 'text' or 'voice'.
+        type : :class:`ChannelType`
+            The type of channel to create. Defaults to :attr:`ChannelType.text`.
 
         Raises
         -------
@@ -1117,9 +1152,12 @@ class Client:
             different than the one that will be added in cache.
         """
 
+        if type is None:
+            type = ChannelType.text
+
         payload = {
             'name': name,
-            'type': type
+            'type': str(type)
         }
 
         url = '{0}/{1.id}/channels'.format(endpoints.SERVERS, server)
@@ -1161,3 +1199,629 @@ class Client:
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
 
+    # Server management
+
+    @asyncio.coroutine
+    def leave_server(self, server):
+        """|coro|
+
+        Leaves a :class:`Server`.
+
+        Warning
+        --------
+        If you are the owner of the server then it is deleted.
+
+        Parameters
+        ----------
+        server : :class:`Server`
+            The server to leave.
+
+        Raises
+        --------
+        HTTPException
+            If leaving the server failed.
+        """
+
+        url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
+        response = yield from self.session.delete(url, headers=self.headers)
+        log.debug(request_logging_format.format(method='DELETE', response=response))
+        yield from utils._verify_successful_response(response)
+
+    @asyncio.coroutine
+    def create_server(self, name, region=None, icon=None):
+        """|coro|
+
+        Creates a :class:`Server`.
+
+        Parameters
+        ----------
+        name : str
+            The name of the server.
+        region : :class:`ServerRegion`
+            The region for the voice communication server.
+            Defaults to :attr`ServerRegion.us_west`.
+        icon : bytes
+            The *bytes-like* object representing the icon. See :meth:`edit_profile`
+            for more details on what is expected.
+
+        Raises
+        ------
+        HTTPException
+            Server creation failed.
+        InvalidArgument
+            Invalid icon image format given. Must be PNG or JPG.
+
+        Returns
+        -------
+        :class:`Server`
+            The server created. This is not the same server that is
+            added to cache.
+        """
+        if icon is not None:
+            icon = utils._bytes_to_base64_data(icon)
+
+        r = yield from self.session.post(endpoints.SERVERS, headers=self.headers)
+        log.debug(request_logging_format.format(method='POST', response=r))
+        yield from utils._verify_successful_response(r)
+        data = yield from r.json()
+        log.debug(request_success_log.format(response=r, json=payload, data=data))
+        return Server(**data)
+
+    @asyncio.coroutine
+    def edit_server(self, server, **fields):
+        """|coro|
+
+        Edits a :class:`Server`.
+
+        You must have the proper permissions to edit the server.
+
+        The server is **not** edited in-place.
+
+        Parameters
+        ----------
+        server : :class:`Server`
+            The server to edit.
+        name : str
+            The new name of the server.
+        icon : bytes
+            A *bytes-like* object representing the icon. See :meth:`edit_profile`
+            for more details. Could be ``None`` to denote
+        region : :class:`ServerRegion`
+            The new region for the server's voice communication.
+        afk_channel : :class:`Channel`
+            The new channel that is the AFK channel. Could be ``None`` for no AFK channel.
+        afk_timeout : int
+            The number of seconds until someone is moved to the AFK channel.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to edit the server.
+        NotFound
+            The server you are trying to edit does not exist.
+        HTTPException
+            Editing the server failed.
+        InvalidArgument
+            The image format passed in to ``icon`` is invalid. It must be
+            PNG or JPG.
+        """
+
+        try:
+            icon_bytes = fields['icon']
+        except KeyError:
+            icon = server.icon
+        else:
+            if icon_bytes is not None:
+                icon = utils._bytes_to_base64_data(icon_bytes)
+            else:
+                icon = None
+
+        payload = {
+            'region': str(fields.get('region', server.region)),
+            'afk_timeout': fields.get('afk_timeout', server.afk_timeout),
+            'icon': icon,
+            'name': fields.get('name', server.name),
+        }
+
+        afk_channel = fields.get('afk_channel')
+        if afk_channel is None:
+            afk_channel = server.afk_channel
+
+        payload['afk_channel'] = getattr(afk_channel, 'id', None)
+
+        url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
+        r = yield from self.session.patch(url, headers=self.headers, data=to_json(payload))
+        log.debug(request_logging_format.format(method='PATCH', response=r))
+        yield from utils._verify_successful_response(r)
+
+    # Invite management
+
+    @asyncio.coroutine
+    def create_invite(self, destination, **options):
+        """|coro|
+
+        Creates an invite for the destination which could be either a
+        :class:`Server` or :class:`Channel`.
+
+        Parameters
+        ------------
+        destination
+            The :class:`Server` or :class:`Channel` to create the invite to.
+        max_age : int
+            How long the invite should last. If it's 0 then the invite
+            doesn't expire. Defaults to 0.
+        max_uses : int
+            How many uses the invite could be used for. If it's 0 then there
+            are unlimited uses. Defaults to 0.
+        temporary : bool
+            Denotes that the invite grants temporary membership
+            (i.e. they get kicked after they disconnect). Defaults to False.
+        xkcd : bool
+            Indicates if the invite URL is human readable. Defaults to False.
+
+        Raises
+        -------
+        HTTPException
+            Invite creation failed.
+
+        Returns
+        --------
+        :class:`Invite`
+            The invite that was created.
+        """
+
+        payload = {
+            'max_age': options.get('max_age', 0),
+            'max_uses': options.get('max_uses', 0),
+            'temporary': options.get('temporary', False),
+            'xkcdpass': options.get('xkcd', False)
+        }
+
+        url = '{0}/{1.id}/invites'.format(endpoints.CHANNELS, destination)
+        response = yield from self.session.post(url, headers=self.headers, data=to_json(payload))
+        log.debug(request_logging_format.format(method='POST', response=response))
+
+        yield from utils._verify_successful_response(response)
+        data = yield from response.json()
+        log.debug(request_success_log.format(json=payload, response=response, data=data))
+
+        data['server'] = self.connection._get_server(data['guild']['id'])
+        channel_id = data['channel']['id']
+        data['channel'] = utils.find(lambda ch: ch.id == channel_id, data['server'].channels)
+        return Invite(**data)
+
+    @asyncio.coroutine
+    def get_invite(self, url):
+        """|coro|
+
+        Gets a :class:`Invite` from a discord.gg URL or ID.
+
+        Note
+        ------
+        If the invite is for a server you have not joined, the server and channel
+        attributes of the returned invite will be :class:`Object` with the names
+        patched in.
+
+        Parameters
+        -----------
+        url : str
+            The discord invite ID or URL (must be a discord.gg URL).
+
+        Raises
+        -------
+        NotFound
+            The invite has expired or is invalid.
+        HTTPException
+            Getting the invite failed.
+
+        Returns
+        --------
+        :class:`Invite`
+            The invite from the URL/ID.
+        """
+
+        destination = self._resolve_invite(url)
+        rurl = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
+        response = yield from self.session.get(rurl, headers=self.headers)
+        log.debug(request_logging_format.format(method='GET', response=response))
+        yield from utils._verify_successful_response(response)
+        data = yield from response.json()
+        server = self.connection._get_server(data['guild']['id'])
+        if server is not None:
+            ch_id = data['channel']['id']
+            channels = getattr(server, 'channels', [])
+            channel = utils.find(lambda c: c.id == ch_id, channels)
+        else:
+            server = Object(id=data['guild']['id'])
+            server.name = data['guild']['name']
+            channel = Object(id=data['channel']['id'])
+            channel.name = data['channel']['name']
+        data['server'] = server
+        data['channel'] = channel
+        return Invite(**data)
+
+    @asyncio.coroutine
+    def accept_invite(self, invite):
+        """|coro|
+
+        Accepts an :class:`Invite`, URL or ID to an invite.
+
+        The URL must be a discord.gg URL. e.g. "http://discord.gg/codehere".
+        An ID for the invite is just the "codehere" portion of the invite URL.
+
+        Parameters
+        -----------
+        invite
+            The :class:`Invite` or URL to an invite to accept.
+
+        Raises
+        -------
+        HTTPException
+            Accepting the invite failed.
+        NotFound
+            The invite is invalid or expired.
+        """
+
+        destination = self._resolve_invite(invite)
+        url = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
+        response = yield from self.session.post(url, headers=self.headers)
+        log.debug(request_logging_format.format(method='POST', response=response))
+        yield from utils._verify_successful_response(response)
+
+    @asyncio.coroutine
+    def delete_invite(self, invite):
+        """|coro|
+
+        Revokes an :class:`Invite`, URL, or ID to an invite.
+
+        The ``invite`` parameter follows the same rules as
+        :meth:`accept_invite`.
+
+        Parameters
+        ----------
+        invite
+            The invite to revoke.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to revoke invites.
+        NotFound
+            The invite is invalid or expired.
+        HTTPException
+            Revoking the invite failed.
+        """
+
+        destination = self._resolve_invite(invite)
+        url = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
+        response = yield from self.session.delete(url, headers=self.headers)
+        log.debug(request_logging_format.format(method='DELETE', response=response))
+        yield from utils._verify_successful_response(response)
+
+
+    # Role management
+
+    @asyncio.coroutine
+    def edit_role(self, server, role, **fields):
+        """|coro|
+
+        Edits the specified :class:`Role` for the entire :class:`Server`.
+
+        This does **not** edit the role in place.
+
+        All fields except ``server`` and ``role`` are optional.
+
+        .. versionchanged:: 0.8.0
+            Editing now uses keyword arguments instead of editing the :class:`Role` object directly.
+
+        Note
+        -----
+        At the moment, the Discord API allows you to set the colour to any
+        RGB value. This might change in the future so it is recommended that
+        you use the constants in the :class:`Colour` instead such as
+        :meth:`Colour.green`.
+
+        Parameters
+        -----------
+        server : :class:`Server`
+            The server the role belongs to.
+        role : :class:`Role`
+            The role to edit.
+        name : str
+            The new role name to change to.
+        permissions : :class:`Permissions`
+            The new permissions to change to.
+        colour : :class:`Colour`
+            The new colour to change to. (aliased to color as well)
+        hoist : bool
+            Indicates if the role should be shown separately in the online list.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to change the role.
+        HTTPException
+            Editing the role failed.
+        """
+
+        url = '{0}/{1.id}/roles/{2.id}'.format(endpoints.SERVERS, server, role)
+        color = fields.get('color')
+        if color is None:
+            color = fields.get('colour', role.colour)
+
+        payload = {
+            'name': fields.get('name', role.name),
+            'permissions': fields.get('permissions', role.permissions).value,
+            'color': color.value,
+            'hoist': fields.get('hoist', role.hoist)
+        }
+
+        r = yield from self.session.patch(url, data=to_json(payload), headers=self.headers)
+        log.debug(request_logging_format.format(method='PATCH', response=r))
+        yield from utils._verify_successful_response(r)
+
+        data = yield from r.json()
+        log.debug(request_success_log.format(json=payload, response=r, data=data))
+
+    @asyncio.coroutine
+    def delete_role(self, server, role):
+        """|coro|
+
+        Deletes the specified :class:`Role` for the entire :class:`Server`.
+
+        Works in a similar matter to :func:`edit_role`.
+
+        Parameters
+        -----------
+        server : :class:`Server`
+            The server the role belongs to.
+        role : :class:`Role`
+            The role to delete.
+
+        Raises
+        --------
+        Forbidden
+            You do not have permissions to delete the role.
+        HTTPException
+            Deleting the role failed.
+        """
+
+        url = '{0}/{1.id}/roles/{2.id}'.format(endpoints.SERVERS, server, role)
+        response = yield from self.session.delete(url, headers=self.headers)
+        log.debug(request_logging_format.format(method='DELETE', response=response))
+        yield from utils._verify_successful_response(response)
+
+    @asyncio.coroutine
+    def add_roles(self, member, *roles):
+        """|coro|
+
+        Gives the specified :class:`Member` a number of :class:`Role` s.
+
+        You must have the proper permissions to use this function.
+
+        This method **appends** a role to a member but does **not** do it
+        in-place.
+
+        Parameters
+        -----------
+        member : :class:`Member`
+            The member to give roles to.
+        *roles
+            An argument list of :class:`Role` s to give the member.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to add roles.
+        HTTPException
+            Adding roles failed.
+        """
+
+        new_roles = [role.id for role in itertools.chain(member.roles, roles)]
+        yield from self.replace_roles(member, *new_roles)
+
+    @asyncio.coroutine
+    def remove_roles(self, member, *roles):
+        """|coro|
+
+        Removes the :class:`Role` s from the :class:`Member`.
+
+        You must have the proper permissions to use this function.
+
+        This method does **not** do edit the member in-place.
+
+        Parameters
+        -----------
+        member : :class:`Member`
+            The member to revoke roles from.
+        *roles
+            An argument list of :class:`Role` s to revoke the member.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to revoke roles.
+        HTTPException
+            Removing roles failed.
+        """
+        new_roles = {role.id for role in member.roles}
+        new_roles = new_roles.difference(roles)
+        yield from self.replace_roles(member, *new_roles)
+
+    @asyncio.coroutine
+    def replace_roles(self, member, *roles):
+        """|coro|
+
+        Replaces the :class:`Member`'s roles.
+
+        You must have the proper permissions to use this function.
+
+        This function **replaces** all roles that the member has.
+        For example if the member has roles ``[a, b, c]`` and the
+        call is ``client.replace_roles(member, d, e, c)`` then
+        the member has the roles ``[d, e, c]``.
+
+        This method does **not** do edit the member in-place.
+
+        Parameters
+        -----------
+        member : :class:`Member`
+            The member to replace roles from.
+        *roles
+            An argument list of :class:`Role` s to replace the roles with.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to revoke roles.
+        HTTPException
+            Removing roles failed.
+        """
+
+        url = '{0}/{1.server.id}/members/{1.id}'.format(endpoints.SERVERS, member)
+
+        payload = {
+            'roles': [role.id for role in roles]
+        }
+
+        r = yield from self.session.patch(url, headers=self.headers, data=to_json(payload))
+        log.debug(request_logging_format.format(method='PATCH', response=r))
+        yield from utils._verify_successful_response(r)
+
+    @asyncio.coroutine
+    def create_role(self, server, **fields):
+        """|coro|
+
+        Creates a :class:`Role`.
+
+        This function is similar to :class:`edit_role` in both
+        the fields taken and exceptions thrown.
+
+        Returns
+        --------
+        :class:`Role`
+            The newly created role. This not the same role that
+            is stored in cache.
+        """
+
+        url = '{0}/{1.id}/roles'.format(endpoints.SERVERS, server)
+        r = yield from self.session.post(url, headers=self.headers)
+        log.debug(request_logging_format.format(method='POST', response=r))
+        yield from utils._verify_successful_response(r)
+
+        data = yield from r.json()
+        everyone = server.id == data.get('id')
+        role = Role(everyone=everyone, **data)
+
+        # we have to call edit because you can't pass a payload to the
+        # http request currently.
+        yield from self.edit_role(server, role, **fields)
+        return role
+
+    @asyncio.coroutine
+    def edit_channel_permissions(self, channel, target, allow=None, deny=None):
+        """|coro|
+
+        Sets the channel specific permission overwrites for a target in the
+        specified :class:`Channel`.
+
+        The ``target`` parameter should either be a :class:`Member` or a
+        :class:`Role` that belongs to the channel's server.
+
+        You must have the proper permissions to do this.
+
+        Examples
+        ----------
+
+        Setting allow and deny: ::
+
+            allow = discord.Permissions.none()
+            deny = discord.Permissions.none()
+            allow.can_mention_everyone = True
+            deny.can_manage_messages = True
+            client.set_channel_permissions(message.channel, message.author, allow, deny)
+
+        Parameters
+        -----------
+        channel : :class:`Channel`
+            The channel to give the specific permissions for.
+        target
+            The :class:`Member` or :class:`Role` to overwrite permissions for.
+        allow : :class:`Permissions`
+            The permissions to explicitly allow. (optional)
+        deny : :class:`Permissions`
+            The permissions to explicitly deny. (optional)
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to edit channel specific permissions.
+        NotFound
+            The channel specified was not found.
+        HTTPException
+            Editing channel specific permissions failed.
+        InvalidArgument
+            The allow or deny arguments were not of type :class:`Permissions`
+            or the target type was not :class:`Role` or :class:`Member`.
+        """
+
+        url = '{0}/{1.id}/permissions/{2.id}'.format(endpoints.CHANNELS, channel, target)
+
+        allow = Permissions.none() if allow is None else allow
+        deny = Permissions.none() if deny is None else deny
+
+        if not (isinstance(allow, Permissions) and isinstance(deny, Permissions)):
+            raise InvalidArgument('allow and deny parameters must be discord.Permissions')
+
+        deny =  deny.value
+        allow = allow.value
+
+        payload = {
+            'id': target.id,
+            'allow': allow,
+            'deny': deny
+        }
+
+        if isinstance(target, Member):
+            payload['type'] = 'member'
+        elif isinstance(target, Role):
+            payload['type'] = 'role'
+        else:
+            raise InvalidArgument('target parameter must be either discord.Member or discord.Role')
+
+        r = yield from self.session.put(url, data=to_json(payload), headers=self.headers)
+        log.debug(request_logging_format.format(method='PUT', response=r))
+        yield from utils._verify_successful_response(r)
+
+    @asyncio.coroutine
+    def delete_channel_permissions(self, channel, target):
+        """|coro|
+
+        Removes a channel specific permission overwrites for a target
+        in the specified :class:`Channel`.
+
+        The target parameter follows the same rules as :meth:`set_channel_permissions`.
+
+        You must have the proper permissions to do this.
+
+        Parameters
+        ----------
+        channel : :class:`Channel`
+            The channel to give the specific permissions for.
+        target
+            The :class:`Member` or :class:`Role` to overwrite permissions for.
+
+        Raises
+        ------
+        Forbidden
+            You do not have permissions to delete channel specific permissions.
+        NotFound
+            The channel specified was not found.
+        HTTPException
+            Deleting channel specific permissions failed.
+        """
+
+        url = '{0}/{1.id}/permissions/{2.id}'.format(endpoints.CHANNELS, channel, target)
+        response = yield from self.session.delete(url, headers=self.headers)
+        log.debug(request_logging_format.format(method='DELETE', response=response))
+        yield from utils._verify_successful_response(response)

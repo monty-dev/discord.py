@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 """
 The MIT License (MIT)
 
@@ -23,25 +24,31 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-class Object(object):
-    """Represents a generic Discord object.
+from enum import Enum
 
-    The purpose of this class is to allow you to create 'miniature'
-    versions of data classes if you want to pass in just an ID. All functions
-    that take in a specific data class with an ID can also take in this class
-    as a substitute instead. Note that even though this is the case, not all
-    objects (if any) actually inherit from this class.
+class ChannelType(Enum):
+    text = 'text'
+    voice = 'voice'
 
-    There are also some cases where some websocket events are received
-    in :issue:`strange order <21>` and when such events happened you would
-    receive this class rather than the actual data class. These cases are
-    extremely rare.
+    def __str__(self):
+        return self.value
 
-    Attributes
-    -----------
-    id : str
-        The ID of the object.
-    """
+class ServerRegion(Enum):
+    us_west = 'us-west'
+    us_east = 'us-east'
+    singapore = 'singapore'
+    london = 'london'
+    sydney = 'sydney'
+    amsterdam = 'amsterdam'
+    frankfurt = 'frankfurt'
 
-    def __init__(self, id):
-        self.id = id
+    def __str__(self):
+        return self.value
+
+class Status(Enum):
+    online = 'online'
+    offline = 'offline'
+    idle = 'idle'
+
+    def __str__(self):
+        return self.value
