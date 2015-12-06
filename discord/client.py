@@ -231,13 +231,12 @@ class Client:
         if event in ('READY', 'MESSAGE_CREATE', 'MESSAGE_DELETE',
                      'MESSAGE_UPDATE', 'PRESENCE_UPDATE', 'USER_UPDATE',
                      'CHANNEL_DELETE', 'CHANNEL_UPDATE', 'CHANNEL_CREATE',
-                     'GUILD_MEMBER_ADD', 'GUILD_MEMBER_REMOVE',
+                     'GUILD_MEMBER_ADD', 'GUILD_MEMBER_REMOVE', 'GUILD_UPDATE'
                      'GUILD_MEMBER_UPDATE', 'GUILD_CREATE', 'GUILD_DELETE',
                      'GUILD_ROLE_CREATE', 'GUILD_ROLE_DELETE', 'TYPING_START',
                      'GUILD_ROLE_UPDATE', 'VOICE_STATE_UPDATE'):
             parser = 'parse_' + event.lower()
-            if hasattr(self.connection, parser):
-                getattr(self.connection, parser)(data)
+            getattr(self.connection, parser)(data)
         else:
             log.info("Unhandled event {}".format(event))
 
@@ -513,7 +512,7 @@ class Client:
             'recipient_id': user.id
         }
 
-        url = '{}/{}/channels'.format(endpoints.USERS, self.user.id)
+        url = '{}/@me/channels'.format(endpoints.USERS)
         r = yield from self.session.post(url, data=to_json(payload), headers=self.headers)
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
@@ -1719,7 +1718,7 @@ class Client:
         return role
 
     @asyncio.coroutine
-    def edit_channel_permissions(self, channel, target, allow=None, deny=None):
+    def edit_channel_permissions(self, channel, target, *, allow=None, deny=None):
         """|coro|
 
         Sets the channel specific permission overwrites for a target in the
@@ -1739,7 +1738,7 @@ class Client:
             deny = discord.Permissions.none()
             allow.can_mention_everyone = True
             deny.can_manage_messages = True
-            client.set_channel_permissions(message.channel, message.author, allow, deny)
+            yield from client.set_channel_permissions(message.channel, message.author, allow=allow, deny=deny)
 
         Parameters
         -----------
