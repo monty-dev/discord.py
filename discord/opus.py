@@ -80,10 +80,11 @@ def load_opus(name):
     """Loads the libopus shared library for use with voice.
 
     If this function is not called then the library uses the function
-    `ctypes.util.find_library <find_library>` and then loads that one
+    `ctypes.util.find_library`__ and then loads that one
     if available.
 
-    .. find_library: https://docs.python.org/3.5/library/ctypes.html#finding-shared-libraries
+    .. _find library: https://docs.python.org/3.5/library/ctypes.html#finding-shared-libraries
+    __ `find library`_
 
     Not loading a library leads to voice not working.
 
@@ -100,7 +101,7 @@ def load_opus(name):
     ----
     On Windows, the .dll extension is not necessary. However, on Linux
     the full extension is required to load the library, e.g. ``libopus.so.1``.
-    On Linux however, `find_library`_ will usually find the library automatically
+    On Linux however, `find library`_ will usually find the library automatically
     without you having to call this.
 
     Parameters
@@ -111,13 +112,37 @@ def load_opus(name):
     global _lib
     _lib = libopus_loader(name)
 
+def is_loaded():
+    """Function to check if opus lib is successfully loaded either
+    via the ``ctypes.util.find_library`` call of :func:`load_opus`.
+
+    This must return ``True`` for voice to work.
+
+    Returns
+    -------
+    bool
+        Indicates if the opus library has been loaded.
+    """
+    global _lib
+    return _lib is not None
+
 class OpusError(DiscordException):
-    """An exception that is thrown for libopus related errors."""
+    """An exception that is thrown for libopus related errors.
+
+    Attributes
+    ----------
+    code : int
+        The error code returned.
+    """
     def __init__(self, code):
         self.code = code
         msg = _lib.opus_strerror(self.code).decode('utf-8')
         log.info('"{}" has happened'.format(msg))
-        super(DiscordException, self).__init__(msg)
+        super().__init__(msg)
+
+class OpusNotLoaded(DiscordException):
+    """An exception that is thrown for when libopus is not loaded."""
+    pass
 
 
 # Some constants...
@@ -136,6 +161,9 @@ class Encoder:
         self.sample_size = 2 * self.channels # (bit_rate / 8) but bit_rate == 16
         self.samples_per_frame = int(self.sampling_rate / 1000 * self.frame_length)
         self.frame_size = self.samples_per_frame * self.sample_size
+
+        if not is_loaded():
+            raise OpusNotLoaded()
 
         self._state = self._create_state()
 

@@ -31,12 +31,14 @@ Voice
 Opus Library
 ~~~~~~~~~~~~~
 
-.. autofunction:: opus.load_opus
+.. autofunction:: discord.opus.load_opus
+
+.. autofunction:: discord.opus.is_loaded
 
 .. _discord-api-events:
 
 Event Reference
-~~~~~~~~~~~~~~~~
+---------------
 
 This page outlines the different types of events listened by :class:`Client`.
 
@@ -457,4 +459,6 @@ The following exceptions are thrown by the library.
 
 .. autoexception:: GatewayNotFound
 
-.. autoexception:: OpusError
+.. autoexception:: discord.opus.OpusError
+
+.. autoexception:: discord.opus.OpusNotLoaded
