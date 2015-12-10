@@ -24,6 +24,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+from . import __version__ as library_version
 from . import endpoints
 from .user import User
 from .channel import Channel, PrivateChannel
@@ -31,6 +32,7 @@ from .server import Server
 from .message import Message
 from .invite import Invite
 from .object import Object
+from .role import Role
 from .errors import *
 from .state import ConnectionState
 from . import utils
@@ -71,6 +73,10 @@ class Client:
     -----------
     user : Optional[:class:`User`]
         Represents the connected client. None if not logged in.
+    voice : Optional[:class:`VoiceClient`]
+        Represents the current voice connection. None if you are not connected
+        to a voice channel. To connect to voice use :meth:`join_voice_channel`.
+        To query the voice connection state use :meth:`is_voice_connected`.
     servers : list of :class:`Server`
         The servers that the connected client is a member of.
     private_channels : list of :class:`PrivateChannel`
@@ -92,6 +98,7 @@ class Client:
         self.ws = None
         self.token = None
         self.gateway = None
+        self.voice = None
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self._listeners = []
 
@@ -101,20 +108,26 @@ class Client:
 
         self.connection = ConnectionState(self.dispatch, max_messages)
         self.session = aiohttp.ClientSession(loop=self.loop)
+
+        # Blame React for this
+        user_agent = 'DiscordBot (https://github.com/Rapptz/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
+
         self.headers = {
             'content-type': 'application/json',
+            'user-agent': user_agent.format(library_version, sys.version_info, aiohttp.__version__)
         }
+
         self._closed = False
         self._is_logged_in = False
-
-        # this is shared state between Client and VoiceClient
-        # could this lead to issues? Not sure. I want to say no.
-        self._is_voice_connected = asyncio.Event(loop=self.loop)
 
         # These two events correspond to the two events necessary
         # for a connection to be made
         self._voice_data_found = asyncio.Event(loop=self.loop)
         self._session_id_found = asyncio.Event(loop=self.loop)
+
+    def __del__(self):
+        if hasattr(self, 'session'):
+            self.session.close()
 
     # internals
 
@@ -564,9 +577,14 @@ class Client:
         if self._closed:
             return
 
+        if self.is_voice_connected():
+            yield from self.voice.disconnect()
+            self.voice = None
+
         yield from self.ws.close()
         self.keep_alive.cancel()
         self._closed = True
+
 
     @asyncio.coroutine
     def start(self, email, password):
@@ -2005,6 +2023,9 @@ class Client:
         Joins a voice channel and creates a :class:`VoiceClient` to
         establish your connection to the voice server.
 
+        After this function is successfully called, :attr:`voice` is
+        set to the returned :class:`VoiceClient`.
+
         Parameters
         ----------
         channel : :class:`Channel`
@@ -2027,7 +2048,7 @@ class Client:
             A voice client that is fully connected to the voice server.
         """
 
-        if self._is_voice_connected.is_set():
+        if self.is_voice_connected():
             raise ClientException('Already connected to a voice channel')
 
         if getattr(channel, 'type', ChannelType.text) != ChannelType.voice:
@@ -2055,7 +2076,6 @@ class Client:
 
         kwargs = {
             'user': self.user,
-            'connected': self._is_voice_connected,
             'channel': self.voice_channel,
             'data': self._voice_data_found.data,
             'loop': self.loop,
@@ -2063,6 +2083,11 @@ class Client:
             'main_ws': self.ws
         }
 
-        result = VoiceClient(**kwargs)
-        yield from result.connect()
-        return result
+        self.voice = VoiceClient(**kwargs)
+        yield from self.voice.connect()
+        return self.voice
+
+
+    def is_voice_connected(self):
+        """bool : Indicates if we are currently connected to a voice channel."""
+        return self.voice is not None and self.voice.is_connected()
