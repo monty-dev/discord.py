@@ -70,9 +70,13 @@ class StreamPlayer(threading.Thread):
     def run(self):
         self.loops = 0
         self._start = time.time()
-        while not self.is_done():
+        while not self._end.is_set():
             if self._paused.is_set():
                 continue
+
+            if not self._connected.is_set():
+                self.stop()
+                break
 
             self.loops += 1
             data = self.buff.read(self.frame_size)
@@ -107,6 +111,16 @@ class StreamPlayer(threading.Thread):
 
     def is_done(self):
         return not self._connected.is_set() or self._end.is_set()
+
+class ProcessPlayer(StreamPlayer):
+    def __init__(self, process, client, after, **kwargs):
+        super().__init__(process.stdout, client.encoder,
+                         client._connected, client.play_audio, after, **kwargs)
+        self.process = process
+
+    def stop(self):
+        self.process.kill()
+        super().stop()
 
 class VoiceClient:
     """Represents a Discord voice connection.
@@ -281,7 +295,6 @@ class VoiceClient:
             return
 
         self.keep_alive.cancel()
-        self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
         self._connected.clear()
         yield from self.ws.close()
@@ -318,7 +331,7 @@ class VoiceClient:
         struct.pack_into('>I', buff, 8, self.ssrc)
         return buff
 
-    def create_ffmpeg_player(self, filename, *, use_avconv=False, after=None):
+    def create_ffmpeg_player(self, filename, *, use_avconv=False, pipe=False, options=None, after=None):
         """Creates a stream player for ffmpeg that launches in a separate thread to play
         audio.
 
@@ -342,11 +355,17 @@ class VoiceClient:
 
         Parameters
         -----------
-        filename : str
+        filename
             The filename that ffmpeg will take and convert to PCM bytes.
-            This is passed to the ``-i`` flag that ffmpeg takes.
+            If ``pipe`` is True then this is a file-like object that is
+            passed to the stdin of ``ffmpeg``.
         use_avconv: bool
             Use ``avconv`` instead of ``ffmpeg``.
+        pipe : bool
+            If true, denotes that ``filename`` parameter will be passed
+            to the stdin of ffmpeg.
+        options: str
+            Extra command line flags to pass to ``ffmpeg``.
         after : callable
             The finalizer that is called after the stream is done being
             played. All exceptions the finalizer throws are silently discarded.
@@ -363,19 +382,88 @@ class VoiceClient:
             See :meth:`create_stream_player`.
         """
         command = 'ffmpeg' if not use_avconv else 'avconv'
-        cmd = '{} -i "{}" -f s16le -ar {} -ac {} -loglevel warning pipe:1'
-        cmd = cmd.format(command, filename, self.encoder.sampling_rate, self.encoder.channels)
+        input_name = '-' if pipe else shlex.quote(filename)
+        cmd = command + ' -i {} -f s16le -ar {} -ac {} -loglevel warning pipe:1'
+        cmd = cmd.format(input_name, self.encoder.sampling_rate, self.encoder.channels)
+
+        if isinstance(options, str):
+            cmd = cmd + ' ' + options
+
+        stdin = None if not pipe else filename
+        args = shlex.split(cmd)
         try:
-            process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
-        except Exception as e:
+            p = subprocess.Popen(args, stdin=stdin, stdout=subprocess.PIPE)
+            return ProcessPlayer(p, self, after)
+        except subprocess.SubprocessError as e:
             raise ClientException('Popen failed: {0.__name__} {1}'.format(type(e), str(e)))
 
-        def killer():
-            process.kill()
-            if callable(after):
-                after()
 
-        return StreamPlayer(process.stdout, self.encoder, self._connected, self.play_audio, killer)
+    def create_ytdl_player(self, url, *, options=None, use_avconv=False, after=None):
+        """Creates a stream player for youtube or other services that launches
+        in a separate thread to play the audio.
+
+        The player uses the ``youtube_dl`` python library to get the information
+        required to get audio from the URL. Since this uses an external library,
+        you must install it yourself. You can do so by calling
+        ``pip install youtube_dl``.
+
+        You must have the ffmpeg or avconv executable in your path environment
+        variable in order for this to work.
+
+        The operations that can be done on the player are the same as those in
+        :meth:`create_stream_player`.
+
+        .. _here: https://github.com/rg3/youtube-dl/blob/master/youtube_dl/YoutubeDL.py#L117-L265
+
+        Examples
+        ----------
+
+        Basic usage: ::
+
+            voice = yield from client.join_voice_channel(channel)
+            player = voice.create_ytdl_player('https://www.youtube.com/watch?v=d62TYemN6MQ')
+            player.start()
+
+        Parameters
+        -----------
+        url : str
+            The URL that ``youtube_dl`` will take and download audio to pass
+            to ``ffmpeg`` or ``avconv`` to convert to PCM bytes.
+        options : dict
+            A dictionary of options to pass into the ``YoutubeDL`` instance.
+            See `here`_ for more details.
+        use_avconv: bool
+            Use ``avconv`` instead of ``ffmpeg``. Passes the appropriate
+            flags to ``youtube-dl`` as well.
+        after : callable
+            The finalizer that is called after the stream is done being
+            played. All exceptions the finalizer throws are silently discarded.
+
+        Raises
+        -------
+        ClientException
+            Popen failure from either ``ffmpeg``/``avconv``.
+
+        Returns
+        --------
+        StreamPlayer
+            A stream player with specific operations.
+            See :meth:`create_stream_player`.
+        """
+        import youtube_dl
+
+        opts = {
+            'format': 'webm[abr>0]' if 'youtube' in url else 'best',
+            'prefer_ffmpeg': not use_avconv
+        }
+
+        if options is not None and isinstance(options, dict):
+            opts.update(options)
+
+        ydl = youtube_dl.YoutubeDL(opts)
+        info = ydl.extract_info(url, download=False)
+        log.info('playing URL {}'.format(url))
+        return self.create_ffmpeg_player(info['url'], use_avconv=use_avconv, after=after)
 
     def encoder_options(self, *, sample_rate, channels=2):
         """Sets the encoder options for the OpusEncoder.
@@ -451,6 +539,7 @@ class VoiceClient:
         StreamPlayer
             A stream player with the operations noted above.
         """
+        return StreamPlayer(stream, self.encoder, self._connected, self.play_audio, after)
 
     def play_audio(self, data):
         """Sends an audio packet composed of the data.
