@@ -170,6 +170,7 @@ class Client:
                 return m.group(1)
         return invite
 
+    @asyncio.coroutine
     def _resolve_destination(self, destination):
         if isinstance(destination, (Channel, PrivateChannel, Server)):
             return destination.id
@@ -177,7 +178,7 @@ class Client:
             found = utils.find(lambda pm: pm.user == destination, self.private_channels)
             if found is None:
                 # Couldn't find the user, so start a PM with them first.
-                self.start_private_message(destination)
+                yield from self.start_private_message(destination)
                 channel_id = self.private_channels[-1].id
                 return channel_id
             else:
@@ -298,7 +299,7 @@ class Client:
             raise ClientException('You must be logged in to connect')
 
         self.gateway = yield from self._get_gateway()
-        self.ws = yield from websockets.connect(self.gateway)
+        self.ws = yield from websockets.connect(self.gateway, loop=self.loop)
         self.ws.max_size = None
         log.info('Created websocket connected to {0.gateway}'.format(self))
         payload = {
@@ -520,8 +521,7 @@ class Client:
         if resp.status == 400:
             raise LoginFailure('Improper credentials have been passed.')
         elif resp.status != 200:
-            data = yield from resp.json()
-            raise HTTPException(resp, data.get('message'))
+            raise HTTPException(resp, None)
 
         log.info('logging in returned status code {}'.format(resp.status))
         self.email = email
@@ -692,6 +692,20 @@ class Client:
         self.private_channels.append(PrivateChannel(id=data['id'], user=user))
 
     @asyncio.coroutine
+    def _rate_limit_helper(self, name, method, url, data):
+        resp = yield from self.session.request(method, url, data=data, headers=self.headers)
+        tmp = request_logging_format.format(method=method, response=resp)
+        log_fmt = 'In {}, {}'.format(name, tmp)
+        log.debug(log_fmt)
+        if resp.status == 429:
+            retry = resp.headers['Retry-After'] / 1000.0
+            yield from resp.release()
+            yield from asyncio.sleep(retry)
+            return (yield from self._rate_limit_helper(name, method, data))
+
+        return resp
+
+    @asyncio.coroutine
     def send_message(self, destination, content, *, mentions=True, tts=False):
         """|coro|
 
@@ -744,7 +758,7 @@ class Client:
             The message that was sent.
         """
 
-        channel_id = self._resolve_destination(destination)
+        channel_id = yield from self._resolve_destination(destination)
 
         content = str(content)
         mentions = self._resolve_mentions(content, mentions)
@@ -758,8 +772,7 @@ class Client:
         if tts:
             payload['tts'] = True
 
-        resp = yield from self.session.post(url, data=utils.to_json(payload), headers=self.headers)
-        log.debug(request_logging_format.format(method='POST', response=resp))
+        resp = yield from self._rate_limit_helper('send_message', 'POST', url, utils.to_json(payload))
         yield from utils._verify_successful_response(resp)
         data = yield from resp.json()
         log.debug(request_success_log.format(response=resp, json=payload, data=data))
@@ -783,7 +796,7 @@ class Client:
             The location to send the typing update.
         """
 
-        channel_id = self._resolve_destination(destination)
+        channel_id = yield from self._resolve_destination(destination)
 
         url = '{base}/{id}/typing'.format(base=endpoints.CHANNELS, id=channel_id)
 
@@ -825,8 +838,6 @@ class Client:
 
         Raises
         -------
-        InvalidArgument
-            If ``fp.name`` is an invalid default for ``filename``.
         HTTPException
             Sending the file failed.
 
@@ -836,27 +847,25 @@ class Client:
             The message sent.
         """
 
-        channel_id = self._resolve_destination(destination)
+        channel_id = yield from self._resolve_destination(destination)
 
         url = '{base}/{id}/messages'.format(base=endpoints.CHANNELS, id=channel_id)
+        files = aiohttp.FormData()
+
+        # we don't want the content-type json in this request
+        headers = {
+            'authorization': self.token
+        }
 
         try:
             # attempt to open the file and send the request
             with open(fp, 'rb') as f:
-                files = {
-                    'file': (fp if filename is None else filename, f)
-                }
+                files.add_field('file', f, filename=filename)
+                response = yield from self.session.post(url, data=files, headers=headers)
         except TypeError:
-            # if we got a TypeError then this is probably a file-like object
-            fname = getattr(fp, 'name', None) if filename is None else filename
-            if fname is None:
-                raise InvalidArgument('file-like object has no name attribute and no filename was specified')
+            files.add_field('file', fp, filename=filename)
+            response = yield from self.session.post(url, data=files, headers=headers)
 
-            files = {
-                'file': (fname, fp)
-            }
-
-        response = yield from self.session.post(url, files=files, headers=self.headers)
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
         data = yield from response.json()
@@ -931,12 +940,30 @@ class Client:
             'mentions': self._resolve_mentions(content, mentions)
         }
 
-        response = yield from self.session.patch(url, headers=self.headers, data=utils.to_json(payload))
+        response = yield from self._rate_limit_helper('edit_message', 'PATCH', url, utils.to_json(payload))
         log.debug(request_logging_format.format(method='PATCH', response=response))
         yield from utils._verify_successful_response(response)
         data = yield from response.json()
         log.debug(request_success_log.format(response=response, json=payload, data=data))
         return Message(channel=channel, **data)
+
+    @asyncio.coroutine
+    def _logs_from(self, channel, limit=100, before=None, after=None):
+        url = '{}/{}/messages'.format(endpoints.CHANNELS, channel.id)
+        params = {
+            'limit': limit
+        }
+
+        if before:
+            params['before'] = before.id
+        if after:
+            params['after'] = after.id
+
+        response = yield from self.session.get(url, params=params, headers=self.headers)
+        log.debug(request_logging_format.format(method='GET', response=response))
+        yield from utils._verify_successful_response(response)
+        messages = yield from response.json()
+        return messages
 
     @asyncio.coroutine
     def logs_from(self, channel, limit=100, *, before=None, after=None):
@@ -981,25 +1008,19 @@ class Client:
                         yield from client.edit_message(message, 'goodbye')
         """
 
-        def generator_wrapper(data):
+        def generator(data):
             for message in data:
                 yield Message(channel=channel, **message)
 
-        url = '{}/{}/messages'.format(endpoints.CHANNELS, channel.id)
-        params = {
-            'limit': limit
-        }
+        result = []
+        while limit > 0:
+            retrieve = limit if limit <= 100 else 100
+            data = yield from self._logs_from(channel, retrieve, before, after)
+            limit -= retrieve
+            result.extend(data)
+            before = Object(id=data[-1]['id'])
 
-        if before:
-            params['before'] = before.id
-        if after:
-            params['after'] = after.id
-
-        response = yield from self.session.get(url, params=params, headers=self.headers)
-        log.debug(request_logging_format.format(method='GET', response=response))
-        yield from utils._verify_successful_response(response)
-        messages = yield from response.json()
-        return generator_wrapper(messages)
+        return generator(result)
 
     # Member management
 
