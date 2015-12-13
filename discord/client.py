@@ -45,6 +45,7 @@ import websockets
 
 import logging, traceback
 import sys, time, re, json
+import tempfile, os, hashlib
 
 log = logging.getLogger(__name__)
 request_logging_format = '{method} {response.url} has returned {response.status}'
@@ -68,6 +69,10 @@ class Client:
     loop : Optional[event loop].
         The `event loop`_ to use for asynchronous operations. Defaults to ``None``,
         in which case the default event loop is used via ``asyncio.get_event_loop()``.
+    cache_auth : Optional[bool]
+        Indicates if :meth:`login` should cache the authentication tokens. Defaults
+        to ``True``. The method in which the cache is written is done by writing to
+        disk to a temporary directory.
 
     Attributes
     -----------
@@ -101,13 +106,13 @@ class Client:
         self.voice = None
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self._listeners = []
+        self.cache_auth = options.get('cache_auth', True)
 
         max_messages = options.get('max_messages')
         if max_messages is None or max_messages < 100:
             max_messages = 5000
 
         self.connection = ConnectionState(self.dispatch, max_messages)
-        self.session = aiohttp.ClientSession(loop=self.loop)
 
         # Blame React for this
         user_agent = 'DiscordBot (https://github.com/Rapptz/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
@@ -125,11 +130,55 @@ class Client:
         self._voice_data_found = asyncio.Event(loop=self.loop)
         self._session_id_found = asyncio.Event(loop=self.loop)
 
-    def __del__(self):
-        if hasattr(self, 'session'):
-            self.session.close()
-
     # internals
+
+    def _get_cache_filename(self, email):
+        filename = hashlib.md5(email.encode('utf-8')).hexdigest()
+        return os.path.join(tempfile.gettempdir(), 'discord_py', filename)
+
+    @asyncio.coroutine
+    def _login_via_cache(self, email, password):
+        try:
+            log.info('attempting to login via cache')
+            cache_file = self._get_cache_filename(email)
+            with open(cache_file, 'r') as f:
+                log.info('login cache file found')
+                self.token = f.read()
+                self.headers['authorization'] = self.token
+
+            check = yield from aiohttp.get(endpoints.GATEWAY, headers=self.headers, loop=self.loop)
+            if check.status == 200:
+                log.info('login cache token check succeeded')
+                data = yield from check.json()
+                self.gateway = data.get('url')
+                self._is_logged_in = True
+                return
+            else:
+                # failed auth check
+                yield from check.release()
+                if check.status != 401:
+                    # This is unrelated to the auth check so it's
+                    # an error on discord's end
+                    raise GatewayNotFound()
+
+            # at this point our check failed
+            # so we have to login and get the proper token and then
+            # redo the cache
+        except OSError as e:
+            log.info('a problem occurred while opening login cache')
+            pass # file not found et al
+
+    def _update_cache(self, email, password):
+        try:
+            cache_file = self._get_cache_filename(email)
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, 'w') as f:
+                log.info('updating login cache')
+                f.write(self.token)
+        except OSError:
+            log.info('a problem occurred while updating the login cache')
+            pass
+
 
     def handle_message(self, message):
         removed = []
@@ -178,9 +227,8 @@ class Client:
             found = utils.find(lambda pm: pm.user == destination, self.private_channels)
             if found is None:
                 # Couldn't find the user, so start a PM with them first.
-                yield from self.start_private_message(destination)
-                channel_id = self.private_channels[-1].id
-                return channel_id
+                channel = yield from self.start_private_message(destination)
+                return channel.id
             else:
                 return found.id
         elif isinstance(destination, Object):
@@ -204,7 +252,7 @@ class Client:
 
     @asyncio.coroutine
     def _get_gateway(self):
-        resp = yield from self.session.get(endpoints.GATEWAY, headers=self.headers)
+        resp = yield from aiohttp.get(endpoints.GATEWAY, headers=self.headers, loop=self.loop)
         if resp.status != 200:
             raise GatewayNotFound()
         data = yield from resp.json()
@@ -298,7 +346,6 @@ class Client:
         if not self.is_logged_in:
             raise ClientException('You must be logged in to connect')
 
-        self.gateway = yield from self._get_gateway()
         self.ws = yield from websockets.connect(self.gateway, loop=self.loop)
         self.ws.max_size = None
         log.info('Created websocket connected to {0.gateway}'.format(self))
@@ -509,14 +556,23 @@ class Client:
             An unknown HTTP related error occurred,
             usually when it isn't 200 or the known incorrect credentials
             passing status code.
+        GatewayNotFound
+            The gateway to connect to discord was not found.
         """
+
+        # attempt to read the token from cache
+        if self.cache_auth:
+            yield from self._login_via_cache(email, password)
+            if self._is_logged_in:
+                return
+
         payload = {
             'email': email,
             'password': password
         }
 
         data = utils.to_json(payload)
-        resp = yield from self.session.post(endpoints.LOGIN, data=data, headers=self.headers)
+        resp = yield from aiohttp.post(endpoints.LOGIN, data=data, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=resp))
         if resp.status == 400:
             raise LoginFailure('Improper credentials have been passed.')
@@ -530,13 +586,20 @@ class Client:
         self.token = body['token']
         self.headers['authorization'] = self.token
         self._is_logged_in = True
+        self.gateway = yield from self._get_gateway()
+
+        # since we went through all this trouble
+        # let's make sure we don't have to do it again
+        if self.cache_auth:
+            self._update_cache(email, password)
 
     @asyncio.coroutine
     def logout(self):
         """|coro|
 
         Logs out of Discord and closes all connections."""
-        response = yield from self.session.post(endpoints.LOGOUT, headers=self.headers)
+        response = yield from aiohttp.post(endpoints.LOGOUT, headers=self.headers, loop=self.loop)
+        yield from response.release()
         yield from self.close()
         self._is_logged_in = False
         log.debug(request_logging_format.format(method='POST', response=response))
@@ -683,17 +746,19 @@ class Client:
             'recipient_id': user.id
         }
 
-        url = '{}/@me/channels'.format(endpoints.USERS)
-        r = yield from self.session.post(url, data=utils.to_json(payload), headers=self.headers)
+        url = '{}/channels'.format(endpoints.ME)
+        r = yield from aiohttp.post(url, data=utils.to_json(payload), headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
         data = yield from r.json()
         log.debug(request_success_log.format(response=r, json=payload, data=data))
-        self.private_channels.append(PrivateChannel(id=data['id'], user=user))
+        channel = PrivateChannel(id=data['id'], user=user)
+        self.private_channels.append(channel)
+        return channel
 
     @asyncio.coroutine
     def _rate_limit_helper(self, name, method, url, data):
-        resp = yield from self.session.request(method, url, data=data, headers=self.headers)
+        resp = yield from aiohttp.request(method, url, data=data, headers=self.headers, loop=self.loop)
         tmp = request_logging_format.format(method=method, response=resp)
         log_fmt = 'In {}, {}'.format(name, tmp)
         log.debug(log_fmt)
@@ -800,7 +865,7 @@ class Client:
 
         url = '{base}/{id}/typing'.format(base=endpoints.CHANNELS, id=channel_id)
 
-        response = yield from self.session.post(url, headers=self.headers)
+        response = yield from aiohttp.post(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -861,10 +926,10 @@ class Client:
             # attempt to open the file and send the request
             with open(fp, 'rb') as f:
                 files.add_field('file', f, filename=filename)
-                response = yield from self.session.post(url, data=files, headers=headers)
+                response = yield from aiohttp.post(url, data=files, headers=headers, loop=self.loop)
         except TypeError:
             files.add_field('file', fp, filename=filename)
-            response = yield from self.session.post(url, data=files, headers=headers)
+            response = yield from aiohttp.post(url, data=files, headers=headers, loop=self.loop)
 
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
@@ -898,7 +963,7 @@ class Client:
         """
 
         url = '{}/{}/messages/{}'.format(endpoints.CHANNELS, message.channel.id, message.id)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -959,7 +1024,7 @@ class Client:
         if after:
             params['after'] = after.id
 
-        response = yield from self.session.get(url, params=params, headers=self.headers)
+        response = yield from aiohttp.get(url, params=params, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='GET', response=response))
         yield from utils._verify_successful_response(response)
         messages = yield from response.json()
@@ -1050,7 +1115,7 @@ class Client:
         """
 
         url = '{0}/{1.server.id}/members/{1.id}'.format(endpoints.SERVERS, member)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1081,7 +1146,7 @@ class Client:
         """
 
         url = '{0}/{1.server.id}/bans/{1.id}'.format(endpoints.SERVERS, member)
-        response = yield from self.session.put(url, headers=self.headers)
+        response = yield from aiohttp.put(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='PUT', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1112,7 +1177,7 @@ class Client:
         """
 
         url = '{0}/{1.server.id}/bans/{1.id}'.format(endpoints.SERVERS, member)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1152,7 +1217,7 @@ class Client:
             'deaf': deafen
         }
 
-        response = yield from self.session.patch(url, headers=self.headers, data=utils.to_json(payload))
+        response = yield from aiohttp.patch(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='PATCH', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1216,8 +1281,7 @@ class Client:
             'avatar': avatar
         }
 
-        url = '{0}/@me'.format(endpoints.USERS)
-        r = yield from self.session.patch(url, headers=self.headers, data=utils.to_json(payload))
+        r = yield from aiohttp.patch(endpoints.ME, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
 
@@ -1226,6 +1290,9 @@ class Client:
         self.token = data['token']
         self.email = data['email']
         self.headers['authorization'] = self.token
+
+        if self.cache_auth:
+            self._update_cache(self.email, password)
 
     @asyncio.coroutine
     def change_status(self, game_id=None, idle=False):
@@ -1312,7 +1379,7 @@ class Client:
             'position': options.get('position', channel.position)
         }
 
-        r = yield from self.session.patch(url, headers=self.headers, data=utils.to_json(payload))
+        r = yield from aiohttp.patch(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
 
@@ -1361,7 +1428,7 @@ class Client:
         }
 
         url = '{0}/{1.id}/channels'.format(endpoints.SERVERS, server)
-        response = yield from self.session.post(url, headers=self.headers, data=utils.to_json(payload))
+        response = yield from aiohttp.post(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
 
@@ -1395,7 +1462,7 @@ class Client:
         """
 
         url = '{}/{}'.format(endpoints.CHANNELS, channel.id)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1424,7 +1491,7 @@ class Client:
         """
 
         url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1462,7 +1529,7 @@ class Client:
         if icon is not None:
             icon = utils._bytes_to_base64_data(icon)
 
-        r = yield from self.session.post(endpoints.SERVERS, headers=self.headers)
+        r = yield from aiohttp.post(endpoints.SERVERS, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
         data = yield from r.json()
@@ -1532,7 +1599,7 @@ class Client:
         payload['afk_channel'] = getattr(afk_channel, 'id', None)
 
         url = '{0}/{1.id}'.format(endpoints.SERVERS, server)
-        r = yield from self.session.patch(url, headers=self.headers, data=utils.to_json(payload))
+        r = yield from aiohttp.patch(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
         yield from r.release()
@@ -1581,7 +1648,7 @@ class Client:
         }
 
         url = '{0}/{1.id}/invites'.format(endpoints.CHANNELS, destination)
-        response = yield from self.session.post(url, headers=self.headers, data=utils.to_json(payload))
+        response = yield from aiohttp.post(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=response))
 
         yield from utils._verify_successful_response(response)
@@ -1625,7 +1692,7 @@ class Client:
 
         destination = self._resolve_invite(url)
         rurl = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
-        response = yield from self.session.get(rurl, headers=self.headers)
+        response = yield from aiohttp.get(rurl, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='GET', response=response))
         yield from utils._verify_successful_response(response)
         data = yield from response.json()
@@ -1667,7 +1734,7 @@ class Client:
 
         destination = self._resolve_invite(invite)
         url = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
-        response = yield from self.session.post(url, headers=self.headers)
+        response = yield from aiohttp.post(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1698,7 +1765,7 @@ class Client:
 
         destination = self._resolve_invite(invite)
         url = '{0}/invite/{1}'.format(endpoints.API_BASE, destination)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1760,7 +1827,7 @@ class Client:
             'hoist': fields.get('hoist', role.hoist)
         }
 
-        r = yield from self.session.patch(url, data=utils.to_json(payload), headers=self.headers)
+        r = yield from aiohttp.patch(url, data=utils.to_json(payload), headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
 
@@ -1791,7 +1858,7 @@ class Client:
         """
 
         url = '{0}/{1.id}/roles/{2.id}'.format(endpoints.SERVERS, server, role)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
@@ -1889,7 +1956,7 @@ class Client:
             'roles': [role.id for role in roles]
         }
 
-        r = yield from self.session.patch(url, headers=self.headers, data=utils.to_json(payload))
+        r = yield from aiohttp.patch(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
         yield from r.release()
@@ -1911,7 +1978,7 @@ class Client:
         """
 
         url = '{0}/{1.id}/roles'.format(endpoints.SERVERS, server)
-        r = yield from self.session.post(url, headers=self.headers)
+        r = yield from aiohttp.post(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
 
@@ -1995,7 +2062,7 @@ class Client:
         else:
             raise InvalidArgument('target parameter must be either discord.Member or discord.Role')
 
-        r = yield from self.session.put(url, data=utils.to_json(payload), headers=self.headers)
+        r = yield from aiohttp.put(url, data=utils.to_json(payload), headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='PUT', response=r))
         yield from utils._verify_successful_response(r)
         yield from r.release()
@@ -2029,7 +2096,7 @@ class Client:
         """
 
         url = '{0}/{1.id}/permissions/{2.id}'.format(endpoints.CHANNELS, channel, target)
-        response = yield from self.session.delete(url, headers=self.headers)
+        response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
