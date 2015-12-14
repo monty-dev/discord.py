@@ -29,9 +29,22 @@ from .role import Role
 from .member import Member
 from .channel import Channel
 from .enums import ServerRegion, Status
+from .mixins import EqualityComparable
 
-class Server:
+class Server(EqualityComparable):
     """Represents a Discord server.
+
+    Supported Operations:
+
+    +-----------+--------------------------------------+
+    | Operation |             Description              |
+    +===========+======================================+
+    | x == y    | Checks if two servers are equal.     |
+    +-----------+--------------------------------------+
+    | x != y    | Checks if two servers are not equal. |
+    +-----------+--------------------------------------+
+    | str(x)    | Returns the server's name.           |
+    +-----------+--------------------------------------+
 
     Attributes
     ----------
@@ -69,6 +82,9 @@ class Server:
         self.owner = None
         self.members = []
         self._from_data(kwargs)
+
+    def __str__(self):
+        return self.name
 
     def _update_voice_state(self, data):
         user_id = data.get('user_id')
@@ -141,6 +157,7 @@ class Server:
         """Gets the default :class:`Channel` for the server."""
         return utils.find(lambda c: c.is_default_channel(), self.channels)
 
+    @property
     def icon_url(self):
         """Returns the URL version of the server's icon. Returns an empty string if it has no icon."""
         if self.icon is None:
