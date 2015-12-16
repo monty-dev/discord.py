@@ -46,6 +46,7 @@ import websockets
 import logging, traceback
 import sys, time, re, json
 import tempfile, os, hashlib
+import itertools
 
 log = logging.getLogger(__name__)
 request_logging_format = '{method} {response.url} has returned {response.status}'
@@ -791,7 +792,7 @@ class Client:
         log_fmt = 'In {}, {}'.format(name, tmp)
         log.debug(log_fmt)
         if resp.status == 429:
-            retry = resp.headers['Retry-After'] / 1000.0
+            retry = float(resp.headers['Retry-After']) / 1000.0
             yield from resp.release()
             yield from asyncio.sleep(retry)
             return (yield from self._rate_limit_helper(name, method, data))
@@ -1632,6 +1633,40 @@ class Client:
         yield from utils._verify_successful_response(r)
         yield from r.release()
 
+    @asyncio.coroutine
+    def get_bans(self, server):
+        """|coro|
+
+        Retrieves all the :class:`User`s that are banned from the specified
+        server.
+
+        You must have proper permissions to get this information.
+
+        Parameters
+        ----------
+        server : :class:`Server`
+            The server to get ban information from.
+
+        Raises
+        -------
+        Forbidden
+            You do not have proper permissions to get the information.
+        HTTPException
+            An error occurred while fetching the information.
+
+        Returns
+        --------
+        list
+            A list of :class:`User` that have been banned.
+        """
+
+        url = '{0}/{1.id}/bans'.format(endpoints.SERVERS, server)
+        resp = yield from aiohttp.get(url, headers=self.headers, loop=self.loop)
+        log.debug(request_logging_format.format(method='GET', response=resp))
+        yield from utils._verify_successful_response(resp)
+        data = yield from resp.json()
+        return [User(**user['user']) for user in data]
+
     # Invite management
 
     @asyncio.coroutine
@@ -1737,6 +1772,47 @@ class Client:
         data['server'] = server
         data['channel'] = channel
         return Invite(**data)
+
+    @asyncio.coroutine
+    def invites_from(self, server):
+        """|coro|
+
+        Returns a generator that yields all active instant invites from
+        a :class:`Server`.
+
+        You must have proper permissions to get this information.
+
+        Parameters
+        ----------
+        server : :class:`Server`
+            The server to get invites from.
+
+        Raises
+        -------
+        Forbidden
+            You do not have proper permissions to get the information.
+        HTTPException
+            An error occurred while fetching the information.
+
+        Yields
+        -------
+        :class:`Invite`
+            The invite with the message data parsed.
+        """
+
+        def generator(data):
+            for invite in data:
+                channel = utils.get(server.channels, id=invite['channel']['id'])
+                invite['channel'] = channel
+                invite['server'] = server
+                yield Invite(**invite)
+
+        url = '{0}/{1.id}/invites'.format(endpoints.SERVERS, server)
+        resp = yield from aiohttp.get(url, headers=self.headers, loop=self.loop)
+        log.debug(request_logging_format.format(method='GET', response=resp))
+        yield from utils._verify_successful_response(resp)
+        data = yield from resp.json()
+        return generator(data)
 
     @asyncio.coroutine
     def accept_invite(self, invite):
@@ -1892,6 +1968,19 @@ class Client:
         yield from response.release()
 
     @asyncio.coroutine
+    def _replace_roles(self, member, *roles):
+        url = '{0}/{1.server.id}/members/{1.id}'.format(endpoints.SERVERS, member)
+
+        payload = {
+            'roles': list(roles)
+        }
+
+        r = yield from aiohttp.patch(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
+        log.debug(request_logging_format.format(method='PATCH', response=r))
+        yield from utils._verify_successful_response(r)
+        yield from r.release()
+
+    @asyncio.coroutine
     def add_roles(self, member, *roles):
         """|coro|
 
@@ -1918,7 +2007,7 @@ class Client:
         """
 
         new_roles = [role.id for role in itertools.chain(member.roles, roles)]
-        yield from self.replace_roles(member, *new_roles)
+        yield from self._replace_roles(member, *new_roles)
 
     @asyncio.coroutine
     def remove_roles(self, member, *roles):
@@ -1946,7 +2035,7 @@ class Client:
         """
         new_roles = {role.id for role in member.roles}
         new_roles = new_roles.difference(roles)
-        yield from self.replace_roles(member, *new_roles)
+        yield from self._replace_roles(member, *new_roles)
 
     @asyncio.coroutine
     def replace_roles(self, member, *roles):
@@ -1978,16 +2067,8 @@ class Client:
             Removing roles failed.
         """
 
-        url = '{0}/{1.server.id}/members/{1.id}'.format(endpoints.SERVERS, member)
-
-        payload = {
-            'roles': [role.id for role in roles]
-        }
-
-        r = yield from aiohttp.patch(url, headers=self.headers, data=utils.to_json(payload), loop=self.loop)
-        log.debug(request_logging_format.format(method='PATCH', response=r))
-        yield from utils._verify_successful_response(r)
-        yield from r.release()
+        new_roles = [role.id for role in roles]
+        yield from self._replace_roles(member, *new_roles)
 
     @asyncio.coroutine
     def create_role(self, server, **fields):
