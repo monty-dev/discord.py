@@ -26,9 +26,9 @@ DEALINGS IN THE SOFTWARE.
 
 from .permissions import Permissions
 from .colour import Colour
-from .mixins import EqualityComparable
+from .mixins import Hashable
 
-class Role(EqualityComparable):
+class Role(Hashable):
     """Represents a Discord role in a :class:`Server`.
 
     Supported Operations:
@@ -39,6 +39,8 @@ class Role(EqualityComparable):
     | x == y    | Checks if two roles are equal.     |
     +-----------+------------------------------------+
     | x != y    | Checks if two roles are not equal. |
+    +-----------+------------------------------------+
+    | hash(x)   | Return the role's hash.            |
     +-----------+------------------------------------+
     | str(x)    | Returns the role's name.           |
     +-----------+------------------------------------+
@@ -81,6 +83,7 @@ class Role(EqualityComparable):
         if 'everyone' in kwargs:
             self._is_everyone = kwargs['everyone']
 
+    @property
     def is_everyone(self):
         """Checks if the role is the @everyone role."""
         return self._is_everyone

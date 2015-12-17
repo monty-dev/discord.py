@@ -206,7 +206,7 @@ class Client:
         if isinstance(mentions, list):
             return [user.id for user in mentions]
         elif mentions == True:
-            return re.findall(r'<@(\d+)>', content)
+            return re.findall(r'<@([0-9]+)>', content)
         else:
             return []
 
@@ -344,7 +344,8 @@ class Client:
                      'GUILD_MEMBER_ADD', 'GUILD_MEMBER_REMOVE', 'GUILD_UPDATE'
                      'GUILD_MEMBER_UPDATE', 'GUILD_CREATE', 'GUILD_DELETE',
                      'GUILD_ROLE_CREATE', 'GUILD_ROLE_DELETE', 'TYPING_START',
-                     'GUILD_ROLE_UPDATE', 'VOICE_STATE_UPDATE'):
+                     'GUILD_ROLE_UPDATE', 'VOICE_STATE_UPDATE',
+                     'GUILD_BAN_ADD', 'GUILD_BAN_REMOVE'):
             parser = 'parse_' + event.lower()
             getattr(self.connection, parser)(data)
         else:
@@ -1110,9 +1111,12 @@ class Client:
         while limit > 0:
             retrieve = limit if limit <= 100 else 100
             data = yield from self._logs_from(channel, retrieve, before, after)
-            limit -= retrieve
-            result.extend(data)
-            before = Object(id=data[-1]['id'])
+            if len(data):
+                limit -= retrieve
+                result.extend(data)
+                before = Object(id=data[-1]['id'])
+            else:
+                break
 
         return generator(result)
 
@@ -1150,7 +1154,7 @@ class Client:
         yield from response.release()
 
     @asyncio.coroutine
-    def ban(self, member):
+    def ban(self, member, delete_message_days=1):
         """|coro|
 
         Bans a :class:`Member` from the server they belong to.
@@ -1165,6 +1169,9 @@ class Client:
         -----------
         member : :class:`Member`
             The member to ban from their server.
+        delete_message_days : int
+            The number of days worth of messages to delete from the user
+            in the server. The minimum is 0 and the maximum is 7.
 
         Raises
         -------
@@ -1174,28 +1181,28 @@ class Client:
             Banning failed.
         """
 
+        params = {
+            'delete-message-days': delete_message_days
+        }
+
         url = '{0}/{1.server.id}/bans/{1.id}'.format(endpoints.SERVERS, member)
-        response = yield from aiohttp.put(url, headers=self.headers, loop=self.loop)
+        response = yield from aiohttp.put(url, params=params, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='PUT', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
 
     @asyncio.coroutine
-    def unban(self, member):
+    def unban(self, server, user):
         """|coro|
 
-        Unbans a :class:`Member` from the server they belong to.
-
-        Warning
-        --------
-        This function unbans the :class:`Member` based on the server it
-        belongs to, which is accessed via :attr:`Member.server`. So you
-        must have the proper permissions in that server.
+        Unbans a :class:`User` from the server they are banned from.
 
         Parameters
         -----------
-        member : :class:`Member`
-            The member to unban from their server.
+        server : :class:`Server`
+            The server to unban the user from.
+        user : :class:`User`
+            The user to unban.
 
         Raises
         -------
@@ -1205,7 +1212,7 @@ class Client:
             Unbanning failed.
         """
 
-        url = '{0}/{1.server.id}/bans/{1.id}'.format(endpoints.SERVERS, member)
+        url = '{0}/{1.id}/bans/{2.id}'.format(endpoints.SERVERS, server, user)
         response = yield from aiohttp.delete(url, headers=self.headers, loop=self.loop)
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
@@ -1332,12 +1339,12 @@ class Client:
         The game_id parameter is a numeric ID (not a string) that represents
         a game being played currently. The list of game_id to actual games changes
         constantly and would thus be out of date pretty quickly. An old version of
-        the game_id database can be seen `here`_ to help you get started.
+        the game_id database can be seen `here <game_list>`_ to help you get started.
 
         The idle parameter is a boolean parameter that indicates whether the
         client should go idle or not.
 
-        .. _here: https://gist.github.com/Rapptz/a82b82381b70a60c281b
+        .. _game_list: https://gist.github.com/Rapptz/a82b82381b70a60c281b
 
         Parameters
         ----------
@@ -1637,7 +1644,7 @@ class Client:
     def get_bans(self, server):
         """|coro|
 
-        Retrieves all the :class:`User`s that are banned from the specified
+        Retrieves all the :class:`User` s that are banned from the specified
         server.
 
         You must have proper permissions to get this information.
