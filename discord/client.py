@@ -35,6 +35,7 @@ from .object import Object
 from .role import Role
 from .errors import *
 from .state import ConnectionState
+from .permissions import Permissions
 from . import utils
 from .enums import ChannelType, ServerRegion
 from .voice_client import VoiceClient
@@ -478,7 +479,7 @@ class Client:
     # listeners/waiters
 
     @asyncio.coroutine
-    def wait_for_ready(self):
+    def wait_until_ready(self):
         """|coro|
 
         This coroutine waits until the client is all ready. This could be considered
@@ -488,12 +489,12 @@ class Client:
         yield from self._is_ready.wait()
 
     @asyncio.coroutine
-    def wait_for_login(self):
+    def wait_until_login(self):
         """|coro|
 
         This coroutine waits until the client is logged on successfully. This
         is different from waiting until the client's state is all ready. For
-        that check :func:`discord.on_ready` and :meth:`wait_for_ready`.
+        that check :func:`discord.on_ready` and :meth:`wait_until_ready`.
         """
         yield from self._is_logged_in.wait()
 
@@ -2203,7 +2204,7 @@ class Client:
             deny = discord.Permissions.none()
             allow.can_mention_everyone = True
             deny.can_manage_messages = True
-            yield from client.set_channel_permissions(message.channel, message.author, allow=allow, deny=deny)
+            yield from client.edit_channel_permissions(message.channel, message.author, allow=allow, deny=deny)
 
         Parameters
         -----------
@@ -2265,7 +2266,7 @@ class Client:
         Removes a channel specific permission overwrites for a target
         in the specified :class:`Channel`.
 
-        The target parameter follows the same rules as :meth:`set_channel_permissions`.
+        The target parameter follows the same rules as :meth:`edit_channel_permissions`.
 
         You must have the proper permissions to do this.
 
