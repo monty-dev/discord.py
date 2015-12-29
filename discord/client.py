@@ -114,9 +114,11 @@ class Client:
         self._listeners = []
         self.cache_auth = options.get('cache_auth', True)
 
-        self.max_messages = options.get('max_messages')
-        if self.max_messages is None or self.max_messages < 100:
-            self.max_messages = 5000
+        max_messages = options.get('max_messages')
+        if max_messages is None or max_messages < 100:
+            max_messages = 5000
+
+        self.connection = ConnectionState(self.dispatch, max_messages)
 
         # Blame React for this
         user_agent = 'DiscordBot (https://github.com/Rapptz/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
@@ -146,30 +148,16 @@ class Client:
         try:
             log.info('attempting to login via cache')
             cache_file = self._get_cache_filename(email)
+            self.email = email
             with open(cache_file, 'r') as f:
                 log.info('login cache file found')
                 self.token = f.read()
                 self.headers['authorization'] = self.token
 
-            check = yield from aiohttp.get(endpoints.GATEWAY, headers=self.headers, loop=self.loop)
-            if check.status == 200:
-                log.info('login cache token check succeeded')
-                data = yield from check.json()
-                self.gateway = data.get('url')
-                self._is_logged_in.set()
-                return
-            else:
-                # failed auth check
-                yield from check.release()
-                if check.status != 401:
-                    # This is unrelated to the auth check so it's
-                    # an error on discord's end
-                    raise GatewayNotFound()
-
             # at this point our check failed
             # so we have to login and get the proper token and then
             # redo the cache
-        except OSError as e:
+        except OSError:
             log.info('a problem occurred while opening login cache')
             pass # file not found et al
 
@@ -332,7 +320,7 @@ class Client:
         event = msg.get('t')
 
         if event == 'READY':
-            self.connection = ConnectionState(self.dispatch, self.max_messages)
+            self.connection.clear()
             self.session_id = data['session_id']
 
         if event == 'READY' or event == 'RESUMED':
@@ -348,16 +336,10 @@ class Client:
         if event == 'VOICE_SERVER_UPDATE':
             self._voice_data_found.data = data
             self._voice_data_found.set()
+            return
 
-        if event in ('READY', 'MESSAGE_CREATE', 'MESSAGE_DELETE',
-                     'MESSAGE_UPDATE', 'PRESENCE_UPDATE', 'USER_UPDATE',
-                     'CHANNEL_DELETE', 'CHANNEL_UPDATE', 'CHANNEL_CREATE',
-                     'GUILD_MEMBER_ADD', 'GUILD_MEMBER_REMOVE', 'GUILD_UPDATE',
-                     'GUILD_MEMBER_UPDATE', 'GUILD_CREATE', 'GUILD_DELETE',
-                     'GUILD_ROLE_CREATE', 'GUILD_ROLE_DELETE', 'TYPING_START',
-                     'GUILD_ROLE_UPDATE', 'VOICE_STATE_UPDATE',
-                     'GUILD_BAN_ADD', 'GUILD_BAN_REMOVE'):
-            parser = 'parse_' + event.lower()
+        parser = 'parse_' + event.lower()
+        if hasattr(self.connection, parser):
             getattr(self.connection, parser)(data)
         else:
             log.info("Unhandled event {}".format(event))
@@ -631,8 +613,6 @@ class Client:
             An unknown HTTP related error occurred,
             usually when it isn't 200 or the known incorrect credentials
             passing status code.
-        GatewayNotFound
-            The gateway to connect to discord was not found.
         """
 
         # attempt to read the token from cache
@@ -663,7 +643,6 @@ class Client:
         self.token = body['token']
         self.headers['authorization'] = self.token
         self._is_logged_in.set()
-        self.gateway = yield from self._get_gateway()
 
         # since we went through all this trouble
         # let's make sure we don't have to do it again
@@ -696,8 +675,13 @@ class Client:
         Raises
         -------
         ClientException
-            If this is called before :meth:`login` was invoked successfully.
+            If this is called before :meth:`login` was invoked successfully
+            or when an unexpected closure of the websocket occurs.
+        GatewayNotFound
+            If the gateway to connect to discord is not found. Usually if this
+            is thrown then there is a discord API outage.
         """
+        self.gateway = yield from self._get_gateway()
         yield from self._make_websocket()
 
         while not self.is_closed:
@@ -706,6 +690,8 @@ class Client:
                 if self.ws.close_code == 1012:
                     yield from self.redirect_websocket(self.gateway)
                     continue
+                elif not self._is_ready.is_set():
+                    raise ClientException('Unexpected websocket closure received')
                 else:
                     yield from self.close()
                     break
@@ -1604,7 +1590,7 @@ class Client:
             The name of the server.
         region : :class:`ServerRegion`
             The region for the voice communication server.
-            Defaults to :attr`ServerRegion.us_west`.
+            Defaults to :attr:`ServerRegion.us_west`.
         icon : bytes
             The *bytes-like* object representing the icon. See :meth:`edit_profile`
             for more details on what is expected.
@@ -1736,6 +1722,20 @@ class Client:
 
     # Invite management
 
+    def _fill_invite_data(self, data):
+        server = self.connection._get_server(data['guild']['id'])
+        if server is not None:
+            ch_id = data['channel']['id']
+            channels = getattr(server, 'channels', [])
+            channel = utils.find(lambda c: c.id == ch_id, channels)
+        else:
+            server = Object(id=data['guild']['id'])
+            server.name = data['guild']['name']
+            channel = Object(id=data['channel']['id'])
+            channel.name = data['channel']['name']
+        data['server'] = server
+        data['channel'] = channel
+
     @asyncio.coroutine
     def create_invite(self, destination, **options):
         """|coro|
@@ -1784,10 +1784,7 @@ class Client:
         yield from utils._verify_successful_response(response)
         data = yield from response.json()
         log.debug(request_success_log.format(json=payload, response=response, data=data))
-
-        data['server'] = self.connection._get_server(data['guild']['id'])
-        channel_id = data['channel']['id']
-        data['channel'] = utils.find(lambda ch: ch.id == channel_id, data['server'].channels)
+        self._fill_invite_data(data)
         return Invite(**data)
 
     @asyncio.coroutine
@@ -1826,18 +1823,7 @@ class Client:
         log.debug(request_logging_format.format(method='GET', response=response))
         yield from utils._verify_successful_response(response)
         data = yield from response.json()
-        server = self.connection._get_server(data['guild']['id'])
-        if server is not None:
-            ch_id = data['channel']['id']
-            channels = getattr(server, 'channels', [])
-            channel = utils.find(lambda c: c.id == ch_id, channels)
-        else:
-            server = Object(id=data['guild']['id'])
-            server.name = data['guild']['name']
-            channel = Object(id=data['channel']['id'])
-            channel.name = data['channel']['name']
-        data['server'] = server
-        data['channel'] = channel
+        self._fill_invite_data(data)
         return Invite(**data)
 
     @asyncio.coroutine
@@ -2280,6 +2266,49 @@ class Client:
     # Voice management
 
     @asyncio.coroutine
+    def move_member(self, member, channel):
+        """|coro|
+
+        Moves a :class:`Member` to a different voice channel.
+
+        You must have proper permissions to do this.
+
+        Note
+        -----
+        You cannot pass in a :class:`Object` in place of a :class:`Channel`
+        object in this function.
+
+        Parameters
+        -----------
+        member : :class:`Member`
+            The member to move to another voice channel.
+        channel : :class:`Channel`
+            The voice channel to move the member to.
+
+        Raises
+        -------
+        InvalidArgument
+            The channel provided is not a voice channel.
+        HTTPException
+            Moving the member failed.
+        Forbidden
+            You do not have permissions to move the member.
+        """
+
+        url = '{0}/{1.server.id}/members/{2.id}'.format(endpoints.SERVERS, member)
+
+        if getattr(channel, 'type', ChannelType.text) != ChannelType.voice:
+            raise InvalidArgument('The channel provided must be a voice channel.')
+
+        payload = utils.to_json({
+            'channel_id': channel.id
+        })
+        response = yield from aiohttp.patch(url, data=payload, headers=self.headers, loop=self.loop)
+        log.debug(request_logging_format.format(method='PATCH', response=response))
+        yield from utils._verify_successful_response(response)
+        yield from response.release()
+
+    @asyncio.coroutine
     def join_voice_channel(self, channel):
         """|coro|
 
@@ -2314,17 +2343,19 @@ class Client:
         if self.is_voice_connected():
             raise ClientException('Already connected to a voice channel')
 
+        if isinstance(channel, Object):
+            channel = self.get_channel(channel.id)
+
         if getattr(channel, 'type', ChannelType.text) != ChannelType.voice:
             raise InvalidArgument('Channel passed must be a voice channel')
 
-        self.voice_channel = channel
         log.info('attempting to join voice channel {0.name}'.format(channel))
 
         payload = {
             'op': 4,
             'd': {
-                'guild_id': self.voice_channel.server.id,
-                'channel_id': self.voice_channel.id,
+                'guild_id': channel.server.id,
+                'channel_id': channel.id,
                 'self_mute': False,
                 'self_deaf': False
             }
@@ -2339,7 +2370,7 @@ class Client:
 
         kwargs = {
             'user': self.user,
-            'channel': self.voice_channel,
+            'channel': channel,
             'data': self._voice_data_found.data,
             'loop': self.loop,
             'session_id': self.session_id,
