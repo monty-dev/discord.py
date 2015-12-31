@@ -331,10 +331,12 @@ class Client:
             user_id = data.get('user_id')
             if user_id == self.user.id:
                 self.session_id = data.get('session_id')
+                log.debug('Session ID found: {}'.format(self.session_id))
                 self._session_id_found.set()
 
         if event == 'VOICE_SERVER_UPDATE':
             self._voice_data_found.data = data
+            log.debug('Voice connection data found: {}'.format(data))
             self._voice_data_found.set()
             return
 
@@ -2059,7 +2061,7 @@ class Client:
             Adding roles failed.
         """
 
-        new_roles = utils._unique(itertools.chain(member.roles, roles))
+        new_roles = utils._unique(role.id for role in itertools.chain(member.roles, roles))
         yield from self._replace_roles(member, new_roles)
 
     @asyncio.coroutine
@@ -2127,7 +2129,7 @@ class Client:
             Removing roles failed.
         """
 
-        new_roles = utils._unique(roles)
+        new_roles = utils._unique(role.id for role in roles)
         yield from self._replace_roles(member, new_roles)
 
     @asyncio.coroutine
