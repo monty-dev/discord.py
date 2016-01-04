@@ -105,6 +105,7 @@ class Client:
 
     """
     def __init__(self, *, loop=None, **options):
+        super().__init__(loop, **options)
         self.ws = None
         self.token = None
         self.gateway = None
@@ -2200,8 +2201,8 @@ class Client:
 
             allow = discord.Permissions.none()
             deny = discord.Permissions.none()
-            allow.can_mention_everyone = True
-            deny.can_manage_messages = True
+            allow.mention_everyone = True
+            deny.manage_messages = True
             yield from client.edit_channel_permissions(message.channel, message.author, allow=allow, deny=deny)
 
         Parameters
