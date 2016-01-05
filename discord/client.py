@@ -3,7 +3,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2015 Rapptz
+Copyright (c) 2015-2016 Rapptz
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -105,7 +105,6 @@ class Client:
 
     """
     def __init__(self, *, loop=None, **options):
-        super().__init__(loop, **options)
         self.ws = None
         self.token = None
         self.gateway = None

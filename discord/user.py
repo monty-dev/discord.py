@@ -3,7 +3,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2015 Rapptz
+Copyright (c) 2015-2016 Rapptz
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -56,7 +56,6 @@ class User:
     __slots__ = ['name', 'id', 'discriminator', 'avatar']
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
         self.name = kwargs.get('username')
         self.id = kwargs.get('id')
         self.discriminator = kwargs.get('discriminator')
