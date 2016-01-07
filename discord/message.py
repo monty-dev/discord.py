@@ -26,7 +26,6 @@ DEALINGS IN THE SOFTWARE.
 
 from . import utils
 from .user import User
-from .member import Member
 from .object import Object
 import re
 
@@ -48,6 +47,9 @@ class Message:
         private channel, then it is a :class:`User` instead.
     content : str
         The actual contents of the message.
+    nonce
+        The value used by the discord server and the client to verify that the message is successfully sent.
+        This is typically non-important.
     embeds : list
         A list of embedded objects. The elements are objects that meet oEmbed's specification_.
 
@@ -87,6 +89,11 @@ class Message:
         A list of attachments given to a message.
     """
 
+    __slots__ = [ 'edited_timestamp', 'timestamp', 'tts', 'content', 'channel',
+                  'mention_everyone', 'embeds', 'id', 'mentions', 'author',
+                  'channel_mentions', 'server', '_raw_mentions', 'attachments',
+                  '_clean_content', '_raw_channel_mentions', 'nonce' ]
+
     def __init__(self, **kwargs):
         # at the moment, the timestamps seem to be naive so they have no time zone and operate on UTC time.
         # we can use this to our advantage to use strptime instead of a complicated parsing routine.
@@ -101,6 +108,7 @@ class Message:
         self.id = kwargs.get('id')
         self.channel = kwargs.get('channel')
         self.author = User(**kwargs.get('author', {}))
+        self.nonce = kwargs.get('nonce')
         self.attachments = kwargs.get('attachments')
         self._handle_upgrades(kwargs.get('channel_id'))
         self._handle_mentions(kwargs.get('mentions', []))
@@ -124,7 +132,7 @@ class Message:
                 if channel is not None:
                     self.channel_mentions.append(channel)
 
-    @utils.cached_property
+    @utils.cached_slot_property('_raw_mentions')
     def raw_mentions(self):
         """A property that returns an array of user IDs matched with
         the syntax of <@user_id> in the message content.
@@ -134,7 +142,7 @@ class Message:
         """
         return re.findall(r'<@([0-9]+)>', self.content)
 
-    @utils.cached_property
+    @utils.cached_slot_property('_raw_channel_mentions')
     def raw_channel_mentions(self):
         """A property that returns an array of channel IDs matched with
         the syntax of <#channel_id> in the message content.
@@ -144,7 +152,7 @@ class Message:
         """
         return re.findall(r'<#([0-9]+)>', self.content)
 
-    @utils.cached_property
+    @utils.cached_slot_property('_clean_content')
     def clean_content(self):
         """A property that returns the content in a "cleaned up"
         manner. This basically means that mentions are transformed

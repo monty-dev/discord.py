@@ -51,6 +51,7 @@ import sys, time, re, json
 import tempfile, os, hashlib
 import itertools
 import zlib
+from random import randint as random_integer
 
 log = logging.getLogger(__name__)
 request_logging_format = '{method} {response.url} has returned {response.status}'
@@ -922,7 +923,8 @@ class Client:
 
         url = '{base}/{id}/messages'.format(base=endpoints.CHANNELS, id=channel_id)
         payload = {
-            'content': content
+            'content': content,
+            'nonce': random_integer(-2**63, 2**63 - 1)
         }
 
         if tts:
@@ -2069,7 +2071,7 @@ class Client:
         -----------
         member : :class:`Member`
             The member to give roles to.
-        *roles
+        \*roles
             An argument list of :class:`Role` s to give the member.
 
         Raises
@@ -2097,7 +2099,7 @@ class Client:
         -----------
         member : :class:`Member`
             The member to revoke roles from.
-        *roles
+        \*roles
             An argument list of :class:`Role` s to revoke the member.
 
         Raises
@@ -2137,7 +2139,7 @@ class Client:
         -----------
         member : :class:`Member`
             The member to replace roles from.
-        *roles
+        \*roles
             An argument list of :class:`Role` s to replace the roles with.
 
         Raises

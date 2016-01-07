@@ -36,6 +36,15 @@ from .view import quoted_word
 __all__ = [ 'Command', 'Group', 'GroupMixin', 'command', 'group',
             'has_role', 'has_permissions', 'has_any_role', 'check' ]
 
+def _convert_to_bool(argument):
+    lowered = argument.lower()
+    if lowered in ('yes', 'y', 'true', 't', '1', 'enable', 'on'):
+        return True
+    elif lowered in ('no', 'n', 'false', 'f', '0', 'disable', 'off'):
+        return False
+    else:
+        raise BadArgument(lowered + ' is not a recognised boolean option')
+
 class Command:
     """A class that implements the protocol for a bot text command.
 
@@ -57,6 +66,11 @@ class Command:
     pass_context : bool
         A boolean that indicates that the current :class:`Context` should
         be passed as the **first parameter**. Defaults to `False`.
+    enabled : bool
+        A boolean that indicates if the command is currently enabled.
+        If the command is invoked while it is disabled, then
+        :exc:`DisabledCommand` is raised to the :func:`on_command_error`
+        event. Defaults to ``True``.
     checks
         A list of predicates that verifies if the command could be executed
         with the given :class:`Context` as the sole parameter. If an exception
@@ -68,6 +82,7 @@ class Command:
     def __init__(self, name, callback, **kwargs):
         self.name = name
         self.callback = callback
+        self.enabled = kwargs.get('enabled', True)
         self.help = kwargs.get('help')
         self.brief = kwargs.get('brief')
         self.aliases = kwargs.get('aliases', [])
@@ -90,6 +105,9 @@ class Command:
         return result
 
     def do_conversion(self, bot, message, converter, argument):
+        if converter is bool:
+            return _convert_to_bool(argument)
+
         if converter.__module__.split('.')[0] != 'discord':
             return converter(argument)
 
@@ -194,15 +212,18 @@ class Command:
         return True
 
     def _verify_checks(self, ctx):
-        predicates = self.checks
-        if predicates:
-            try:
+        try:
+            if not self.enabled:
+                raise DisabledCommand('{0.name} command is disabled'.format(self))
+
+            predicates = self.checks
+            if predicates:
                 check = all(predicate(ctx) for predicate in predicates)
                 if not check:
                     raise CheckFailure('The check functions for command {0.name} failed.'.format(self))
-            except CommandError as exc:
-                ctx.bot.dispatch('command_error', exc, ctx)
-                return False
+        except CommandError as exc:
+            ctx.bot.dispatch('command_error', exc, ctx)
+            return False
 
         return True
 
@@ -278,6 +299,24 @@ class GroupMixin:
             `None` is returned instead.
         """
         return self.commands.pop(name, None)
+
+    def get_command(self, name):
+        """Get a :class:`Command` or subclasses from the internal list
+        of commands.
+
+        This could also be used as a way to get aliases.
+
+        Parameters
+        -----------
+        name : str
+            The name of the command to get.
+
+        Returns
+        --------
+        Command or subclass
+            The command that was requested. If not found, returns ``None``.
+        """
+        return self.commands.get(name, None)
 
     def command(self, *args, **kwargs):
         """A shortcut decorator that invokes :func:`command` and adds it to
