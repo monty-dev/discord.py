@@ -122,6 +122,43 @@ After:
 In order for you to ``yield from`` or ``await`` a coroutine then your function must be decorated
 with ``@asyncio.coroutine`` or ``async def``.
 
+.. _migrating-iterable:
+
+Iterables
+----------
+
+For performance reasons, many of the internal data structures were changed into a dictionary to support faster
+lookup. As a consequence, this meant that some lists that were exposed via the API have changed into iterables
+and not sequences. In short, this means that certain attributes now only support iteration and not any of the
+sequence functions.
+
+The affected attributes are as follows:
+
+- :attr:`Client.servers`
+- :attr:`Client.private_channels`
+- :attr:`Server.channels`
+- :attr:`Server.members`
+
+Some examples of previously valid behaviour that is now invalid
+
+.. code-block:: python
+
+    if client.servers[0].name == "test":
+        # do something
+
+Since they are no longer ``list``\s, they no longer support indexing or any operation other than iterating.
+In order to get the old behaviour you should explicitly cast it to a list.
+
+.. code-block:: python
+
+    servers = list(client.servers)
+    # work with servers
+
+.. warning::
+
+    Due to internal changes of the structure, the order you receive the data in
+    is not in a guaranteed order.
+
 .. _migrating-enums:
 
 Enumerators
@@ -261,6 +298,13 @@ After:
 .. code-block:: python
 
     client.run('email', 'password')
+
+.. warning::
+
+    Like in the older ``Client.run`` function, the newer one must be the one of
+    the last functions to call. This is because the function is **blocking**. Registering
+    events or doing anything after :meth:`Client.run` will not execute until the function
+    returns.
 
 This is a utility function that abstracts the event loop for you. There's no need for
 the run call to be blocking and out of your control. Indeed, if you want control of the

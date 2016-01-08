@@ -88,9 +88,9 @@ class Client:
         Represents the current voice connection. None if you are not connected
         to a voice channel. To connect to voice use :meth:`join_voice_channel`.
         To query the voice connection state use :meth:`is_voice_connected`.
-    servers : list of :class:`Server`
+    servers : iterable of :class:`Server`
         The servers that the connected client is a member of.
-    private_channels : list of :class:`PrivateChannel`
+    private_channels : iterable of :class:`PrivateChannel`
         The private channels that the connected client is participating on.
     messages
         A deque_ of :class:`Message` that the client has received from all
@@ -213,7 +213,7 @@ class Client:
         if isinstance(destination, (Channel, PrivateChannel, Server)):
             return destination.id
         elif isinstance(destination, User):
-            found = utils.find(lambda pm: pm.user == destination, self.private_channels)
+            found = self.connection._get_private_channel_by_user(destination.id)
             if found is None:
                 # Couldn't find the user, so start a PM with them first.
                 channel = yield from self.start_private_message(destination)
@@ -428,6 +428,10 @@ class Client:
     def get_channel(self, id):
         """Returns a :class:`Channel` or :class:`PrivateChannel` with the following ID. If not found, returns None."""
         return self.connection.get_channel(id)
+
+    def get_server(self, id):
+        """Returns a :class:`Server` with the given ID. If not found, returns None."""
+        return self.connection._get_server(id)
 
     def get_all_channels(self):
         """A generator that retrieves every :class:`Channel` the client can 'access'.
@@ -755,7 +759,14 @@ class Client:
                 # cancel all tasks lingering
             finally:
                 loop.close()
+
+        Warning
+        --------
+        This function must be the last function to call due to the fact that it
+        is blocking. That means that registration of events or anything being
+        called after this function call will not execute until it returns.
         """
+
         try:
             self.loop.run_until_complete(self.start(email, password))
         except KeyboardInterrupt:
@@ -853,7 +864,7 @@ class Client:
         data = yield from r.json()
         log.debug(request_success_log.format(response=r, json=payload, data=data))
         channel = PrivateChannel(id=data['id'], user=user)
-        self.private_channels.append(channel)
+        self.connection._add_private_channel(channel)
         return channel
 
     @asyncio.coroutine
@@ -1749,8 +1760,7 @@ class Client:
         server = self.connection._get_server(data['guild']['id'])
         if server is not None:
             ch_id = data['channel']['id']
-            channels = getattr(server, 'channels', [])
-            channel = utils.find(lambda c: c.id == ch_id, channels)
+            channel = server.get_channel(ch_id)
         else:
             server = Object(id=data['guild']['id'])
             server.name = data['guild']['name']
@@ -1878,7 +1888,7 @@ class Client:
 
         def generator(data):
             for invite in data:
-                channel = utils.get(server.channels, id=invite['channel']['id'])
+                channel = server.get_channel(invite['channel']['id'])
                 invite['channel'] = channel
                 invite['server'] = server
                 yield Invite(**invite)
