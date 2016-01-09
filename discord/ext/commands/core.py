@@ -28,13 +28,24 @@ import asyncio
 import inspect
 import re
 import discord
-from functools import partial
+import functools
 
 from .errors import *
 from .view import quoted_word
 
 __all__ = [ 'Command', 'Group', 'GroupMixin', 'command', 'group',
             'has_role', 'has_permissions', 'has_any_role', 'check' ]
+
+def inject_context(ctx, coro):
+    @functools.wraps(coro)
+    @asyncio.coroutine
+    def wrapped(*args, **kwargs):
+        _internal_channel = ctx.message.channel
+        _internal_author = ctx.message.author
+
+        ret = yield from coro(*args, **kwargs)
+        return ret
+    return wrapped
 
 def _convert_to_bool(argument):
     lowered = argument.lower()
@@ -71,6 +82,9 @@ class Command:
         If the command is invoked while it is disabled, then
         :exc:`DisabledCommand` is raised to the :func:`on_command_error`
         event. Defaults to ``True``.
+    parent : Optional[command]
+        The parent command that this command belongs to. ``None`` is there
+        isn't one.
     checks
         A list of predicates that verifies if the command could be executed
         with the given :class:`Context` as the sole parameter. If an exception
@@ -90,6 +104,21 @@ class Command:
         signature = inspect.signature(callback)
         self.params = signature.parameters.copy()
         self.checks = kwargs.get('checks', [])
+        self.module = inspect.getmodule(callback)
+        self.instance = None
+        self.parent = None
+
+    def handle_local_error(self, error, ctx):
+        try:
+            coro = self.on_error
+        except AttributeError:
+            return
+
+        injected = inject_context(ctx, coro)
+        if self.instance is not None:
+            discord.utils.create_task(injected(self.instance, error, ctx), loop=ctx.bot.loop)
+        else:
+            discord.utils.create_task(injected(error, ctx), loop=ctx.bot.loop)
 
     def _receive_item(self, message, argument, regex, receiver, generator):
         match = re.match(regex, argument)
@@ -181,14 +210,25 @@ class Command:
 
     def _parse_arguments(self, ctx):
         try:
-            ctx.args = []
+            ctx.args = [] if self.instance is None else [self.instance]
             ctx.kwargs = {}
             args = ctx.args
             kwargs = ctx.kwargs
 
             first = True
             view = ctx.view
-            for name, param in self.params.items():
+            iterator = iter(self.params.items())
+
+            if self.instance is not None:
+                # we have 'self' as the first parameter so just advance
+                # the iterator and resume parsing
+                try:
+                    next(iterator)
+                except StopIteration:
+                    fmt = 'Callback for {0.name} command is missing "self" parameter.'
+                    raise discord.ClientException(fmt.format(self))
+
+            for name, param in iterator:
                 if first and self.pass_context:
                     args.append(ctx)
                     first = False
@@ -207,6 +247,7 @@ class Command:
                         except StopIteration:
                             break
         except CommandError as e:
+            self.handle_local_error(e, ctx)
             ctx.bot.dispatch('command_error', e, ctx)
             return False
         return True
@@ -222,6 +263,7 @@ class Command:
                 if not check:
                     raise CheckFailure('The check functions for command {0.name} failed.'.format(self))
         except CommandError as exc:
+            self.handle_local_error(exc, ctx)
             ctx.bot.dispatch('command_error', exc, ctx)
             return False
 
@@ -233,7 +275,32 @@ class Command:
             return
 
         if self._parse_arguments(ctx):
-            yield from self.callback(*ctx.args, **ctx.kwargs)
+            injected = inject_context(ctx, self.callback)
+            yield from injected(*ctx.args, **ctx.kwargs)
+
+    def error(self, coro):
+        """A decorator that registers a coroutine as a local error handler.
+
+        A local error handler is an :func:`on_command_error` event limited to
+        a single command. However, the :func:`on_command_error` is still
+        invoked afterwards as the catch-all.
+
+        Parameters
+        -----------
+        coro
+            The coroutine to register as the local error handler.
+
+        Raises
+        -------
+        discord.ClientException
+            The coroutine is not actually a coroutine.
+        """
+
+        if not asyncio.iscoroutinefunction(coro):
+            raise discord.ClientException('The error handler must be a coroutine.')
+
+        self.on_error = coro
+        return coro
 
 class GroupMixin:
     """A mixin that implements common functionality for classes that behave
@@ -248,6 +315,12 @@ class GroupMixin:
     def __init__(self, **kwargs):
         self.commands = {}
         super().__init__(**kwargs)
+
+    def recursively_remove_all_commands(self):
+        for command in self.commands.copy().values():
+            if isinstance(command, GroupMixin):
+                command.recursively_remove_all_commands()
+            self.remove_command(command.name)
 
     def add_command(self, command):
         """Adds a :class:`Command` or its superclasses into the internal list
@@ -271,6 +344,9 @@ class GroupMixin:
 
         if not isinstance(command, Command):
             raise TypeError('The command passed must be a subclass of Command')
+
+        if isinstance(self, Command):
+            command.parent = self
 
         if command.name in self.commands:
             raise discord.ClientException('Command {0.name} is already registered.'.format(command))
@@ -368,9 +444,11 @@ class Group(GroupMixin, Command):
             if trigger in self.commands:
                 ctx.invoked_subcommand = self.commands[trigger]
 
-        yield from self.callback(*ctx.args, **ctx.kwargs)
+        injected = inject_context(ctx, self.callback)
+        yield from injected(*ctx.args, **ctx.kwargs)
 
         if ctx.invoked_subcommand:
+            ctx.invoked_with = trigger
             yield from ctx.invoked_subcommand.invoke(ctx)
 
 # Decorators
@@ -558,7 +636,7 @@ def has_any_role(*names):
         if ch.is_private:
             return False
 
-        getter = partial(discord.utils.get, msg.author.roles)
+        getter = functools.partial(discord.utils.get, msg.author.roles)
         return any(getter(name=name) is not None for name in names)
     return check(predicate)
 

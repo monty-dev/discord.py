@@ -27,11 +27,28 @@ DEALINGS IN THE SOFTWARE.
 import asyncio
 import discord
 import inspect
+import importlib
+import sys
 
-from .core import GroupMixin
+from .core import GroupMixin, Command
 from .view import StringView
 from .context import Context
 from .errors import CommandNotFound
+
+def _get_variable(name):
+    stack = inspect.stack()
+    try:
+        for frames in stack:
+            current_locals = frames[0].f_locals
+            if name in current_locals:
+                return current_locals[name]
+    finally:
+        del stack
+
+def when_mentioned(bot, msg):
+    """A callable that implements a command prefix equivalent
+    to being mentioned, e.g. ``@bot ``."""
+    return '{0.user.mention} '.format(bot)
 
 class Bot(GroupMixin, discord.Client):
     """Represents a discord bot.
@@ -48,9 +65,10 @@ class Bot(GroupMixin, discord.Client):
     command_prefix
         The command prefix is what the message content must contain initially
         to have a command invoked. This prefix could either be a string to
-        indicate what the prefix should be, or a callable that takes in a
-        :class:`discord.Message` as its first parameter and returns the prefix.
-        This is to facilitate "dynamic" command prefixes.
+        indicate what the prefix should be, or a callable that takes in the bot
+        as its first parameter and :class:`discord.Message` as its second
+        parameter and returns the prefix. This is to facilitate "dynamic"
+        command prefixes.
 
         The command prefix could also be a list or a tuple indicating that
         multiple checks for the prefix should be used and the first one to
@@ -60,20 +78,40 @@ class Bot(GroupMixin, discord.Client):
     def __init__(self, command_prefix, **options):
         super().__init__(**options)
         self.command_prefix = command_prefix
+        self.extra_events = {}
+        self.cogs = {}
+        self.extensions = {}
 
-    def _get_variable(self, name):
-        stack = inspect.stack()
-        for frames in stack:
-            current_locals = frames[0].f_locals
-            if name in current_locals:
-                return current_locals[name]
+    # internal helpers
 
     def _get_prefix(self, message):
         prefix = self.command_prefix
         if callable(prefix):
-            return prefix(message)
+            return prefix(self, message)
         else:
             return prefix
+
+    @asyncio.coroutine
+    def _run_extra(self, coro, event_name, *args, **kwargs):
+        try:
+            yield from coro(*args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            try:
+                yield from self.on_error(event_name, *args, **kwargs)
+            except asyncio.CancelledError:
+                pass
+
+    def dispatch(self, event_name, *args, **kwargs):
+        super().dispatch(event_name, *args, **kwargs)
+        ev = 'on_' + event_name
+        if ev in self.extra_events:
+            for event in self.extra_events[ev]:
+                coro = self._run_extra(event, event_name, *args, **kwargs)
+                discord.utils.create_task(coro, loop=self.loop)
+
+    # utility "send_*" functions
 
     @asyncio.coroutine
     def say(self, content):
@@ -90,7 +128,7 @@ class Bot(GroupMixin, discord.Client):
         content : str
             The content to pass to :class:`Client.send_message`
         """
-        destination = self._get_variable('_internal_channel')
+        destination = _get_variable('_internal_channel')
         result = yield from self.send_message(destination, content)
         return result
 
@@ -109,7 +147,7 @@ class Bot(GroupMixin, discord.Client):
         content : str
             The content to pass to :class:`Client.send_message`
         """
-        destination = self._get_variable('_internal_author')
+        destination = _get_variable('_internal_author')
         result = yield from self.send_message(destination, content)
         return result
 
@@ -129,8 +167,8 @@ class Bot(GroupMixin, discord.Client):
         content : str
             The content to pass to :class:`Client.send_message`
         """
-        author = self._get_variable('_internal_author')
-        destination = self._get_variable('_internal_channel')
+        author = _get_variable('_internal_author')
+        destination = _get_variable('_internal_channel')
         fmt = '{0.mention}, {1}'.format(author, str(content))
         result = yield from self.send_message(destination, fmt)
         return result
@@ -152,7 +190,7 @@ class Bot(GroupMixin, discord.Client):
         name
             The second parameter to pass to :meth:`Client.send_file`
         """
-        destination = self._get_variable('_internal_channel')
+        destination = _get_variable('_internal_channel')
         result = yield from self.send_file(destination, fp, name)
         return result
 
@@ -170,8 +208,225 @@ class Bot(GroupMixin, discord.Client):
         ---------
         The :meth:`Client.send_typing` function.
         """
-        destination = self._get_variable('_internal_channel')
+        destination = _get_variable('_internal_channel')
         yield from self.send_typing(destination)
+
+    # listener registration
+
+    def add_listener(self, func, name=None):
+        """The non decorator alternative to :meth:`listen`.
+
+        Parameters
+        -----------
+        func : coroutine
+            The extra event to listen to.
+        name : Optional[str]
+            The name of the command to use. Defaults to ``func.__name__``.
+
+        Examples
+        ---------
+
+        .. code-block:: python
+
+            async def on_ready(): pass
+            async def my_message(message): pass
+
+            bot.add_listener(on_ready)
+            bot.add_listener(my_message, 'on_message')
+
+        """
+        name = func.__name__ if name is None else name
+
+        if not asyncio.iscoroutinefunction(func):
+            raise discord.ClientException('Listeners must be coroutines')
+
+        if name in self.extra_events:
+            self.extra_events[name].append(func)
+        else:
+            self.extra_events[name] = [func]
+
+    def remove_listener(self, func, name=None):
+        """Removes a listener from the pool of listeners.
+
+        Parameters
+        -----------
+        func
+            The function that was used as a listener to remove.
+        name
+            The name of the event we want to remove. Defaults to
+            ``func.__name__``.
+        """
+
+        name = func.__name__ if name is None else name
+
+        if name in self.extra_events:
+            try:
+                self.extra_events[name].remove(func)
+            except ValueError:
+                pass
+
+    def listen(self, name=None):
+        """A decorator that registers another function as an external
+        event listener. Basically this allows you to listen to multiple
+        events from different places e.g. such as :func:`discord.on_ready`
+
+        The functions being listened to must be a coroutine.
+
+        Examples
+        ---------
+
+        .. code-block:: python
+
+            @bot.listen
+            async def on_message(message):
+                print('one')
+
+            # in some other file...
+
+            @bot.listen('on_message')
+            async def my_message(message):
+                print('two')
+
+        Would print one and two in an unspecified order.
+
+        Raises
+        -------
+        discord.ClientException
+            The function being listened to is not a coroutine.
+        """
+
+        def decorator(func):
+            self.add_listener(func, name)
+            return func
+
+        return decorator
+
+    # cogs
+
+    def add_cog(self, cog):
+        """Adds a "cog" to the bot.
+
+        A cog is a class that has its own event listeners and commands.
+
+        They are meant as a way to organize multiple relevant commands
+        into a singular class that shares some state or no state at all.
+
+        More information will be documented soon.
+
+        Parameters
+        -----------
+        cog
+            The cog to register to the bot.
+        """
+
+        self.cogs[type(cog).__name__] = cog
+        members = inspect.getmembers(cog)
+        for name, member in members:
+            # register commands the cog has
+            if isinstance(member, Command):
+                member.instance = cog
+                if member.parent is None:
+                    self.add_command(member)
+                continue
+
+            # register event listeners the cog has
+            if name.startswith('on_'):
+                self.add_listener(member)
+
+    def get_cog(self, name):
+        """Gets the cog instance requested.
+
+        If the cog is not found, ``None`` is returned instead.
+
+        Parameters
+        -----------
+        name : str
+            The name of the cog you are requesting.
+        """
+        return self.cogs.get(name)
+
+    def remove_cog(self, name):
+        """Removes a cog the bot.
+
+        All registered commands and event listeners that the
+        cog has registered will be removed as well.
+
+        If no cog is found then ``None`` is returned, otherwise
+        the cog instance that is being removed is returned.
+
+        Parameters
+        -----------
+        name : str
+            The name of the cog to remove.
+        """
+
+        cog = self.cogs.pop(name, None)
+        if cog is None:
+            return cog
+
+        members = inspect.getmembers(cog)
+        for name, member in members:
+            # remove commands the cog has
+            if isinstance(member, Command):
+                member.instance = None
+                if member.parent is None:
+                    self.remove_command(member.name)
+                continue
+
+            # remove event listeners the cog has
+            if name.startswith('on_'):
+                self.remove_listener(member)
+
+    # extensions
+
+    def load_extension(self, name):
+        if name in self.extensions:
+            return
+
+        lib = importlib.import_module(name)
+        try:
+            lib.setup(self)
+        except AttributeError:
+            raise discord.ClientException('extension does not have a setup function')
+
+        self.extensions[name] = lib
+
+    def unload_extension(self, name):
+        lib = self.extensions.get(name)
+        if lib is None:
+            return
+
+        # find all references to the module
+
+        # remove the cogs registered from the module
+        for cogname, cog in self.cogs.copy().items():
+            if cog.__module__ is lib:
+                self.remove_cog(cogname)
+
+        # first remove all the commands from the module
+        for command in self.commands.copy().values():
+            if command.module is lib:
+                command.module = None
+                if isinstance(command, GroupMixin):
+                    command.recursively_remove_all_commands()
+                self.remove_command(command.name)
+
+        # then remove all the listeners from the module
+        for event_list in self.extra_events.copy().values():
+            remove = []
+            for index, event in enumerate(event_list):
+                if inspect.getmodule(event) is lib:
+                    remove.append(index)
+
+            for index in reversed(remove):
+                del event_list[index]
+
+        # finally remove the import..
+        del lib
+        del self.extensions[name]
+        del sys.modules[name]
+
+    # command processing
 
     @asyncio.coroutine
     def process_commands(self, message):
