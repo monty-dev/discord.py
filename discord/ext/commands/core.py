@@ -71,7 +71,8 @@ class Command:
     help : str
         The long help text for the command.
     brief : str
-        The short help text for the command.
+        The short help text for the command. If this is not specified
+        then the first line of the long help text is used instead.
     aliases : list
         The list of aliases the command can be invoked under.
     pass_context : bool
@@ -209,6 +210,24 @@ class Command:
         except Exception:
             raise BadArgument('Converting to "{0.__name__}" failed.'.format(converter))
 
+    @property
+    def clean_params(self):
+        """Retrieves the parameter OrderedDict without the context or self parameters.
+
+        Useful for inspecting signature.
+        """
+        result = self.params.copy()
+        if self.instance is not None:
+            # first parameter is self
+            result.popitem(last=False)
+
+        if self.pass_context:
+            # first/second parameter is context
+            result.popitem(last=False)
+
+        return result
+
+
     def _parse_arguments(self, ctx):
         try:
             ctx.args = [] if self.instance is None else [self.instance]
@@ -303,6 +322,11 @@ class Command:
         self.on_error = coro
         return coro
 
+    @property
+    def cog_name(self):
+        """The name of the cog this command belongs to. None otherwise."""
+        return type(self.instance).__name__ if self.instance is not None else None
+
 class GroupMixin:
     """A mixin that implements common functionality for classes that behave
     similar to :class:`Group` and are allowed to register commands.
@@ -375,7 +399,15 @@ class GroupMixin:
             The command that was removed. If the name is not valid then
             `None` is returned instead.
         """
-        return self.commands.pop(name, None)
+        command = self.commands.pop(name, None)
+        if name in command.aliases:
+            # we're removing an alias so we don't want to remove the rest
+            return command
+
+        # we're not removing the alias so let's delete the rest of them.
+        for alias in command.aliases:
+            self.commands.pop(alias, None)
+        return command
 
     def get_command(self, name):
         """Get a :class:`Command` or subclasses from the internal list
