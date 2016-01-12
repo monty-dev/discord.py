@@ -147,8 +147,8 @@ class ConnectionState:
                 except:
                     pass
 
-                game = data.get('game')
-                member.game = game and Game(**game)
+                game = data.get('game', {})
+                member.game = Game(**game) if game else None
                 member.name = user.get('username', member.name)
                 member.avatar = user.get('avatar', member.avatar)
 
@@ -194,7 +194,7 @@ class ConnectionState:
 
     def parse_guild_member_add(self, data):
         server = self._get_server(data.get('guild_id'))
-        member = Member(server=server, deaf=False, mute=False, **data)
+        member = Member(server=server, **data)
         member.roles.append(server.default_role)
         server._add_member(member)
         self.dispatch('member_join', member)
