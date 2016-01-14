@@ -98,6 +98,13 @@ class Command:
     hidden : bool
         If ``True``, the default help command does not show this in the
         help output.
+    rest_is_raw : bool
+        If ``False`` and a keyword-only argument is provided then the keyword
+        only argument is stripped and handled as if it was a regular argument
+        that handles :exc:`MissingRequiredArgument` and default values in a
+        regular matter rather than passing the rest completely raw. If ``True``
+        then the keyword-only argument will pass in the rest of the arguments
+        in a completely raw matter. Defaults to ``False``.
     """
     def __init__(self, name, callback, **kwargs):
         self.name = name
@@ -105,9 +112,10 @@ class Command:
         self.enabled = kwargs.get('enabled', True)
         self.help = kwargs.get('help')
         self.brief = kwargs.get('brief')
+        self.rest_is_raw = kwargs.get('rest_is_raw', False)
         self.aliases = kwargs.get('aliases', [])
         self.pass_context = kwargs.get('pass_context', False)
-        self.description = kwargs.get('description')
+        self.description = inspect.cleandoc(kwargs.get('description', ''))
         self.hidden = kwargs.get('hidden', False)
         signature = inspect.signature(callback)
         self.params = signature.parameters.copy()
@@ -174,17 +182,17 @@ class Command:
             if message.channel.is_private:
                 raise NoPrivateMessage()
 
-            role = discord.utils.get(message.server.roles, name=argument.strip())
+            role = discord.utils.get(message.server.roles, name=argument)
             if role is None:
                 raise BadArgument('Role not found')
             return role
         elif converter is discord.Game:
-            return discord.Game(name=argument.strip())
+            return discord.Game(name=argument)
         elif converter is discord.Invite:
             try:
-                return bot.get_invite(argument.strip())
-            except:
-                raise BadArgument('Invite is invalid')
+                return bot.get_invite(argument)
+            except Exception as e:
+                raise BadArgument('Invite is invalid') from e
 
     def _get_converter(self, param):
         converter = param.annotation
@@ -201,6 +209,7 @@ class Command:
     def transform(self, ctx, param):
         required = param.default is param.empty
         converter = self._get_converter(param)
+        consume_rest_is_special = param.kind == param.KEYWORD_ONLY and not self.rest_is_raw
         view = ctx.view
         view.skip_ws()
 
@@ -211,14 +220,17 @@ class Command:
                 raise MissingRequiredArgument('{0.name} is a required argument that is missing.'.format(param))
             return param.default
 
-        argument = quoted_word(view)
+        if consume_rest_is_special:
+            argument = view.read_rest().strip()
+        else:
+            argument = quoted_word(view)
 
         try:
             return self.do_conversion(ctx.bot, ctx.message, converter, argument)
         except CommandError as e:
             raise e
-        except Exception:
-            raise BadArgument('Converting to "{0.__name__}" failed.'.format(converter))
+        except Exception as e:
+            raise BadArgument('Converting to "{0.__name__}" failed.'.format(converter)) from e
 
     @property
     def clean_params(self):
@@ -268,9 +280,12 @@ class Command:
                     args.append(self.transform(ctx, param))
                 elif param.kind == param.KEYWORD_ONLY:
                     # kwarg only param denotes "consume rest" semantics
-                    converter = self._get_converter(param)
-                    argument = view.read_rest()
-                    kwargs[name] = self.do_conversion(ctx.bot, ctx.message, converter, argument)
+                    if self.rest_is_raw:
+                        converter = self._get_converter(param)
+                        argument = view.read_rest()
+                        kwargs[name] = self.do_conversion(ctx.bot, ctx.message, converter, argument)
+                    else:
+                        kwargs[name] = self.transform(ctx, param)
                     break
                 elif param.kind == param.VAR_POSITIONAL:
                     while not view.eof:

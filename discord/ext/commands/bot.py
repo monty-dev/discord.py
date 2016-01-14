@@ -139,7 +139,7 @@ class Bot(GroupMixin, discord.Client):
         self.extra_events = {}
         self.cogs = {}
         self.extensions = {}
-        self.description = description
+        self.description = inspect.cleandoc(description) if description else ''
         self.pm_help = pm_help
         if formatter is not None:
             if not isinstance(formatter, HelpFormatter):
@@ -456,8 +456,8 @@ class Bot(GroupMixin, discord.Client):
         lib = importlib.import_module(name)
         try:
             lib.setup(self)
-        except AttributeError:
-            raise discord.ClientException('extension does not have a setup function')
+        except AttributeError as e:
+            raise discord.ClientException('extension does not have a setup function') from e
 
         self.extensions[name] = lib
 
@@ -514,7 +514,8 @@ class Bot(GroupMixin, discord.Client):
         --------
         This function is necessary for :meth:`say`, :meth:`whisper`,
         :meth:`type`, :meth:`reply`, and :meth:`upload` to work due to the
-        way they are written.
+        way they are written. It is also required for the :func:`on_command`
+        and :func:`on_command_completion` events.
 
         Parameters
         -----------
@@ -553,8 +554,10 @@ class Bot(GroupMixin, discord.Client):
 
         if invoker in self.commands:
             command = self.commands[invoker]
+            self.dispatch('command', command, ctx)
             ctx.command = command
             yield from command.invoke(ctx)
+            self.dispatch('command_completion', command, ctx)
         else:
             exc = CommandNotFound('Command "{}" is not found'.format(invoker))
             self.dispatch('command_error', exc, ctx)
