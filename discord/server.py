@@ -149,8 +149,6 @@ class Server(Hashable):
         self.id = guild['id']
         self.roles = [Role(everyone=(self.id == r['id']), **r) for r in guild.get('roles', [])]
 
-        owner_id = guild.get('owner_id')
-
         for data in guild.get('members', []):
             roles = [self.default_role]
             for role_id in data['roles']:
@@ -161,11 +159,10 @@ class Server(Hashable):
             data['roles'] = roles
             member = Member(**data)
             member.server = self
-
-            if member.id == owner_id:
-                self.owner = member
-
             self._add_member(member)
+
+        if 'owner_id' in guild:
+            self.owner = self.get_member(guild['owner_id'])
 
         for presence in guild.get('presences', []):
             user_id = presence['user']['id']
