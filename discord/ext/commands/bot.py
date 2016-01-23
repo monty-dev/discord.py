@@ -51,12 +51,11 @@ def when_mentioned(bot, msg):
     to being mentioned, e.g. ``@bot ``."""
     return '{0.user.mention} '.format(bot)
 
-@command(pass_context=True, name='help')
 @asyncio.coroutine
 def _default_help_command(ctx, *commands : str):
     """Shows this message."""
     bot = ctx.bot
-    destination = ctx.message.channel if not bot.pm_help else ctx.message.author
+    destination = ctx.message.author if bot.pm_help else ctx.message.channel
 
     # help by itself just lists our own commands.
     if len(commands) == 0:
@@ -70,7 +69,7 @@ def _default_help_command(ctx, *commands : str):
         else:
             command = bot.commands.get(name)
             if command is None:
-                yield from bot.send_message(destination, 'No command called "{}" found.'.format(name))
+                yield from bot.send_message(destination, bot.command_not_found.format(name))
                 return
 
         pages = bot.formatter.format_help_for(ctx, command)
@@ -78,20 +77,26 @@ def _default_help_command(ctx, *commands : str):
         name = commands[0]
         command = bot.commands.get(name)
         if command is None:
-            yield from bot.send_message(destination, 'No command called "{}" found.'.format(name))
+            yield from bot.send_message(destination, bot.command_not_found.format(name))
             return
 
         for key in commands[1:]:
             try:
                 command = command.commands.get(key)
                 if command is None:
-                    yield from bot.send_message(destination, 'No command called "{}" found.'.format(key))
+                    yield from bot.send_message(destination, bot.command_not_found.format(key))
                     return
             except AttributeError:
-                yield from bot.send_message(destination, 'Command "{0.name}" has no subcommands.'.format(command))
+                yield from bot.send_message(destination, bot.command_has_no_subcommands.format(command, key))
                 return
 
         pages = bot.formatter.format_help_for(ctx, command)
+
+    if bot.pm_help is None:
+        characters = sum(map(lambda l: len(l), pages))
+        # modify destination based on length of pages.
+        if characters > 1000:
+            destination = ctx.message.author
 
     for page in pages:
         yield from bot.send_message(destination, page)
@@ -129,9 +134,28 @@ class Bot(GroupMixin, discord.Client):
         If you want to change the help command completely (add aliases, etc) then
         a call to :meth:`remove_command` with 'help' as the argument would do the
         trick.
-    pm_help : bool
-        A boolean that indicates if the help command should PM the user instead of
-        sending it to the channel it received it from. Defaults to ``False``.
+    pm_help : Optional[bool]
+        A tribool that indicates if the help command should PM the user instead of
+        sending it to the channel it received it from. If the boolean is set to
+        ``True``, then all help output is PM'd. If ``False``, none of the help
+        output is PM'd. If ``None``, then the bot will only PM when the help
+        message becomes too long (dictated by more than 1000 characters).
+        Defaults to ``False``.
+    help_attrs : dict
+        A dictionary of options to pass in for the construction of the help command.
+        This allows you to change the command behaviour without actually changing
+        the implementation of the command. The attributes will be the same as the
+        ones passed in the :class:`Command` constructor. Note that ``pass_context``
+        will always be set to ``True`` regardless of what you pass in.
+    command_not_found : str
+        The format string used when the help command is invoked with a command that
+        is not found. Useful for i18n. Defaults to ``"No command called {} found."``.
+        The only format argument is the name of the command passed.
+    command_has_no_subcommands : str
+        The format string used when the help command is invoked with requests for a
+        subcommand but the command does not have any subcommands. Defaults to
+        ``"Command {0.name} has no subcommands."``. The first format argument is the
+        :class:`Command` attempted to get a subcommand and the second is the name.
     """
     def __init__(self, command_prefix, formatter=None, description=None, pm_help=False, **options):
         super().__init__(**options)
@@ -141,6 +165,15 @@ class Bot(GroupMixin, discord.Client):
         self.extensions = {}
         self.description = inspect.cleandoc(description) if description else ''
         self.pm_help = pm_help
+        self.command_not_found = options.pop('command_not_found', 'No command called "{}" found.')
+        self.command_has_no_subcommands = options.pop('command_has_no_subcommands', 'Command {0.name} has no subcommands.')
+
+        self.help_attrs = options.pop('help_attrs', {})
+        self.help_attrs['pass_context'] = True
+
+        if 'name' not in self.help_attrs:
+            self.help_attrs['name'] = 'help'
+
         if formatter is not None:
             if not isinstance(formatter, HelpFormatter):
                 raise discord.ClientException('Formatter must be a subclass of HelpFormatter')
@@ -148,7 +181,8 @@ class Bot(GroupMixin, discord.Client):
         else:
             self.formatter = HelpFormatter()
 
-        self.add_command(_default_help_command)
+        # pay no mind to this ugliness.
+        self.command(**self.help_attrs)(_default_help_command)
 
     # internal helpers
 
