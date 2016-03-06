@@ -36,10 +36,9 @@ from .enums import Status
 
 
 from collections import deque, namedtuple
-import copy
+import copy, enum, math
 import datetime
 import asyncio
-import enum
 import logging
 
 class ListenerType(enum.Enum):
@@ -49,10 +48,11 @@ Listener = namedtuple('Listener', ('type', 'future', 'predicate'))
 log = logging.getLogger(__name__)
 
 class ConnectionState:
-    def __init__(self, dispatch, max_messages, *, loop):
+    def __init__(self, dispatch, chunker, max_messages, *, loop):
         self.loop = loop
         self.max_messages = max_messages
         self.dispatch = dispatch
+        self.chunker = chunker
         self._listeners = []
         self.clear()
 
@@ -128,6 +128,26 @@ class ConnectionState:
         self._add_server(server)
         return server
 
+    def chunks_needed(self, server):
+        for chunk in range(math.ceil(server._member_count / 1000)):
+            yield self.receive_chunk(server.id)
+
+    @asyncio.coroutine
+    def _fill_offline(self):
+        # a chunk has a maximum of 1000 members.
+        # we need to find out how many futures we're actually waiting for
+        large_servers = [s for s in self.servers if s.large]
+        yield from self.chunker(large_servers)
+
+        chunks = []
+        for server in large_servers:
+            chunks.extend(self.chunks_needed(server))
+
+        if chunks:
+            yield from asyncio.wait(chunks)
+
+        self.dispatch('ready')
+
     def parse_ready(self, data):
         self.user = User(**data['user'])
         guilds = data.get('guilds')
@@ -138,6 +158,8 @@ class ConnectionState:
         for pm in data.get('private_channels'):
             self._add_private_channel(PrivateChannel(id=pm['id'],
                                      user=User(**pm['recipient'])))
+
+        utils.create_task(self._fill_offline(), loop=self.loop)
 
     def parse_message_create(self, data):
         channel = self.get_channel(data.get('channel_id'))
@@ -274,6 +296,7 @@ class ConnectionState:
 
             self.dispatch('member_update', old_member, member)
 
+    @asyncio.coroutine
     def parse_guild_create(self, data):
         unavailable = data.get('unavailable')
         if unavailable == False:
@@ -296,6 +319,14 @@ class ConnectionState:
         # available, so it isn't in the cache...
 
         server = self._add_server_from_data(data)
+
+        # check if it requires chunking
+        if server.large:
+            yield from self.chunker(server)
+            chunks = list(self.chunks_needed(server))
+            if chunks:
+                yield from asyncio.wait(chunks)
+
         self.dispatch('server_join', server)
 
     def parse_guild_update(self, data):

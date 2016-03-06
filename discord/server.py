@@ -85,7 +85,7 @@ class Server(Hashable):
     """
 
     __slots__ = ['afk_timeout', 'afk_channel', '_members', '_channels', 'icon',
-                 'name', 'id', 'owner', 'unavailable', 'name', 'me', 'region',
+                 'name', 'id', 'owner', 'unavailable', 'name', 'region',
                  '_default_role', '_default_channel', 'roles', '_member_count',
                  'large', 'owner_id' ]
 
@@ -218,3 +218,8 @@ class Server(Hashable):
     def member_count(self):
         """Returns the true member count regardless of it being loaded fully or not."""
         return self._member_count
+
+    @property
+    def created_at(self):
+        """Returns the server's creation time in UTC."""
+        return utils.snowflake_time(self.id)
