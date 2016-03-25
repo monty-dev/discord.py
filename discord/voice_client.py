@@ -122,11 +122,13 @@ class ProcessPlayer(StreamPlayer):
                          client._connected, client.play_audio, after, **kwargs)
         self.process = process
 
-    def stop(self):
+    def run(self):
+        super().run()
+
         self.process.kill()
         if self.process.poll() is None:
-            self.process.communicate(timeout=0.100)
-        super().stop()
+            self.process.communicate()
+
 
 class VoiceClient:
     """Represents a Discord voice connection.
@@ -341,7 +343,7 @@ class VoiceClient:
         struct.pack_into('>I', buff, 8, self.ssrc)
         return buff
 
-    def create_ffmpeg_player(self, filename, *, use_avconv=False, pipe=False, options=None, headers=None, after=None):
+    def create_ffmpeg_player(self, filename, *, use_avconv=False, pipe=False, options=None, before_options=None, headers=None, after=None):
         """Creates a stream player for ffmpeg that launches in a separate thread to play
         audio.
 
@@ -374,8 +376,10 @@ class VoiceClient:
         pipe : bool
             If true, denotes that ``filename`` parameter will be passed
             to the stdin of ffmpeg.
-        options: str
-            Extra command line flags to pass to ``ffmpeg``.
+        options : str
+            Extra command line flags to pass to ``ffmpeg`` after the ``-i`` flag.
+        before_options : str
+            Command line flags to pass to ``ffmpeg`` before the ``-i`` flag.
         headers: dict
             HTTP headers dictionary to pass to ``-headers`` command line option
         after : callable
@@ -395,13 +399,17 @@ class VoiceClient:
         """
         command = 'ffmpeg' if not use_avconv else 'avconv'
         input_name = '-' if pipe else shlex.quote(filename)
-        headers_arg = ""
+        before_args = ""
         if isinstance(headers, dict):
             for key, value in headers.items():
-                headers_arg += "{}: {}\r\n".format(key, value)
-            headers_arg = ' -headers ' + shlex.quote(headers_arg)
+                before_args += "{}: {}\r\n".format(key, value)
+            before_args = ' -headers ' + shlex.quote(before_args)
+
+        if isinstance(before_options, str):
+            before_args += ' ' + before_options
+
         cmd = command + '{} -i {} -f s16le -ar {} -ac {} -loglevel warning'
-        cmd = cmd.format(headers_arg, input_name, self.encoder.sampling_rate, self.encoder.channels)
+        cmd = cmd.format(before_args, input_name, self.encoder.sampling_rate, self.encoder.channels)
 
         if isinstance(options, str):
             cmd = cmd + ' ' + options
@@ -582,7 +590,7 @@ class VoiceClient:
         self.encoder = OpusEncoder(sample_rate, channels)
         log.info('created opus encoder with {0.__dict__}'.format(self.encoder))
 
-    def create_stream_player(self, stream, after=None):
+    def create_stream_player(self, stream, *, after=None):
         """Creates a stream player that launches in a separate thread to
         play audio.
 
@@ -618,7 +626,7 @@ class VoiceClient:
         -----------
         stream
             The stream object to read from.
-        after:
+        after
             The finalizer that is called after the stream is exhausted.
             All exceptions it throws are silently discarded. It is called
             without parameters.
@@ -630,15 +638,17 @@ class VoiceClient:
         """
         return StreamPlayer(stream, self.encoder, self._connected, self.play_audio, after)
 
-    def play_audio(self, data):
+    def play_audio(self, data, *, encode=True):
         """Sends an audio packet composed of the data.
 
         You must be connected to play audio.
 
         Parameters
         ----------
-        data
-            The *bytes-like object* denoting PCM voice data.
+        data : bytes
+            The *bytes-like object* denoting PCM or Opus voice data.
+        encode : bool
+            Indicates if ``data`` should be encoded into Opus.
 
         Raises
         -------
@@ -649,7 +659,10 @@ class VoiceClient:
         """
 
         self.checked_add('sequence', 1, 65535)
-        encoded_data = self.encoder.encode(data, self.encoder.samples_per_frame)
+        if encode:
+            encoded_data = self.encoder.encode(data, self.encoder.samples_per_frame)
+        else:
+            encoded_data = data
         packet = self._get_voice_packet(encoded_data)
         sent = self.socket.sendto(packet, (self.endpoint_ip, self.voice_port))
         self.checked_add('timestamp', self.encoder.samples_per_frame, 4294967295)
