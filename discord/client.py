@@ -452,7 +452,7 @@ class Client:
         log.debug(request_logging_format.format(method='GET', response=resp))
 
         if resp.status != 200:
-            if resp.status == 400:
+            if resp.status == 401:
                 raise LoginFailure('Improper token has been passed.')
             else:
                 raise HTTPException(resp, None)
@@ -510,7 +510,7 @@ class Client:
 
             # or
 
-            await client.login('token')
+            await client.login('email', 'password')
 
         More than 2 parameters or less than 1 parameter raises a
         :exc:`TypeError`.
