@@ -28,7 +28,6 @@ from . import __version__ as library_version
 from . import endpoints
 from .user import User
 from .member import Member
-from .game import Game
 from .channel import Channel, PrivateChannel
 from .server import Server
 from .message import Message
@@ -38,20 +37,20 @@ from .role import Role
 from .errors import *
 from .state import ConnectionState
 from .permissions import Permissions
-from . import utils
-from .enums import ChannelType, ServerRegion, Status
+from . import utils, compat
+from .enums import ChannelType, ServerRegion
 from .voice_client import VoiceClient
 from .iterators import LogsFromIterator
+from .gateway import *
 
 import asyncio
 import aiohttp
 import websockets
 
 import logging, traceback
-import sys, time, re, json
+import sys, re
 import tempfile, os, hashlib
 import itertools
-import zlib
 from random import randint as random_integer
 
 PY35 = sys.version_info >= (3, 5)
@@ -115,11 +114,7 @@ class Client:
     def __init__(self, *, loop=None, **options):
         self.ws = None
         self.token = None
-        self.gateway = None
         self.voice = None
-        self.session_id = None
-        self.keep_alive = None
-        self.sequence = 0
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self._listeners = []
         self.cache_auth = options.get('cache_auth', True)
@@ -145,21 +140,11 @@ class Client:
         self._is_logged_in = asyncio.Event(loop=self.loop)
         self._is_ready = asyncio.Event(loop=self.loop)
 
-        # These two events correspond to the two events necessary
-        # for a connection to be made
-        self._voice_data_found = asyncio.Event(loop=self.loop)
-        self._session_id_found = asyncio.Event(loop=self.loop)
-
     # internals
 
     def _get_cache_filename(self, email):
         filename = hashlib.md5(email.encode('utf-8')).hexdigest()
         return os.path.join(tempfile.gettempdir(), 'discord_py', filename)
-
-    @asyncio.coroutine
-    def _send_ws(self, data):
-        self.dispatch('socket_raw_send', data)
-        yield from self.ws.send(data)
 
     @asyncio.coroutine
     def _login_via_cache(self, email, password):
@@ -255,14 +240,6 @@ class Client:
             object.__setattr__(self, name, value)
 
     @asyncio.coroutine
-    def _get_gateway(self):
-        resp = yield from self.session.get(endpoints.GATEWAY, headers=self.headers)
-        if resp.status != 200:
-            raise GatewayNotFound()
-        data = yield from resp.json()
-        return data.get('url')
-
-    @asyncio.coroutine
     def _run_event(self, event, *args, **kwargs):
         try:
             yield from getattr(self, event)(*args, **kwargs)
@@ -283,23 +260,7 @@ class Client:
             getattr(self, handler)(*args, **kwargs)
 
         if hasattr(self, method):
-            utils.create_task(self._run_event(method, *args, **kwargs), loop=self.loop)
-
-    @asyncio.coroutine
-    def keep_alive_handler(self, interval):
-        try:
-            while not self.is_closed:
-                payload = {
-                    'op': 1,
-                    'd': int(time.time())
-                }
-
-                msg = 'Keeping websocket alive with timestamp {}'
-                log.debug(msg.format(payload['d']))
-                yield from self._send_ws(utils.to_json(payload))
-                yield from asyncio.sleep(interval)
-        except asyncio.CancelledError:
-            pass
+            compat.create_task(self._run_event(method, *args, **kwargs), loop=self.loop)
 
     @asyncio.coroutine
     def on_error(self, event_method, *args, **kwargs):
@@ -313,130 +274,6 @@ class Client:
         """
         print('Ignoring exception in {}'.format(event_method), file=sys.stderr)
         traceback.print_exc()
-
-    @asyncio.coroutine
-    def received_message(self, msg):
-        self.dispatch('socket_raw_receive', msg)
-
-        if isinstance(msg, bytes):
-            msg = zlib.decompress(msg, 15, 10490000) # This is 10 MiB
-            msg = msg.decode('utf-8')
-
-        msg = json.loads(msg)
-
-        log.debug('WebSocket Event: {}'.format(msg))
-        self.dispatch('socket_response', msg)
-
-        op = msg.get('op')
-        data = msg.get('d')
-
-        if 's' in msg:
-            self.sequence = msg['s']
-
-        if op == 7:
-            # redirect op code
-            yield from self.ws.close()
-            yield from self.redirect_websocket(data.get('url'))
-            return
-
-        if op != 0:
-            log.info('Unhandled op {}'.format(op))
-            return
-
-        event = msg.get('t')
-        is_ready = event == 'READY'
-
-        if is_ready:
-            self.connection.clear()
-            self.session_id = data['session_id']
-
-        if is_ready or event == 'RESUMED':
-            interval = data['heartbeat_interval'] / 1000.0
-            self.keep_alive = utils.create_task(self.keep_alive_handler(interval), loop=self.loop)
-
-        if event == 'VOICE_STATE_UPDATE':
-            user_id = data.get('user_id')
-            if user_id == self.user.id:
-                if self.is_voice_connected():
-                    self.voice.channel = self.get_channel(data.get('channel_id'))
-
-                self.session_id = data.get('session_id')
-                log.debug('Session ID found: {}'.format(self.session_id))
-                self._session_id_found.set()
-
-
-        if event == 'VOICE_SERVER_UPDATE':
-            self._voice_data_found.data = data
-            log.debug('Voice connection data found: {}'.format(data))
-            self._voice_data_found.set()
-            return
-
-        parser = 'parse_' + event.lower()
-
-        try:
-            func = getattr(self.connection, parser)
-        except AttributeError:
-            log.info('Unhandled event {}'.format(event))
-        else:
-            result = func(data)
-
-    @asyncio.coroutine
-    def _make_websocket(self, initial=True):
-        if not self.is_logged_in:
-            raise ClientException('You must be logged in to connect')
-
-        self.ws = yield from websockets.connect(self.gateway, loop=self.loop)
-        self.ws.max_size = None
-        log.info('Created websocket connected to {0.gateway}'.format(self))
-
-        if initial:
-            payload = {
-                'op': 2,
-                'd': {
-                    'token': self.token,
-                    'properties': {
-                        '$os': sys.platform,
-                        '$browser': 'discord.py',
-                        '$device': 'discord.py',
-                        '$referrer': '',
-                        '$referring_domain': ''
-                    },
-                    'compress': True,
-                    'large_threshold': 250,
-                    'v': 3
-                }
-            }
-
-            yield from self._send_ws(utils.to_json(payload))
-            log.info('sent the initial payload to create the websocket')
-
-    @asyncio.coroutine
-    def redirect_websocket(self, url):
-        # if we get redirected then we need to recreate the websocket
-        # when this recreation happens we have to try to do a reconnection
-        log.info('redirecting websocket from {} to {}'.format(self.gateway, url))
-        self.keep_alive_handler.cancel()
-
-        self.gateway = url
-        yield from self._make_websocket(initial=False)
-        yield from self._reconnect_ws()
-
-        if self.is_voice_connected():
-            # update the websocket reference pointed to by voice
-            self.voice.main_ws = self.ws
-
-    @asyncio.coroutine
-    def _reconnect_ws(self):
-        payload = {
-            'op': 6,
-            'd': {
-                'session_id': self.session_id,
-                'seq': self.sequence
-            }
-        }
-
-        log.info('sending reconnection frame to websocket {}'.format(payload))
-        yield from self._send_ws(utils.to_json(payload))
 
     # login state management
 
@@ -553,29 +390,24 @@ class Client:
 
         Raises
         -------
-        ClientException
-            If this is called before :meth:`login` was invoked successfully
-            or when an unexpected closure of the websocket occurs.
         GatewayNotFound
             If the gateway to connect to discord is not found. Usually if this
             is thrown then there is a discord API outage.
+        ConnectionClosed
+            The websocket connection has been terminated.
         """
-        self.gateway = yield from self._get_gateway()
-        yield from self._make_websocket()
+        self.ws = yield from DiscordWebSocket.from_client(self)
 
         while not self.is_closed:
-            msg = yield from self.ws.recv()
-            if msg is None:
-                if self.ws.close_code == 1012:
-                    yield from self.redirect_websocket(self.gateway)
-                    continue
-                elif not self._is_ready.is_set():
-                    raise ClientException('Unexpected websocket closure received')
-                else:
-                    yield from self.close()
-                    break
-
-            yield from self.received_message(msg)
+            try:
+                yield from self.ws.poll_event()
+            except ReconnectWebSocket:
+                log.info('Reconnecting the websocket.')
+                self.ws = yield from DiscordWebSocket.from_client(self)
+            except ConnectionClosed as e:
+                yield from self.close()
+                if e.code != 1000:
+                    raise
 
     @asyncio.coroutine
     def close(self):
@@ -592,9 +424,6 @@ class Client:
 
         if self.ws is not None and self.ws.open:
             yield from self.ws.close()
-
-        if self.keep_alive is not None:
-            self.keep_alive.cancel()
 
         yield from self.session.close()
         self._closed.set()
@@ -1317,7 +1146,7 @@ class Client:
             }
         }
 
-        yield from self._send_ws(utils.to_json(payload))
+        yield from self.ws.send_as_json(payload)
 
     @asyncio.coroutine
     def kick(self, member):
@@ -1568,32 +1397,7 @@ class Client:
         InvalidArgument
             If the ``game`` parameter is not :class:`Game` or None.
         """
-
-        if game is not None and not isinstance(game, Game):
-            raise InvalidArgument('game must be of Game or None')
-
-        idle_since = None if idle == False else int(time.time() * 1000)
-        sent_game = game and {'name': game.name}
-
-        payload = {
-            'op': 3,
-            'd': {
-                'game': sent_game,
-                'idle_since': idle_since
-            }
-        }
-
-        sent = utils.to_json(payload)
-        log.debug('Sending "{}" to change status'.format(sent))
-        yield from self._send_ws(sent)
-        for server in self.servers:
-            me = server.me
-            if me is None:
-                continue
-
-            me.game = game
-            status = Status.idle if idle_since else Status.online
-            me.status = status
+        yield from self.ws.change_presence(game=game, idle=idle)
 
     # Channel management
 
@@ -2567,7 +2371,6 @@ class Client:
         :class:`VoiceClient`
             A voice client that is fully connected to the voice server.
         """
-
         if self.is_voice_connected():
             raise ClientException('Already connected to a voice channel')
 
@@ -2579,29 +2382,29 @@ class Client:
 
         log.info('attempting to join voice channel {0.name}'.format(channel))
 
-        payload = {
-            'op': 4,
-            'd': {
-                'guild_id': channel.server.id,
-                'channel_id': channel.id,
-                'self_mute': False,
-                'self_deaf': False
-            }
-        }
+        def session_id_found(data):
+            user_id = data.get('user_id')
+            return user_id == self.user.id
 
-        yield from self._send_ws(utils.to_json(payload))
-        yield from asyncio.wait_for(self._session_id_found.wait(), timeout=5.0, loop=self.loop)
-        yield from asyncio.wait_for(self._voice_data_found.wait(), timeout=5.0, loop=self.loop)
+        # register the futures for waiting
+        session_id_future = self.ws.wait_for('VOICE_STATE_UPDATE', session_id_found)
+        voice_data_future = self.ws.wait_for('VOICE_SERVER_UPDATE', lambda d: True)
 
-        self._session_id_found.clear()
-        self._voice_data_found.clear()
+        # request joining
+        yield from self.ws.voice_state(channel.server.id, channel.id)
+        session_id_data = yield from asyncio.wait_for(session_id_future, timeout=10.0, loop=self.loop)
+        data = yield from asyncio.wait_for(voice_data_future, timeout=10.0, loop=self.loop)
+
+        # todo: multivoice
+        if self.is_voice_connected():
+            self.voice.channel = self.get_channel(session_id_data.get('channel_id'))
 
         kwargs = {
             'user': self.user,
             'channel': channel,
-            'data': self._voice_data_found.data,
+            'data': data,
             'loop': self.loop,
-            'session_id': self.session_id,
+            'session_id': session_id_data.get('session_id'),
             'main_ws': self.ws
         }
 
