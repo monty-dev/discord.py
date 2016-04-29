@@ -125,3 +125,13 @@ class User:
         This is when the user's discord account was created."""
         return snowflake_time(self.id)
 
+    @property
+    def display_name(self):
+        """Returns the user's display name.
+
+        For regular users this is just their username, but
+        if they have a server specific nickname then that
+        is returned instead.
+        """
+        return getattr(self, 'nick', None) or self.name
+
