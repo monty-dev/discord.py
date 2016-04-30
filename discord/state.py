@@ -286,7 +286,7 @@ class ConnectionState:
             if role is not None:
                 roles.append(role)
 
-        data['roles'] = roles
+        data['roles'] = sorted(roles, key=lambda r: int(r.id))
         return Member(server=server, **data)
 
     def parse_guild_member_add(self, data):
@@ -329,6 +329,8 @@ class ConnectionState:
                 if role.id in data['roles']:
                     member.roles.append(role)
 
+            # sort the roles by ID since they can be "randomised"
+            member.roles.sort(key=lambda r: int(r.id))
             self.dispatch('member_update', old_member, member)
 
     def _get_create_server(self, data):
