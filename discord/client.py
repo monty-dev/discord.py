@@ -321,7 +321,7 @@ class Client:
         log.info('logging in returned status code {}'.format(resp.status))
         self.email = email
 
-        body = yield from resp.json()
+        body = yield from resp.json(encoding='utf-8')
         self.token = body['token']
         self.headers['authorization'] = self.token
         self._is_logged_in.set()
@@ -750,7 +750,7 @@ class Client:
         r = yield from self.session.post(url, data=utils.to_json(payload), headers=self.headers)
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
-        data = yield from r.json()
+        data = yield from r.json(encoding='utf-8')
         log.debug(request_success_log.format(response=r, json=payload, data=data))
         channel = PrivateChannel(id=data['id'], user=user)
         self.connection._add_private_channel(channel)
@@ -839,7 +839,7 @@ class Client:
 
         resp = yield from self._rate_limit_helper('send_message', 'POST', url, utils.to_json(payload))
         yield from utils._verify_successful_response(resp)
-        data = yield from resp.json()
+        data = yield from resp.json(encoding='utf-8')
         log.debug(request_success_log.format(response=resp, json=payload, data=data))
         channel = self.get_channel(data.get('channel_id'))
         message = Message(channel=channel, **data)
@@ -942,7 +942,7 @@ class Client:
 
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
-        data = yield from response.json()
+        data = yield from response.json(encoding='utf-8')
         msg = 'POST {0.url} returned {0.status} with {1} response'
         log.debug(msg.format(response, data))
         channel = self.get_channel(data.get('channel_id'))
@@ -976,6 +976,121 @@ class Client:
         log.debug(request_logging_format.format(method='DELETE', response=response))
         yield from utils._verify_successful_response(response)
         yield from response.release()
+
+    @asyncio.coroutine
+    def delete_messages(self, messages):
+        """|coro|
+
+        Deletes a list of messages. This is similar to :func:`delete_message`
+        except it bulk deletes multiple messages.
+
+        The channel to check where the message is deleted from is handled via
+        the first element of the iterable's ``.channel.id`` attributes. If the
+        channel is not consistent throughout the entire sequence, then an
+        :exc:`HTTPException` will be raised.
+
+        Parameters
+        -----------
+        messages : iterable of :class:`Message`
+            An iterable of messages denoting which ones to bulk delete.
+
+        Raises
+        ------
+        ClientException
+            The number of messages to delete is less than 2 or more than 100.
+        Forbidden
+            You do not have proper permissions to delete the messages.
+        HTTPException
+            Deleting the messages failed.
+        """
+
+        messages = list(messages)
+        if len(messages) > 100 or len(messages) < 2:
+            raise ClientException('Can only delete messages in the range of [2, 100]')
+
+        channel_id = messages[0].channel.id
+        url = '{0}/{1}/messages/bulk_delete'.format(endpoints.CHANNELS, channel_id)
+        payload = {
+            'messages': [m.id for m in messages]
+        }
+
+        response = yield from self.session.post(url, headers=self.headers, data=utils.to_json(payload))
+        log.debug(request_logging_format.format(method='POST', response=response))
+        yield from utils._verify_successful_response(response)
+        yield from response.release()
+
+    @asyncio.coroutine
+    def purge_from(self, channel, *, limit=100, check=None, before=None, after=None):
+        """|coro|
+
+        Purges a list of messages that meet the criteria given by the predicate
+        ``check``. If a ``check`` is not provided then all messages are deleted
+        without discrimination.
+
+        You must have Manage Messages permission to delete messages that aren't
+        your own. The Read Message History permission is also needed to retrieve
+        message history.
+
+        Parameters
+        -----------
+        channel : :class:`Channel`
+            The channel to purge from.
+        limit : int
+            The number of messages to search through. This is not the number
+            of messages that will be deleted, though it can be.
+        check : predicate
+            The function used to check if a message should be deleted.
+            It must take a :class:`Message` as its sole parameter.
+        before : :class:`Message`
+            The message before scanning for purging must be.
+        after : :class:`Message`
+            The message after scanning for purging must be.
+
+        Raises
+        -------
+        Forbidden
+            You do not have proper permissions to do the actions required.
+        HTTPException
+            Purging the messages failed.
+
+        Returns
+        --------
+        list
+            The list of messages that were deleted.
+        """
+
+        if check is None:
+            check = lambda m: True
+
+        iterator = LogsFromIterator(self, channel, limit, before, after)
+        ret = []
+        count = 0
+
+        while True:
+            try:
+                msg = yield from iterator.iterate()
+            except asyncio.QueueEmpty:
+                # no more messages to poll
+                if count >= 2:
+                    # more than 2 messages -> bulk delete
+                    to_delete = ret[-count:]
+                    yield from self.delete_messages(to_delete)
+                elif count == 1:
+                    # delete a single message
+                    yield from self.delete_message(ret[-1])
+
+                return ret
+            else:
+                if count == 100:
+                    # we've reached a full 'queue'
+                    to_delete = ret[-100:]
+                    yield from self.delete_messages(to_delete)
+                    count = 0
+                    yield from asyncio.sleep(1)
+
+                if check(msg):
+                    count += 1
+                    ret.append(msg)
 
     @asyncio.coroutine
     def edit_message(self, message, new_content):
@@ -1014,7 +1129,7 @@ class Client:
         response = yield from self._rate_limit_helper('edit_message', 'PATCH', url, utils.to_json(payload))
         log.debug(request_logging_format.format(method='PATCH', response=response))
         yield from utils._verify_successful_response(response)
-        data = yield from response.json()
+        data = yield from response.json(encoding='utf-8')
         log.debug(request_success_log.format(response=response, json=payload, data=data))
         return Message(channel=channel, **data)
 
@@ -1080,7 +1195,7 @@ class Client:
         response = yield from self.session.get(url, params=params, headers=self.headers)
         log.debug(request_logging_format.format(method='GET', response=response))
         yield from utils._verify_successful_response(response)
-        messages = yield from response.json()
+        messages = yield from response.json(encoding='utf-8')
         return messages
 
     if PY35:
@@ -1359,7 +1474,7 @@ class Client:
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
 
-        data = yield from r.json()
+        data = yield from r.json(encoding='utf-8')
         log.debug(request_success_log.format(response=r, json=payload, data=data))
 
         if not_bot_account:
@@ -1420,7 +1535,7 @@ class Client:
         Forbidden
             You do not have permissions to change the nickname.
         HTTPException
-            Editing the channel failed.
+            Changing the nickname failed.
         """
 
         if member == self.user:
@@ -1484,7 +1599,7 @@ class Client:
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
 
-        data = yield from r.json()
+        data = yield from r.json(encoding='utf-8')
         log.debug(request_success_log.format(response=r, json=payload, data=data))
 
     @asyncio.coroutine
@@ -1533,7 +1648,7 @@ class Client:
         log.debug(request_logging_format.format(method='POST', response=response))
         yield from utils._verify_successful_response(response)
 
-        data = yield from response.json()
+        data = yield from response.json(encoding='utf-8')
         log.debug(request_success_log.format(response=response, data=data, json=payload))
         channel = Channel(server=server, **data)
         return channel
@@ -1671,7 +1786,7 @@ class Client:
         r = yield from self.session.post(endpoints.SERVERS, data=utils.to_json(payload), headers=self.headers)
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
-        data = yield from r.json()
+        data = yield from r.json(encoding='utf-8')
         log.debug(request_success_log.format(response=r, json=payload, data=data))
         return Server(**data)
 
@@ -1784,7 +1899,7 @@ class Client:
         resp = yield from self.session.get(url, headers=self.headers)
         log.debug(request_logging_format.format(method='GET', response=resp))
         yield from utils._verify_successful_response(resp)
-        data = yield from resp.json()
+        data = yield from resp.json(encoding='utf-8')
         return [User(**user['user']) for user in data]
 
     # Invite management
@@ -1848,7 +1963,7 @@ class Client:
         log.debug(request_logging_format.format(method='POST', response=response))
 
         yield from utils._verify_successful_response(response)
-        data = yield from response.json()
+        data = yield from response.json(encoding='utf-8')
         log.debug(request_success_log.format(json=payload, response=response, data=data))
         self._fill_invite_data(data)
         return Invite(**data)
@@ -1888,7 +2003,7 @@ class Client:
         response = yield from self.session.get(rurl, headers=self.headers)
         log.debug(request_logging_format.format(method='GET', response=response))
         yield from utils._verify_successful_response(response)
-        data = yield from response.json()
+        data = yield from response.json(encoding='utf-8')
         self._fill_invite_data(data)
         return Invite(**data)
 
@@ -1922,7 +2037,7 @@ class Client:
         resp = yield from self.session.get(url, headers=self.headers)
         log.debug(request_logging_format.format(method='GET', response=resp))
         yield from utils._verify_successful_response(resp)
-        data = yield from resp.json()
+        data = yield from resp.json(encoding='utf-8')
         result = []
         for invite in data:
             channel = server.get_channel(invite['channel']['id'])
@@ -2053,7 +2168,7 @@ class Client:
         log.debug(request_logging_format.format(method='PATCH', response=r))
         yield from utils._verify_successful_response(r)
 
-        data = yield from r.json()
+        data = yield from r.json(encoding='utf-8')
         log.debug(request_success_log.format(json=payload, response=r, data=data))
 
     @asyncio.coroutine
@@ -2219,7 +2334,7 @@ class Client:
         log.debug(request_logging_format.format(method='POST', response=r))
         yield from utils._verify_successful_response(r)
 
-        data = yield from r.json()
+        data = yield from r.json(encoding='utf-8')
         everyone = server.id == data.get('id')
         role = Role(everyone=everyone, **data)
 
