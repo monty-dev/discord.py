@@ -470,7 +470,10 @@ class Client:
             gathered = asyncio.gather(*pending)
             try:
                 gathered.cancel()
-                self.loop.run_forever()
+                self.loop.run_until_complete(gathered)
+
+                # we want to retrieve any exceptions to make sure that
+                # they don't nag us about it being un-retrieved.
                 gathered.exception()
             except:
                 pass
@@ -989,6 +992,8 @@ class Client:
         channel is not consistent throughout the entire sequence, then an
         :exc:`HTTPException` will be raised.
 
+        Usable only by bot accounts.
+
         Parameters
         -----------
         messages : iterable of :class:`Message`
@@ -999,7 +1004,8 @@ class Client:
         ClientException
             The number of messages to delete is less than 2 or more than 100.
         Forbidden
-            You do not have proper permissions to delete the messages.
+            You do not have proper permissions to delete the messages or 
+            you're not using a bot account.
         HTTPException
             Deleting the messages failed.
         """
@@ -1031,6 +1037,8 @@ class Client:
         your own. The Read Message History permission is also needed to retrieve
         message history.
 
+        Usable only by bot accounts.
+
         Parameters
         -----------
         channel : :class:`Channel`
@@ -1049,7 +1057,8 @@ class Client:
         Raises
         -------
         Forbidden
-            You do not have proper permissions to do the actions required.
+            You do not have proper permissions to do the actions required or
+            you're not using a bot account.
         HTTPException
             Purging the messages failed.
 
