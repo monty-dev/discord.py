@@ -80,7 +80,13 @@ class Channel(Hashable):
     voice_members
         A list of :class:`Members` that are currently inside this voice channel.
         If :attr:`type` is not :attr:`ChannelType.voice` then this is always an empty array.
+    user_limit : int
+        The channel's limit for number of members that can be in a voice channel.
     """
+
+    __slots__ = [ 'voice_members', 'name', 'id', 'server', 'topic', 'position',
+                  'is_private', 'type', 'bitrate', 'changed_roles',
+                  'user_limit', '_permission_overwrites' ]
 
     def __init__(self, **kwargs):
         self._update(**kwargs)
@@ -98,6 +104,7 @@ class Channel(Hashable):
         self.position = kwargs.get('position')
         self.bitrate = kwargs.get('bitrate')
         self.type = kwargs.get('type')
+        self.user_limit = kwargs.get('user_limit')
         try:
             self.type = ChannelType(self.type)
         except:

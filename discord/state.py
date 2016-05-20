@@ -319,6 +319,15 @@ class ConnectionState:
             if member is not None:
                 server._remove_member(member)
                 server._member_count -= 1
+
+                # remove them from the voice channel member list
+                vc = member.voice_channel
+                if vc is not None:
+                    try:
+                        vc.voice_members.remove(member)
+                    except:
+                        pass
+
                 self.dispatch('member_remove', member)
 
     def parse_guild_member_update(self, data):
@@ -512,8 +521,9 @@ class ConnectionState:
                 if voice is not None:
                     voice.channel = server.get_channel(data.get('channel_id'))
 
-            updated_members = server._update_voice_state(data)
-            self.dispatch('voice_state_update', *updated_members)
+            before, after = server._update_voice_state(data)
+            if after is not None:
+                self.dispatch('voice_state_update', before, after)
 
     def parse_typing_start(self, data):
         channel = self.get_channel(data.get('channel_id'))
