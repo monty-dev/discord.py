@@ -401,9 +401,10 @@ class Client:
         while not self.is_closed:
             try:
                 yield from self.ws.poll_event()
-            except ReconnectWebSocket:
-                log.info('Reconnecting the websocket.')
-                self.ws = yield from DiscordWebSocket.from_client(self)
+            except (ReconnectWebSocket, ResumeWebSocket) as e:
+                resume = type(e) is ResumeWebSocket
+                log.info('Got ' + type(e).__name__)
+                self.ws = yield from DiscordWebSocket.from_client(self, resume=resume)
             except ConnectionClosed as e:
                 yield from self.close()
                 if e.code != 1000:
@@ -2446,8 +2447,7 @@ class Client:
         yield from utils._verify_successful_response(r)
 
         data = yield from r.json(encoding='utf-8')
-        everyone = server.id == data.get('id')
-        role = Role(everyone=everyone, **data)
+        role = Role(server=server, **data)
 
         # we have to call edit because you can't pass a payload to the
         # http request currently.

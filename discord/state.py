@@ -107,6 +107,10 @@ class ConnectionState:
     def _remove_voice_client(self, guild_id):
         self._voice_clients.pop(guild_id, None)
 
+    def _update_references(self, ws):
+        for vc in self.voice_clients:
+            vc.main_ws = ws
+
     @property
     def servers(self):
         return self._servers.values()
@@ -198,6 +202,9 @@ class ConnectionState:
                                      user=User(**pm['recipient'])))
 
         compat.create_task(self._delay_ready(), loop=self.loop)
+
+    def parse_resumed(self, data):
+        self.dispatch('resumed')
 
     def parse_message_create(self, data):
         channel = self.get_channel(data.get('channel_id'))
@@ -469,10 +476,9 @@ class ConnectionState:
     def parse_guild_role_create(self, data):
         server = self._get_server(data.get('guild_id'))
         role_data = data.get('role', {})
-        everyone = server.id == role_data.get('id')
-        role = Role(everyone=everyone, **role_data)
+        role = Role(server=server, **role_data)
         server.roles.append(role)
-        self.dispatch('server_role_create', server, role)
+        self.dispatch('server_role_create', role)
 
     def parse_guild_role_delete(self, data):
         server = self._get_server(data.get('guild_id'))
@@ -484,7 +490,7 @@ class ConnectionState:
             except ValueError:
                 return
             else:
-                self.dispatch('server_role_delete', server, role)
+                self.dispatch('server_role_delete', role)
 
     def parse_guild_role_update(self, data):
         server = self._get_server(data.get('guild_id'))

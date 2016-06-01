@@ -40,9 +40,13 @@ def _get_variable(name):
     stack = inspect.stack()
     try:
         for frames in stack:
-            current_locals = frames[0].f_locals
-            if name in current_locals:
-                return current_locals[name]
+            try:
+                frame = frames[0]
+                current_locals = frame.f_locals
+                if name in current_locals:
+                    return current_locals[name]
+            finally:
+                del frame
     finally:
         del stack
 
@@ -152,6 +156,10 @@ class Bot(GroupMixin, discord.Client):
         :attr:`Context.prefix`.
     description : str
         The content prefixed into the default help message.
+    self_bot : bool
+        If ``True``, the bot will only listen to commands invoked by itself rather
+        than ignoring itself. If ``False`` (the default) then the bot will ignore
+        itself. This cannot be changed once initialised.
     formatter : :class:`HelpFormatter`
         The formatter used to format the help message. By default, it uses a
         the :class:`HelpFormatter`. Check it for more info on how to override it.
@@ -191,6 +199,8 @@ class Bot(GroupMixin, discord.Client):
         self.pm_help = pm_help
         self.command_not_found = options.pop('command_not_found', 'No command called "{}" found.')
         self.command_has_no_subcommands = options.pop('command_has_no_subcommands', 'Command {0.name} has no subcommands.')
+
+        self._skip_check = discord.User.__ne__ if options.pop('self_bot', False) else discord.User.__eq__
 
         self.help_attrs = options.pop('help_attrs', {})
         self.help_attrs['pass_context'] = True
@@ -457,7 +467,7 @@ class Bot(GroupMixin, discord.Client):
         return self.cogs.get(name)
 
     def remove_cog(self, name):
-        """Removes a cog the bot.
+        """Removes a cog from the bot.
 
         All registered commands and event listeners that the
         cog has registered will be removed as well.
@@ -578,7 +588,7 @@ class Bot(GroupMixin, discord.Client):
         _internal_author = message.author
 
         view = StringView(message.content)
-        if message.author == self.user:
+        if self._skip_check(message.author, self.user):
             return
 
         prefix = self._get_prefix(message)
