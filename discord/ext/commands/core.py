@@ -44,7 +44,10 @@ def inject_context(ctx, coro):
         _internal_channel = ctx.message.channel
         _internal_author = ctx.message.author
 
-        ret = yield from coro(*args, **kwargs)
+        try:
+            ret = yield from coro(*args, **kwargs)
+        except Exception as e:
+            raise CommandError("Exception raised while executing command") from e
         return ret
     return wrapped
 
@@ -134,17 +137,20 @@ class Command:
         self.instance = None
         self.parent = None
 
-    def handle_local_error(self, error, ctx):
+    def dispatch_error(self, error, ctx):
         try:
             coro = self.on_error
         except AttributeError:
-            return
-
-        injected = inject_context(ctx, coro)
-        if self.instance is not None:
-            discord.compat.create_task(injected(self.instance, error, ctx), loop=ctx.bot.loop)
+            pass
         else:
-            discord.compat.create_task(injected(error, ctx), loop=ctx.bot.loop)
+            loop = ctx.bot.loop
+            injected = inject_context(ctx, coro)
+            if self.instance is not None:
+                discord.compat.create_task(injected(self.instance, error, ctx), loop=loop)
+            else:
+                discord.compat.create_task(injected(error, ctx), loop=loop)
+        finally:
+            ctx.bot.dispatch('command_error', error, ctx)
 
     def _get_from_servers(self, bot, getter, argument):
         result = None
@@ -303,85 +309,107 @@ class Command:
 
         return result
 
+    @property
+    def full_parent_name(self):
+        """Retrieves the fully qualified parent command name.
+
+        This the base command name required to execute it. For example,
+        in ``?one two three`` the parent name would be ``one two``.
+        """
+        entries = []
+        command = self
+        while command.parent is not None:
+            command = command.parent
+            entries.append(command.name)
+
+        return ' '.join(reversed(entries))
+
+    @property
+    def qualified_name(self):
+        """Retrieves the fully qualified command name.
+
+        This is the full parent name with the command name as well.
+        For example, in ``?one two three`` the qualified name would be
+        ``one two three``.
+        """
+
+        parent = self.full_parent_name
+        if parent:
+            return parent + ' ' + self.name
+        else:
+            return self.name
+
+    def __str__(self):
+        return self.qualified_name
 
     @asyncio.coroutine
     def _parse_arguments(self, ctx):
-        try:
-            ctx.args = [] if self.instance is None else [self.instance]
-            ctx.kwargs = {}
-            args = ctx.args
-            kwargs = ctx.kwargs
+        ctx.args = [] if self.instance is None else [self.instance]
+        ctx.kwargs = {}
+        args = ctx.args
+        kwargs = ctx.kwargs
 
-            first = True
-            view = ctx.view
-            iterator = iter(self.params.items())
+        first = True
+        view = ctx.view
+        iterator = iter(self.params.items())
 
-            if self.instance is not None:
-                # we have 'self' as the first parameter so just advance
-                # the iterator and resume parsing
-                try:
-                    next(iterator)
-                except StopIteration:
-                    fmt = 'Callback for {0.name} command is missing "self" parameter.'
-                    raise discord.ClientException(fmt.format(self))
+        if self.instance is not None:
+            # we have 'self' as the first parameter so just advance
+            # the iterator and resume parsing
+            try:
+                next(iterator)
+            except StopIteration:
+                fmt = 'Callback for {0.name} command is missing "self" parameter.'
+                raise discord.ClientException(fmt.format(self))
 
-            for name, param in iterator:
-                if first and self.pass_context:
-                    args.append(ctx)
-                    first = False
-                    continue
+        for name, param in iterator:
+            if first and self.pass_context:
+                args.append(ctx)
+                first = False
+                continue
 
-                if param.kind == param.POSITIONAL_OR_KEYWORD:
-                    transformed = yield from self.transform(ctx, param)
-                    args.append(transformed)
-                elif param.kind == param.KEYWORD_ONLY:
-                    # kwarg only param denotes "consume rest" semantics
-                    if self.rest_is_raw:
-                        converter = self._get_converter(param)
-                        argument = view.read_rest()
-                        kwargs[name] = yield from self.do_conversion(ctx.bot, ctx.message, converter, argument)
-                    else:
-                        kwargs[name] = yield from self.transform(ctx, param)
-                    break
-                elif param.kind == param.VAR_POSITIONAL:
-                    while not view.eof:
-                        try:
-                            transformed = yield from self.transform(ctx, param)
-                            args.append(transformed)
-                        except RuntimeError:
-                            break
-
-        except CommandError as e:
-            self.handle_local_error(e, ctx)
-            ctx.bot.dispatch('command_error', e, ctx)
-            return False
-        return True
+            if param.kind == param.POSITIONAL_OR_KEYWORD:
+                transformed = yield from self.transform(ctx, param)
+                args.append(transformed)
+            elif param.kind == param.KEYWORD_ONLY:
+                # kwarg only param denotes "consume rest" semantics
+                if self.rest_is_raw:
+                    converter = self._get_converter(param)
+                    argument = view.read_rest()
+                    kwargs[name] = yield from self.do_conversion(ctx.bot, ctx.message, converter, argument)
+                else:
+                    kwargs[name] = yield from self.transform(ctx, param)
+                break
+            elif param.kind == param.VAR_POSITIONAL:
+                while not view.eof:
+                    try:
+                        transformed = yield from self.transform(ctx, param)
+                        args.append(transformed)
+                    except RuntimeError:
+                        break
 
     def _verify_checks(self, ctx):
-        try:
-            if not self.enabled:
-                raise DisabledCommand('{0.name} command is disabled'.format(self))
+        if not self.enabled:
+            raise DisabledCommand('{0.name} command is disabled'.format(self))
 
-            if self.no_pm and ctx.message.channel.is_private:
-                raise NoPrivateMessage('This command cannot be used in private messages.')
+        if self.no_pm and ctx.message.channel.is_private:
+            raise NoPrivateMessage('This command cannot be used in private messages.')
 
-            if not self.can_run(ctx):
-                raise CheckFailure('The check functions for command {0.name} failed.'.format(self))
-        except CommandError as exc:
-            self.handle_local_error(exc, ctx)
-            ctx.bot.dispatch('command_error', exc, ctx)
-            return False
-
-        return True
+        if not self.can_run(ctx):
+            raise CheckFailure('The check functions for command {0.name} failed.'.format(self))
 
     @asyncio.coroutine
     def invoke(self, ctx):
-        if not self._verify_checks(ctx):
-            return
+        ctx.command = self
+        self._verify_checks(ctx)
+        yield from self._parse_arguments(ctx)
 
-        if (yield from self._parse_arguments(ctx)):
-            injected = inject_context(ctx, self.callback)
-            yield from injected(*ctx.args, **ctx.kwargs)
+        # terminate the invoked_subcommand chain.
+        # since we're in a regular command (and not a group) then
+        # the invoked subcommand is None.
+        ctx.invoked_subcommand = None
+        injected = inject_context(ctx, self.callback)
+        yield from injected(*ctx.args, **ctx.kwargs)
 
     def error(self, coro):
         """A decorator that registers a coroutine as a local error handler.
@@ -596,9 +624,9 @@ class Group(GroupMixin, Command):
     def invoke(self, ctx):
         early_invoke = not self.invoke_without_command
         if early_invoke:
-            valid = self._verify_checks(ctx) and (yield from self._parse_arguments(ctx))
-            if not valid:
-                return
+            ctx.command = self
+            self._verify_checks(ctx)
+            yield from self._parse_arguments(ctx)
 
         view = ctx.view
         previous = view.index
@@ -607,8 +635,7 @@ class Group(GroupMixin, Command):
 
         if trigger:
             ctx.subcommand_passed = trigger
-            if trigger in self.commands:
-                ctx.invoked_subcommand = self.commands[trigger]
+            ctx.invoked_subcommand = self.commands.get(trigger, None)
 
         if early_invoke:
             injected = inject_context(ctx, self.callback)
@@ -621,9 +648,8 @@ class Group(GroupMixin, Command):
             # undo the trigger parsing
             view.index = previous
             view.previous = previous
-            valid = self._verify_checks(ctx) and (yield from self._parse_arguments(ctx))
-            if not valid:
-                return
+            self._verify_checks(ctx)
+            yield from self._parse_arguments(ctx)
             injected = inject_context(ctx, self.callback)
             yield from injected(*ctx.args, **ctx.kwargs)
 
