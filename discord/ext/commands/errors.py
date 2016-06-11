@@ -28,7 +28,7 @@ from discord.errors import DiscordException
 
 __all__ = [ 'CommandError', 'MissingRequiredArgument', 'BadArgument',
            'NoPrivateMessage', 'CheckFailure', 'CommandNotFound',
-           'DisabledCommand' ]
+           'DisabledCommand', 'CommandInvokeError' ]
 
 class CommandError(DiscordException):
     """The base exception type for all command related errors.
@@ -39,7 +39,13 @@ class CommandError(DiscordException):
     in a special way as they are caught and passed into a special event
     from :class:`Bot`\, :func:`on_command_error`.
     """
-    pass
+    def __init__(self, message=None, *args):
+        if message is not None:
+            # clean-up @everyone and @here mentions
+            m = message.replace('@everyone', '@\u200beveryone').replace('@here', '@\u200bhere')
+            super().__init__(m, *args)
+        else:
+            super().__init__(*args)
 
 class CommandNotFound(CommandError):
     """Exception raised when a command is attempted to be invoked
@@ -48,6 +54,7 @@ class CommandNotFound(CommandError):
     This is not raised for invalid subcommands, rather just the
     initial main command that is attempted to be invoked.
     """
+    pass
 
 class MissingRequiredArgument(CommandError):
     """Exception raised when parsing a command and a parameter
@@ -74,3 +81,16 @@ class CheckFailure(CommandError):
 class DisabledCommand(CommandError):
     """Exception raised when the command being invoked is disabled."""
     pass
+
+class CommandInvokeError(CommandError):
+    """Exception raised when the command being invoked raised an exception.
+
+    Attributes
+    -----------
+    original
+        The original exception that was raised. You can also get this via
+        the ``__cause__`` attribute.
+    """
+    def __init__(self, e):
+        self.original = e
+        super().__init__('Command raised an exception: {0.__class__.__name__}: {0}'.format(e))
