@@ -189,13 +189,13 @@ class HTTPClient:
 
     @asyncio.coroutine
     def static_login(self, token, *, bot):
-        old_state = (self.token, self.bot_token)
+        old_token, old_bot = self.token, self.bot_token
         self._token(token, bot=bot)
 
         try:
             data = yield from self.get(self.ME)
         except HTTPException as e:
-            self._token(*old_state)
+            self._token(old_token, bot=old_bot)
             if e.response.status == 401:
                 raise LoginFailure('Improper token has been passed.') from e
             raise e
@@ -329,7 +329,7 @@ class HTTPClient:
         payload = {
             'nick': nickname
         }
-        bucket = '{}:{}'.format(_func_(), guild_id)
+        bucket = 'members:{}'.format(guild_id)
         return self.patch(url, json=payload, bucket=bucket)
 
     # Channel management
