@@ -262,6 +262,9 @@ class HTTPClient:
         }
         return self.patch(url, json=payload, bucket='messages:' + str(guild_id))
 
+    def get_message(self, channel_id, message_id):
+        url = '{0.CHANNELS}/{1}/messages/{2}'.format(self, channel_id, message_id)
+        return self.get(url, bucket=_func_())
 
     def logs_from(self, channel_id, limit, before=None, after=None):
         url = '{0.CHANNELS}/{1}/messages'.format(self, channel_id)
@@ -344,12 +347,15 @@ class HTTPClient:
 
         return self.patch(url, json=payload, bucket=_func_())
 
-    def create_channel(self, guild_id, name, channe_type):
+    def create_channel(self, guild_id, name, channe_type, permission_overwrites=None):
         url = '{0.GUILDS}/{1}/channels'.format(self, guild_id)
         payload = {
             'name': name,
             'type': channe_type
         }
+
+        if permission_overwrites is not None:
+            payload['permission_overwrites'] = permission_overwrites
 
         return self.post(url, json=payload, bucket=_func_())
 

@@ -17,7 +17,7 @@ __license__ = 'MIT'
 __copyright__ = 'Copyright 2015-2016 Rapptz'
 __version__ = '0.10.0-alpha'
 
-from .client import Client, AppInfo
+from .client import Client, AppInfo, ChannelPermissions
 from .user import User
 from .game import Game
 from .channel import Channel, PrivateChannel
@@ -25,7 +25,7 @@ from .server import Server
 from .member import Member
 from .message import Message
 from .errors import *
-from .permissions import Permissions
+from .permissions import Permissions, PermissionOverwrite
 from .role import Role
 from .colour import Color, Colour
 from .invite import Invite

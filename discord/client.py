@@ -36,7 +36,7 @@ from .object import Object
 from .role import Role
 from .errors import *
 from .state import ConnectionState
-from .permissions import Permissions
+from .permissions import Permissions, PermissionOverwrite
 from . import utils, compat
 from .enums import ChannelType, ServerRegion
 from .voice_client import VoiceClient
@@ -70,6 +70,9 @@ def app_info_icon_url(self):
     return 'https://cdn.discordapp.com/app-icons/{0.id}/{0.icon}.jpg'.format(self)
 
 AppInfo.icon_url = property(app_info_icon_url)
+
+ChannelPermissions = namedtuple('ChannelPermissions', 'target overwrite')
+ChannelPermissions.__new__.__defaults__ = (PermissionOverwrite(),)
 
 class Client:
     """Represents a client connection that connects to Discord.
@@ -1070,9 +1073,43 @@ class Client:
 
         channel = message.channel
         content = str(new_content)
-
-        data = yield from self.http.edit_message(message.id, channel.id, content, guild_id=channel.server.id)
+        guild_id = channel.server.id if not channel.is_private else None
+        data = yield from self.http.edit_message(message.id, channel.id, content, guild_id=guild_id)
         return Message(channel=channel, **data)
+
+    @asyncio.coroutine
+    def get_message(self, channel, id):
+        """|coro|
+
+        Retrieves a single :class:`Message` from a :class:`Channel`.
+
+        This can only be used by bot accounts.
+
+        Parameters
+        ------------
+        channel: :class:`Channel`
+            The text channel to retrieve the message from.
+        id: str
+            The message ID to look for.
+
+        Returns
+        --------
+        :class:`Message`
+            The message asked for.
+
+        Raises
+        --------
+        NotFound
+            The specified channel or message was not found.
+        Forbidden
+            You do not have the permissions required to get a message.
+        HTTPException
+            Retrieving the message failed.
+        """
+
+        data = yield from self.http.get_message(channel.id, id)
+        return Message(channel=channel, **data)
+
 
     def _logs_from(self, channel, limit=100, before=None, after=None):
         """|coro|
@@ -1542,12 +1579,46 @@ class Client:
         yield from self.http.patch(url, json=payload, bucket='move_channel')
 
     @asyncio.coroutine
-    def create_channel(self, server, name, type=None):
+    def create_channel(self, server, name, *overwrites, type=None):
         """|coro|
 
         Creates a :class:`Channel` in the specified :class:`Server`.
 
         Note that you need the proper permissions to create the channel.
+
+        The ``overwrites`` argument list can be used to create a 'secret'
+        channel upon creation. A namedtuple of :class:`ChannelPermissions`
+        is exposed to create a channel-specific permission overwrite in a more
+        self-documenting matter. You can also use a regular tuple of ``(target, overwrite)``
+        where the ``overwrite`` expected has to be of type :class:`PermissionOverwrite`.
+
+        Examples
+        ----------
+
+        Creating a voice channel:
+
+        .. code-block:: python
+
+            await client.create_channel(server, 'Voice', type=discord.ChannelType.voice)
+
+        Creating a 'secret' text channel:
+
+        .. code-block:: python
+
+            everyone_perms = discord.PermissionOverwrite(read_messages=False)
+            my_perms = discord.PermissionOverwrite(read_messages=True)
+
+            everyone = discord.ChannelPermissions(target=server.default_role, overwrite=everyone_perms)
+            mine = discord.ChannelPermissions(target=server.me, overwrite=my_perms)
+            await client.create_channel(server, 'secret', everyone, mine)
+
+        Or in a more 'compact' way:
+
+        .. code-block:: python
+
+            everyone = discord.PermissionOverwrite(read_messages=False)
+            mine = discord.PermissionOverwrite(read_messages=True)
+            await client.create_channel(server, 'secret', (server.default_role, everyone), (server.me, mine))
 
         Parameters
         -----------
@@ -1557,6 +1628,9 @@ class Client:
             The channel's name.
         type : :class:`ChannelType`
             The type of channel to create. Defaults to :attr:`ChannelType.text`.
+        overwrites:
+            An argument list of channel specific overwrites to apply on the channel on
+            creation. Useful for creating 'secret' channels.
 
         Raises
         -------
@@ -1566,6 +1640,8 @@ class Client:
             The server specified was not found.
         HTTPException
             Creating the channel failed.
+        InvalidArgument
+            The permission overwrite array is not in proper form.
 
         Returns
         -------
@@ -1577,7 +1653,30 @@ class Client:
         if type is None:
             type = ChannelType.text
 
-        data = yield from self.http.create_channel(server.id, name, str(type))
+        perms = []
+        for overwrite in overwrites:
+            target = overwrite[0]
+            perm = overwrite[1]
+            if not isinstance(perm, PermissionOverwrite):
+                raise InvalidArgument('Expected PermissionOverwrite received {0.__name__}'.format(type(perm)))
+
+            allow, deny = perm.pair()
+            payload = {
+                'allow': allow.value,
+                'deny': deny.value,
+                'id': target.id
+            }
+
+            if isinstance(target, User):
+                payload['type'] = 'member'
+            elif isinstance(target, Role):
+                payload['type'] = 'role'
+            else:
+                raise InvalidArgument('Expected Role, User, or Member target, received {0.__name__}'.format(type(target)))
+
+            perms.append(payload)
+
+        data = yield from self.http.create_channel(server.id, name, str(type), permission_overwrites=perms)
         channel = Channel(server=server, **data)
         return channel
 
@@ -2223,7 +2322,7 @@ class Client:
         return role
 
     @asyncio.coroutine
-    def edit_channel_permissions(self, channel, target, *, allow=None, deny=None):
+    def edit_channel_permissions(self, channel, target, overwrite=None):
         """|coro|
 
         Sets the channel specific permission overwrites for a target in the
@@ -2239,11 +2338,10 @@ class Client:
 
         Setting allow and deny: ::
 
-            allow = discord.Permissions.none()
-            deny = discord.Permissions.none()
-            allow.mention_everyone = True
-            deny.manage_messages = True
-            yield from client.edit_channel_permissions(message.channel, message.author, allow=allow, deny=deny)
+            overwrite = discord.PermissionOverwrite()
+            overwrite.read_messages = True
+            overwrite.ban_members = False
+            yield from client.edit_channel_permissions(message.channel, message.author, overwrite)
 
         Parameters
         -----------
@@ -2251,10 +2349,8 @@ class Client:
             The channel to give the specific permissions for.
         target
             The :class:`Member` or :class:`Role` to overwrite permissions for.
-        allow : :class:`Permissions`
-            The permissions to explicitly allow. (optional)
-        deny : :class:`Permissions`
-            The permissions to explicitly deny. (optional)
+        overwrite: :class:`PermissionOverwrite`
+            The permissions to allow and deny to the target.
 
         Raises
         -------
@@ -2265,27 +2361,26 @@ class Client:
         HTTPException
             Editing channel specific permissions failed.
         InvalidArgument
-            The allow or deny arguments were not of type :class:`Permissions`
+            The overwrite parameter was not of type :class:`PermissionOverwrite`
             or the target type was not :class:`Role` or :class:`Member`.
         """
 
-        allow = Permissions.none() if allow is None else allow
-        deny = Permissions.none() if deny is None else deny
+        overwrite = PermissionOverwrite() if overwrite is None else overwrite
 
-        if not (isinstance(allow, Permissions) and isinstance(deny, Permissions)):
-            raise InvalidArgument('allow and deny parameters must be discord.Permissions')
 
-        deny =  deny.value
-        allow = allow.value
+        if not isinstance(overwrite, PermissionOverwrite):
+            raise InvalidArgument('allow and deny parameters must be PermissionOverwrite')
+
+        allow, deny = overwrite.pair()
 
         if isinstance(target, Member):
             perm_type = 'member'
         elif isinstance(target, Role):
             perm_type = 'role'
         else:
-            raise InvalidArgument('target parameter must be either discord.Member or discord.Role')
+            raise InvalidArgument('target parameter must be either Member or Role')
 
-        yield from self.http.edit_channel_permissions(channel.id, target.id, allow, deny, perm_type)
+        yield from self.http.edit_channel_permissions(channel.id, target.id, allow.value, deny.value, perm_type)
 
     @asyncio.coroutine
     def delete_channel_permissions(self, channel, target):
