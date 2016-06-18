@@ -161,7 +161,7 @@ class HTTPClient:
         yield from self.session.close()
 
     def recreate(self):
-        self.session = aiohttp.ClientSession(self.connector, loop=self.loop)
+        self.session = aiohttp.ClientSession(connector=self.connector, loop=self.loop)
 
     def _token(self, token, *, bot=True):
         self.token = token
@@ -277,6 +277,18 @@ class HTTPClient:
             params['after'] = after
 
         return self.get(url, params=params, bucket=_func_())
+
+    def pin_message(self, channel_id, message_id):
+        url = '{0.CHANNELS}/{1}/pins/{2}'.format(self, channel_id, message_id)
+        return self.put(url, bucket=_func_())
+
+    def unpin_message(self, channel_id, message_id):
+        url = '{0.CHANNELS}/{1}/pins/{2}'.format(self, channel_id, message_id)
+        return self.delete(url, bucket=_func_())
+
+    def pins_from(self, channel_id):
+        url = '{0.CHANNELS}/{1}/pins'.format(self, channel_id)
+        return self.get(url, bucket=_func_())
 
     # Member management
 
