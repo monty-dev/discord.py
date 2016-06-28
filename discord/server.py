@@ -86,12 +86,16 @@ class Server(Hashable):
         Indicates if the server is a 'large' server. A large server is defined as having
         more than ``large_threshold`` count members, which for this library is set to
         the maximum of 250.
+    mfa_level: int
+        Indicates the server's two factor authorisation level. If this value is 0 then
+        the server does not require 2FA for their administrative members. If the value is
+        1 then they do.
     """
 
     __slots__ = ['afk_timeout', 'afk_channel', '_members', '_channels', 'icon',
                  'name', 'id', 'owner', 'unavailable', 'name', 'region',
                  '_default_role', '_default_channel', 'roles', '_member_count',
-                 'large', 'owner_id' ]
+                 'large', 'owner_id', 'mfa_level' ]
 
     def __init__(self, **kwargs):
         self._channels = {}
@@ -180,6 +184,20 @@ class Server(Hashable):
         self.unavailable = guild.get('unavailable', False)
         self.id = guild['id']
         self.roles = [Role(server=self, **r) for r in guild.get('roles', [])]
+        self.mfa_level = guild.get('mfa_level')
+
+        for mdata in guild.get('members', []):
+            roles = [self.default_role]
+            for role_id in mdata['roles']:
+                role = utils.find(lambda r: r.id == role_id, self.roles)
+                if role is not None:
+                    roles.append(role)
+
+            mdata['roles'] = roles
+            member = Member(**mdata)
+            member.server = self
+            self._add_member(member)
+
         self._sync(guild)
         self.large = None if member_count is None else self._member_count > 250
 
@@ -196,18 +214,6 @@ class Server(Hashable):
     def _sync(self, data):
         if 'large' in data:
             self.large = data['large']
-
-        for mdata in data.get('members', []):
-            roles = [self.default_role]
-            for role_id in mdata['roles']:
-                role = utils.find(lambda r: r.id == role_id, self.roles)
-                if role is not None:
-                    roles.append(role)
-
-            mdata['roles'] = roles
-            member = Member(**mdata)
-            member.server = self
-            self._add_member(member)
 
         for presence in data.get('presences', []):
             user_id = presence['user']['id']
