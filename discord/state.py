@@ -32,7 +32,7 @@ from .channel import Channel, PrivateChannel
 from .member import Member
 from .role import Role
 from . import utils, compat
-from .enums import Status
+from .enums import Status, ChannelType, try_enum
 
 
 from collections import deque, namedtuple
@@ -138,11 +138,13 @@ class ConnectionState:
 
     def _add_private_channel(self, channel):
         self._private_channels[channel.id] = channel
-        self._private_channels_by_user[channel.user.id] = channel
+        if channel.type is ChannelType.private:
+            self._private_channels_by_user[channel.user.id] = channel
 
     def _remove_private_channel(self, channel):
         self._private_channels.pop(channel.id, None)
-        self._private_channels_by_user.pop(channel.user.id, None)
+        if channel.type is ChannelType.private:
+            self._private_channels_by_user.pop(channel.user.id, None)
 
     def _get_message(self, msg_id):
         return utils.find(lambda m: m.id == msg_id, self.messages)
@@ -205,8 +207,7 @@ class ConnectionState:
                 servers.append(server)
 
         for pm in data.get('private_channels'):
-            self._add_private_channel(PrivateChannel(id=pm['id'],
-                                     user=User(**pm['recipient'])))
+            self._add_private_channel(PrivateChannel(self.user, **pm))
 
         compat.create_task(self._delay_ready(), loop=self.loop)
 
@@ -290,9 +291,17 @@ class ConnectionState:
                 self.dispatch('channel_delete', channel)
 
     def parse_channel_update(self, data):
+        channel_type = try_enum(ChannelType, data.get('type'))
+        channel_id = data.get('id')
+        if channel_type is ChannelType.group:
+            channel = self._get_private_channel(channel_id)
+            old_channel = copy.copy(channel)
+            channel._update_group(**data)
+            self.dispatch('channel_update', old_channel, channel)
+            return
+
         server = self._get_server(data.get('guild_id'))
         if server is not None:
-            channel_id = data.get('id')
             channel = server.get_channel(channel_id)
             if channel is not None:
                 old_channel = copy.copy(channel)
@@ -303,9 +312,7 @@ class ConnectionState:
         is_private = data.get('is_private', False)
         channel = None
         if is_private:
-            recipient = User(**data.get('recipient'))
-            pm_id = data.get('id')
-            channel = PrivateChannel(id=pm_id, user=recipient)
+            channel = PrivateChannel(self.user, **data)
             self._add_private_channel(channel)
         else:
             server = self._get_server(data.get('guild_id'))

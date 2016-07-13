@@ -27,11 +27,13 @@ DEALINGS IN THE SOFTWARE.
 from enum import Enum
 
 class ChannelType(Enum):
-    text = 'text'
-    voice = 'voice'
+    text    = 0
+    private = 1
+    voice   = 2
+    group   = 3
 
     def __str__(self):
-        return self.value
+        return self.name
 
 class ServerRegion(Enum):
     us_west = 'us-west'
@@ -71,3 +73,13 @@ class DefaultAvatar(Enum):
 
     def __str__(self):
         return self.name
+
+def try_enum(cls, val):
+    """A function that tries to turn the value into enum ``cls``.
+
+    If it fails it returns the value instead.
+    """
+    try:
+        return cls(val)
+    except ValueError:
+        return val
