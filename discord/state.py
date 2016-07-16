@@ -33,7 +33,7 @@ from .member import Member
 from .role import Role
 from . import utils, compat
 from .enums import Status, ChannelType, try_enum
-
+from .calls import GroupCall
 
 from collections import deque, namedtuple
 import copy, enum, math
@@ -63,6 +63,7 @@ class ConnectionState:
         self.user = None
         self.sequence = None
         self.session_id = None
+        self._calls = {}
         self._servers = {}
         self._voice_clients = {}
         self._private_channels = {}
@@ -312,9 +313,9 @@ class ConnectionState:
                 self.dispatch('channel_update', old_channel, channel)
 
     def parse_channel_create(self, data):
-        is_private = data.get('is_private', False)
+        ch_type = try_enum(ChannelType, data.get('type'))
         channel = None
-        if is_private:
+        if ch_type in (ChannelType.group, ChannelType.private):
             channel = PrivateChannel(self.user, **data)
             self._add_private_channel(channel)
         else:
@@ -324,6 +325,22 @@ class ConnectionState:
                 server._add_channel(channel)
 
         self.dispatch('channel_create', channel)
+
+    def parse_channel_recipient_add(self, data):
+        channel = self._get_private_channel(data.get('channel_id'))
+        user = User(**data.get('user', {}))
+        channel.recipients.append(user)
+        self.dispatch('group_join', channel, user)
+
+    def parse_channel_recipient_remove(self, data):
+        channel = self._get_private_channel(data.get('channel_id'))
+        user = User(**data.get('user', {}))
+        try:
+            channel.recipients.remove(user)
+        except ValueError:
+            pass
+        else:
+            self.dispatch('group_remove', channel, user)
 
     def _make_member(self, server, data):
         roles = [server.default_role]
@@ -480,7 +497,6 @@ class ConnectionState:
         self._remove_server(server)
         self.dispatch('server_remove', server)
 
-
     def parse_guild_ban_add(self, data):
         # we make the assumption that GUILD_BAN_ADD is done
         # before GUILD_MEMBER_REMOVE is called
@@ -548,16 +564,21 @@ class ConnectionState:
 
     def parse_voice_state_update(self, data):
         server = self._get_server(data.get('guild_id'))
-        user_id = data.get('user_id')
         if server is not None:
-            if user_id == self.user.id:
+            channel = server.get_channel(data.get('channel_id'))
+            if data.get('user_id') == self.user.id:
                 voice = self._get_voice_client(server.id)
                 if voice is not None:
-                    voice.channel = server.get_channel(data.get('channel_id'))
+                    voice.channel = channel
 
             before, after = server._update_voice_state(data)
             if after is not None:
                 self.dispatch('voice_state_update', before, after)
+        else:
+            # in here we're either at private or group calls
+            call = self._calls.get(data.get('channel_id'), None)
+            if call is not None:
+                call._update_voice_state(data)
 
     def parse_typing_start(self, data):
         channel = self.get_channel(data.get('channel_id'))
@@ -576,6 +597,25 @@ class ConnectionState:
             if member is not None:
                 timestamp = datetime.datetime.utcfromtimestamp(data.get('timestamp'))
                 self.dispatch('typing', channel, member, timestamp)
+
+    def parse_call_create(self, data):
+        message = self._get_message(data.get('message_id'))
+        if message is not None:
+            call = GroupCall(call=message, **data)
+            self._calls[data['channel_id']] = call
+            self.dispatch('call', call)
+
+    def parse_call_update(self, data):
+        call = self._calls.get(data.get('channel_id'), None)
+        if call is not None:
+            before = copy.copy(call)
+            call._update(**data)
+            self.dispatch('call_update', before, call)
+
+    def parse_call_delete(self, data):
+        call = self._calls.pop(data.get('channel_id'), None)
+        if call is not None:
+            self.dispatch('call_remove', call)
 
     def get_channel(self, id):
         if id is None:

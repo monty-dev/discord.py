@@ -25,9 +25,12 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from . import utils
+import datetime
+from .enums import ServerRegion, try_enum
+from .member import VoiceState
 
 class CallMessage:
-    """Represents a group call from Discord.
+    """Represents a group call message from Discord.
 
     This is only received in cases where the message type is equivalent to
     :attr:`MessageType.call`.
@@ -38,11 +41,115 @@ class CallMessage:
         A naive UTC datetime object that represents the time that the call has ended.
     participants: List[:class:`User`]
         The list of users that are participating in this call.
-    channel: :class:`PrivateChannel`
-        The private channel associated with this call.
+    message: :class:`Message`
+        The message associated with this call message.
     """
 
-    def __init__(self, channel, **kwargs):
-        self.channel = channel
+    def __init__(self, message, **kwargs):
+        self.message = message
         self.ended_timestamp = utils.parse_time(kwargs.get('ended_timestamp'))
         self.participants = kwargs.get('participants')
+
+    @property
+    def call_ended(self):
+        """bool: Indicates if the call has ended."""
+        return self.ended_timestamp is not None
+
+    @property
+    def channel(self):
+        """:class:`PrivateChannel`\: The private channel associated with this message."""
+        return self.message.channel
+
+    @property
+    def duration(self):
+        """Queries the duration of the call.
+
+        If the call has not ended then the current duration will
+        be returned.
+
+        Returns
+        ---------
+        datetime.timedelta
+            The timedelta object representing the duration.
+        """
+        if self.ended_timestamp is None:
+            return datetime.datetime.utcnow() - self.message.timestamp
+        else:
+            return self.ended_timestamp - self.message.timestamp
+
+class GroupCall:
+    """Represents the actual group call from Discord.
+
+    This is accompanied with a :class:`CallMessage` denoting the information.
+
+    Attributes
+    -----------
+    call: :class:`CallMessage`
+        The call message associated with this group call.
+    unavailable: bool
+        Denotes if this group call is unavailable.
+    ringing: List[:class:`User`]
+        A list of users that are currently being rung to join the call.
+    region: :class:`ServerRegion`
+        The server region the group call is being hosted on.
+    """
+
+    def __init__(self, **kwargs):
+        self.call = kwargs.get('call')
+        self.unavailable = kwargs.get('unavailable')
+        self._voice_states = {}
+
+        for state in kwargs.get('voice_states', []):
+            self._update_voice_state(state)
+
+        self._update(**kwargs)
+
+    def _update(self, **kwargs):
+        self.region = try_enum(ServerRegion, kwargs.get('region'))
+        lookup = {u.id: u for u in self.call.channel.recipients}
+        me = self.call.channel.me
+        lookup[me.id] = me
+        self.ringing = list(filter(None, map(lambda i: lookup.get(i), kwargs.get('ringing', []))))
+
+    def _update_voice_state(self, data):
+        user_id = data['user_id']
+        # left the voice channel?
+        if data['channel_id'] is None:
+            self._voice_states.pop(user_id, None)
+        else:
+            self._voice_states[user_id] = VoiceState(**data, voice_channel=self.channel)
+
+    @property
+    def connected(self):
+        """A property that returns the list of :class:`User` that are currently in this call."""
+        ret = [u for u in self.channel.recipients if self.voice_state_for(u) is not None]
+        me = self.channel.me
+        if self.voice_state_for(me) is not None:
+            ret.append(me)
+
+        return ret
+
+    @property
+    def channel(self):
+        """:class:`PrivateChannel`\: Returns the channel the group call is in."""
+        return self.call.channel
+
+    def voice_state_for(self, user):
+        """Retrieves the :class:`VoiceState` for a specified :class:`User`.
+
+        If the :class:`User` has no voice state then this function returns
+        ``None``.
+
+        Parameters
+        ------------
+        user: :class:`User`
+            The user to retrieve the voice state for.
+
+        Returns
+        --------
+        Optiona[:class:`VoiceState`]
+            The voice state associated with this user.
+        """
+
+        return self._voice_states.get(user.id)
+
