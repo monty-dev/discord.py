@@ -42,6 +42,7 @@ class MessageType(Enum):
     call                = 3
     channel_name_change = 4
     channel_icon_change = 5
+    pins_add            = 6
 
 class ServerRegion(Enum):
     us_west       = 'us-west'
@@ -62,6 +63,16 @@ class ServerRegion(Enum):
 
     def __str__(self):
         return self.value
+
+class VerificationLevel(Enum):
+    none       = 0
+    low        = 1
+    medium     = 2
+    high       = 3
+    table_flip = 3
+
+    def __str__(self):
+        return self.name
 
 class Status(Enum):
     online = 'online'
