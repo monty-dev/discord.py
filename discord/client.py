@@ -25,7 +25,6 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from . import __version__ as library_version
-from . import endpoints
 from .user import User
 from .member import Member
 from .channel import Channel, PrivateChannel
@@ -38,7 +37,7 @@ from .errors import *
 from .state import ConnectionState
 from .permissions import Permissions, PermissionOverwrite
 from . import utils, compat
-from .enums import ChannelType, ServerRegion, VerificationLevel
+from .enums import ChannelType, ServerRegion, VerificationLevel, Status
 from .voice_client import VoiceClient
 from .iterators import LogsFromIterator
 from .gateway import *
@@ -58,8 +57,6 @@ from os.path import split as path_split
 
 PY35 = sys.version_info >= (3, 5)
 log = logging.getLogger(__name__)
-request_logging_format = '{method} {response.url} has returned {response.status}'
-request_success_log = '{response.url} with {json} received {data}'
 
 AppInfo = namedtuple('AppInfo', 'id name description icon owner')
 def app_info_icon_url(self):
@@ -1529,6 +1526,7 @@ class Client:
                 self._update_cache(self.email, password)
 
     @asyncio.coroutine
+    @utils.deprecated('change_presence')
     def change_status(self, game=None, idle=False):
         """|coro|
 
@@ -1540,7 +1538,8 @@ class Client:
         The idle parameter is a boolean parameter that indicates whether the
         client should go idle or not.
 
-        .. _game_list: https://gist.github.com/Rapptz/a82b82381b70a60c281b
+        .. deprecated:: v0.13.0
+            Use :meth:`change_status` instead.
 
         Parameters
         ----------
@@ -1555,6 +1554,42 @@ class Client:
             If the ``game`` parameter is not :class:`Game` or None.
         """
         yield from self.ws.change_presence(game=game, idle=idle)
+
+    @asyncio.coroutine
+    def change_presence(self, *, game=None, status=None, afk=False):
+        """|coro|
+
+        Changes the client's presence.
+
+        The game parameter is a Game object (not a string) that represents
+        a game being played currently.
+
+        Parameters
+        ----------
+        game: Optional[:class:`Game`]
+            The game being played. None if no game is being played.
+        status: Optional[:class:`Status`]
+            Indicates what status to change to. If None, then
+            :attr:`Status.online` is used.
+        afk: bool
+            Indicates if you are going AFK. This allows the discord
+            client to know how to handle push notifications better
+            for you in case you are actually idle and not lying.
+
+        Raises
+        ------
+        InvalidArgument
+            If the ``game`` parameter is not :class:`Game` or None.
+        """
+
+        if status is None:
+            status = 'online'
+        elif status is Status.offline:
+            status = 'invisible'
+        else:
+            status = str(status)
+
+        yield from self.ws.change_presence(game=game, status=status, afk=afk)
 
     @asyncio.coroutine
     def change_nickname(self, member, nickname):
@@ -1665,7 +1700,7 @@ class Client:
         if position < 0:
             raise InvalidArgument('Channel position cannot be less than 0.')
 
-        url = '{0}/{1.server.id}/channels'.format(endpoints.SERVERS, channel)
+        url = '{0}/{1.server.id}/channels'.format(self.http.GUILDS, channel)
         channels = [c for c in channel.server.channels if c.type is channel.type]
 
         if position >= len(channels):
@@ -2302,7 +2337,7 @@ class Client:
         if role.position == position:
             return  # Save discord the extra request.
 
-        url = '{0}/{1.id}/roles'.format(endpoints.SERVERS, server)
+        url = '{0}/{1.id}/roles'.format(self.http.GUILDS, server)
 
         change_range = range(min(role.position, position), max(role.position, position) + 1)
 
