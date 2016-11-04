@@ -8,6 +8,60 @@ What's New
 This page keeps a detailed human friendly rendering of what's new and changed
 in specific versions.
 
+.. _v0p14p2:
+
+v0.14.2
+---------
+
+New Features
+~~~~~~~~~~~~~~
+
+- :meth:`Client.wait_for_reaction` now returns a namedtuple with ``reaction`` and ``user`` attributes.
+    - This is for better support in the case that ``None`` is returned since tuple unpacking can lead to issues.
+
+Bug Fixes
+~~~~~~~~~~
+
+- Fix bug that disallowed ``None`` to be passed for ``emoji`` parameter in :meth:`Client.wait_for_reaction`.
+
+.. _v0p14p1:
+
+v0.14.1
+---------
+
+Bug fixes
+~~~~~~~~~~
+
+- Fix bug with `Reaction` not being visible at import.
+    - This was also breaking the documentation.
+
+.. _v0p14p0:
+
+v0.14.0
+--------
+
+This update adds new API features and a couple of bug fixes.
+
+New Features
+~~~~~~~~~~~~~
+
+- Add support for Manage Webhooks permission under :attr:`Permissions.manage_webhooks`
+- Add support for ``around`` argument in 3.5+ :meth:`Client.logs_from`.
+- Add support for reactions.
+    - :meth:`Client.add_reaction` to add a reactions
+    - :meth:`Client.remove_reaction` to remove a reaction.
+    - :meth:`Client.get_reaction_users` to get the users that reacted to a message.
+    - :attr:`Permissions.add_reactions` permission bit support.
+    - Two new events, :func:`on_reaction_add` and :func:`on_reaction_remove`.
+    - :attr:`Message.reactions` to get reactions from a message.
+    - :meth:`Client.wait_for_reaction` to wait for a reaction from a user.
+
+Bug Fixes
+~~~~~~~~~~
+
+- Fix bug with Paginator still allowing lines that are too long.
+- Fix the :attr:`Permissions.manage_emojis` bit being incorrect.
+
 .. _v0p13p0:
 
 v0.13.0
