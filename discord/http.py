@@ -289,6 +289,10 @@ class HTTPClient:
             params['after'] = after
         return self.get(url, params=params, bucket='%s:%s' % (_func_(), channel_id))
 
+    def clear_reactions(self, message_id, channel_id):
+        url = '{0.CHANNELS}/{1}/messages/{2}/reactions'.format(self, channel_id, message_id)
+        return self.delete(url, bucket='%s:%s' % (_func_(), channel_id))
+
     def get_message(self, channel_id, message_id):
         url = '{0.CHANNELS}/{1}/messages/{2}'.format(self, channel_id, message_id)
         return self.get(url, bucket=_func_())
@@ -530,6 +534,14 @@ class HTTPClient:
     def create_role(self, guild_id):
         url = '{0.GUILDS}/{1}/roles'.format(self, guild_id)
         return self.post(url, bucket=_func_())
+
+    def add_role(self, guild_id, member_id, role_id):
+        url = '{0.GUILDS}/{1}/members/{2}/{3}'.format(self, guild_id, member_id, role_id)
+        return self.put(url, bucket='%s:%s' % (_func_(), guild_id))
+
+    def remove_role(self, guild_id, member_id, role_id):
+        url = '{0.GUILDS}/{1}/members/{2}/{3}'.format(self, guild_id, member_id, role_id)
+        return self.delete(url, bucket='%s:%s' % (_func_(), guild_id))
 
     def edit_channel_permissions(self, channel_id, target, allow, deny, type):
         url = '{0.CHANNELS}/{1}/permissions/{2}'.format(self, channel_id, target)
