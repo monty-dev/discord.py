@@ -28,6 +28,7 @@ import sys
 import websockets
 import asyncio
 import aiohttp
+
 from . import utils, compat
 from .enums import Status, try_enum
 from .game import Game
@@ -115,15 +116,15 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
     PRESENCE
         Send only. Updates your presence.
     VOICE_STATE
-        Send only. Starts a new connection to a voice server.
+        Send only. Starts a new connection to a voice guild.
     VOICE_PING
-        Send only. Checks ping time to a voice server, do not use.
+        Send only. Checks ping time to a voice guild, do not use.
     RESUME
         Send only. Resumes an existing connection.
     RECONNECT
         Receive only. Tells the client to reconnect to a new gateway.
     REQUEST_MEMBERS
-        Send only. Asks for the full member list of a server.
+        Send only. Asks for the full member list of a guild.
     INVALIDATE_SESSION
         Receive only. Tells the client to invalidate the session and IDENTIFY
         again.
@@ -436,8 +437,8 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
         if status_enum is Status.invisible:
             status_enum = Status.offline
 
-        for server in self._connection.servers:
-            me = server.me
+        for guild in self._connection.guilds:
+            me = guild.me
             if me is None:
                 continue
 
@@ -524,7 +525,7 @@ class DiscordVoiceWebSocket(websockets.client.WebSocketClientProtocol):
         identify = {
             'op': cls.IDENTIFY,
             'd': {
-                'server_id': client.guild_id,
+                'guild_id': client.guild_id,
                 'user_id': client.user.id,
                 'session_id': client.session_id,
                 'token': client.token

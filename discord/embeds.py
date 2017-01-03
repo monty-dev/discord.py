@@ -26,8 +26,8 @@ DEALINGS IN THE SOFTWARE.
 
 import datetime
 
-from .colour import Colour
 from . import utils
+from .colour import Colour
 
 class _EmptyEmbed:
     def __bool__(self):

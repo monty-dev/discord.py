@@ -31,11 +31,11 @@ __all__ = ['BucketType', 'Cooldown', 'CooldownMapping']
 class BucketType(enum.Enum):
     default = 0
     user    = 1
-    server  = 2
+    guild  = 2
     channel = 3
 
 class Cooldown:
-    __slots__ = ['rate', 'per', 'type', '_window', '_tokens', '_last']
+    __slots__ = ('rate', 'per', 'type', '_window', '_tokens', '_last')
 
     def __init__(self, rate, per, type):
         self.rate = int(rate)
@@ -97,8 +97,8 @@ class CooldownMapping:
         bucket_type = self._cooldown.type
         if bucket_type is BucketType.user:
             return msg.author.id
-        elif bucket_type is BucketType.server:
-            return getattr(msg.server, 'id', msg.author.id)
+        elif bucket_type is BucketType.guild:
+            return getattr(msg.guild, 'id', msg.author.id)
         elif bucket_type is BucketType.channel:
             return msg.channel.id
 

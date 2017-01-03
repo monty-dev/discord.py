@@ -20,9 +20,9 @@ __version__ = '0.16.0'
 from .client import Client, AppInfo, ChannelPermissions
 from .user import User
 from .game import Game
-from .emoji import Emoji
-from .channel import Channel, PrivateChannel
-from .server import Server
+from .emoji import Emoji, PartialEmoji
+from .channel import *
+from .guild import Guild
 from .member import Member, VoiceState
 from .message import Message
 from .errors import *
@@ -33,9 +33,8 @@ from .colour import Color, Colour
 from .invite import Invite
 from .object import Object
 from .reaction import Reaction
-from . import utils, opus, compat
-from .voice_client import VoiceClient
-from .enums import ChannelType, ServerRegion, Status, MessageType, VerificationLevel
+from . import utils, opus, compat, abc
+from .enums import ChannelType, GuildRegion, Status, MessageType, VerificationLevel
 from collections import namedtuple
 from .embeds import Embed
 

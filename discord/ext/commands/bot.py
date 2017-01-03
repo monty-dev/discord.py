@@ -38,26 +38,12 @@ from .context import Context
 from .errors import CommandNotFound, CommandError
 from .formatter import HelpFormatter
 
-def _get_variable(name):
-    stack = inspect.stack()
-    try:
-        for frames in stack:
-            try:
-                frame = frames[0]
-                current_locals = frame.f_locals
-                if name in current_locals:
-                    return current_locals[name]
-            finally:
-                del frame
-    finally:
-        del stack
-
 def when_mentioned(bot, msg):
     """A callable that implements a command prefix equivalent
     to being mentioned, e.g. ``@bot ``."""
-    server = msg.server
-    if server is not None:
-        return '{0.me.mention} '.format(server)
+    guild = msg.guild
+    if guild is not None:
+        return '{0.me.mention} '.format(guild)
     return '{0.user.mention} '.format(bot)
 
 def when_mentioned_or(*prefixes):
@@ -215,7 +201,10 @@ class Bot(GroupMixin, discord.Client):
         self.command_not_found = options.pop('command_not_found', 'No command called "{}" found.')
         self.command_has_no_subcommands = options.pop('command_has_no_subcommands', 'Command {0.name} has no subcommands.')
 
-        self._skip_check = discord.User.__ne__ if options.pop('self_bot', False) else discord.User.__eq__
+        if options.pop('self_bot', False):
+            self._skip_check = lambda x, y: x != y
+        else:
+            self._skip_check = lambda x, y: x == y
 
         self.help_attrs = options.pop('help_attrs', {})
         self.help_attrs['pass_context'] = True
@@ -301,169 +290,6 @@ class Bot(GroupMixin, discord.Client):
 
         print('Ignoring exception in command {}'.format(context.command), file=sys.stderr)
         traceback.print_exception(type(exception), exception, exception.__traceback__, file=sys.stderr)
-
-    # utility "send_*" functions
-
-    @asyncio.coroutine
-    def _augmented_msg(self, coro, **kwargs):
-        msg = yield from coro
-        delete_after = kwargs.get('delete_after')
-        if delete_after is not None:
-            @asyncio.coroutine
-            def delete():
-                yield from asyncio.sleep(delete_after, loop=self.loop)
-                yield from self.delete_message(msg)
-
-            discord.compat.create_task(delete(), loop=self.loop)
-
-        return msg
-
-    def say(self, *args, **kwargs):
-        """|coro|
-
-        A helper function that is equivalent to doing
-
-        .. code-block:: python
-
-            self.send_message(message.channel, *args, **kwargs)
-
-        The following keyword arguments are "extensions" that augment the
-        behaviour of the standard wrapped call.
-
-        Parameters
-        ------------
-        delete_after: float
-            Number of seconds to wait before automatically deleting the
-            message.
-
-        See Also
-        ---------
-        :meth:`Client.send_message`
-        """
-        destination = _get_variable('_internal_channel')
-
-        extensions = ('delete_after',)
-        params = {
-            k: kwargs.pop(k, None) for k in extensions
-        }
-
-        coro = self.send_message(destination, *args, **kwargs)
-        return self._augmented_msg(coro, **params)
-
-    def whisper(self, *args, **kwargs):
-        """|coro|
-
-        A helper function that is equivalent to doing
-
-        .. code-block:: python
-
-            self.send_message(message.author, *args, **kwargs)
-
-        The following keyword arguments are "extensions" that augment the
-        behaviour of the standard wrapped call.
-
-        Parameters
-        ------------
-        delete_after: float
-            Number of seconds to wait before automatically deleting the
-            message.
-
-        See Also
-        ---------
-        :meth:`Client.send_message`
-        """
-        destination = _get_variable('_internal_author')
-
-        extensions = ('delete_after',)
-        params = {
-            k: kwargs.pop(k, None) for k in extensions
-        }
-
-        coro = self.send_message(destination, *args, **kwargs)
-        return self._augmented_msg(coro, **params)
-
-    def reply(self, content, *args, **kwargs):
-        """|coro|
-
-        A helper function that is equivalent to doing
-
-        .. code-block:: python
-
-            msg = '{0.mention}, {1}'.format(message.author, content)
-            self.send_message(message.channel, msg, *args, **kwargs)
-
-        The following keyword arguments are "extensions" that augment the
-        behaviour of the standard wrapped call.
-
-        Parameters
-        ------------
-        delete_after: float
-            Number of seconds to wait before automatically deleting the
-            message.
-
-        See Also
-        ---------
-        :meth:`Client.send_message`
-        """
-        author = _get_variable('_internal_author')
-        destination = _get_variable('_internal_channel')
-        fmt = '{0.mention}, {1}'.format(author, str(content))
-
-        extensions = ('delete_after',)
-        params = {
-            k: kwargs.pop(k, None) for k in extensions
-        }
-
-        coro = self.send_message(destination, fmt, *args, **kwargs)
-        return self._augmented_msg(coro, **params)
-
-    def upload(self, *args, **kwargs):
-        """|coro|
-
-        A helper function that is equivalent to doing
-
-        .. code-block:: python
-
-            self.send_file(message.channel, *args, **kwargs)
-
-        The following keyword arguments are "extensions" that augment the
-        behaviour of the standard wrapped call.
-
-        Parameters
-        ------------
-        delete_after: float
-            Number of seconds to wait before automatically deleting the
-            message.
-
-        See Also
-        ---------
-        :meth:`Client.send_file`
-        """
-        destination = _get_variable('_internal_channel')
-
-        extensions = ('delete_after',)
-        params = {
-            k: kwargs.pop(k, None) for k in extensions
-        }
-
-        coro = self.send_file(destination, *args, **kwargs)
-        return self._augmented_msg(coro, **params)
-
-    def type(self):
-        """|coro|
-
-        A helper function that is equivalent to doing
-
-        .. code-block:: python
-
-            self.send_typing(message.channel)
-
-        See Also
-        ---------
-        The :meth:`Client.send_typing` function.
-        """
-        destination = _get_variable('_internal_channel')
-        return self.send_typing(destination)
 
     # global check registration
 
@@ -815,7 +641,7 @@ class Bot(GroupMixin, discord.Client):
         _internal_author = message.author
 
         view = StringView(message.content)
-        if self._skip_check(message.author, self.user):
+        if self._skip_check(message.author.id, self.user.id):
             return
 
         prefix = yield from self._get_prefix(message)

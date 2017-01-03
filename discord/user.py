@@ -27,7 +27,10 @@ DEALINGS IN THE SOFTWARE.
 from .utils import snowflake_time
 from .enums import DefaultAvatar
 
-class User:
+import discord.abc
+import asyncio
+
+class User(discord.abc.Messageable):
     """Represents a Discord user.
 
     Supported Operations:
@@ -46,26 +49,27 @@ class User:
 
     Attributes
     -----------
-    name : str
+    name: str
         The user's username.
-    id : str
+    id: int
         The user's unique ID.
-    discriminator : str or int
+    discriminator: str
         The user's discriminator. This is given when the username has conflicts.
-    avatar : str
+    avatar: str
         The avatar hash the user has. Could be None.
-    bot : bool
+    bot: bool
         Specifies if the user is a bot account.
     """
 
-    __slots__ = ['name', 'id', 'discriminator', 'avatar', 'bot']
+    __slots__ = ('name', 'id', 'discriminator', 'avatar', 'bot', '_state')
 
-    def __init__(self, **kwargs):
-        self.name = kwargs.get('username')
-        self.id = kwargs.get('id')
-        self.discriminator = kwargs.get('discriminator')
-        self.avatar = kwargs.get('avatar')
-        self.bot = kwargs.get('bot', False)
+    def __init__(self, *, state, data):
+        self._state = state
+        self.name = data['username']
+        self.id = int(data['id'])
+        self.discriminator = data['discriminator']
+        self.avatar = data['avatar']
+        self.bot = data.get('bot', False)
 
     def __str__(self):
         return '{0.name}#{0.discriminator}'.format(self)
@@ -78,6 +82,41 @@ class User:
 
     def __hash__(self):
         return hash(self.id)
+
+    def __repr__(self):
+        return '<User id={0.id} name={0.name!r} discriminator={0.discriminator!r} bot={0.bot}>'.format(self)
+
+    @asyncio.coroutine
+    def _get_channel(self):
+        ch = yield from self.create_dm()
+        return ch
+
+    def _get_guild_id(self):
+        return None
+
+    @property
+    def dm_channel(self):
+        """Returns the :class:`DMChannel` associated with this user if it exists.
+
+        If this returns ``None``, you can create a DM channel by calling the
+        :meth:`create_dm` coroutine function.
+        """
+        return self._state._get_private_channel_by_user(self.id)
+
+    @asyncio.coroutine
+    def create_dm(self):
+        """Creates a :class:`DMChannel` with this user.
+
+        This should be rarely called, as this is done transparently for most
+        people.
+        """
+        found = self.dm_channel
+        if found is not None:
+            return found
+
+        state = self._state
+        data = yield from state.http.start_private_message(self.id)
+        return state.add_dm_channel(data)
 
     @property
     def avatar_url(self):
@@ -135,7 +174,7 @@ class User:
         """Returns the user's display name.
 
         For regular users this is just their username, but
-        if they have a server specific nickname then that
+        if they have a guild specific nickname then that
         is returned instead.
         """
         return getattr(self, 'nick', None) or self.name

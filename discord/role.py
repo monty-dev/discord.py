@@ -24,13 +24,15 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+import asyncio
+
 from .permissions import Permissions
 from .colour import Colour
 from .mixins import Hashable
 from .utils import snowflake_time
 
 class Role(Hashable):
-    """Represents a Discord role in a :class:`Server`.
+    """Represents a Discord role in a :class:`Guild`.
 
     Supported Operations:
 
@@ -56,44 +58,49 @@ class Role(Hashable):
 
     Attributes
     ----------
-    id : str
+    id: int
         The ID for the role.
-    name : str
+    name: str
         The name of the role.
-    permissions : :class:`Permissions`
+    permissions: :class:`Permissions`
         Represents the role's permissions.
-    server : :class:`Server`
-        The server the role belongs to.
-    colour : :class:`Colour`
+    guild: :class:`Guild`
+        The guild the role belongs to.
+    colour: :class:`Colour`
         Represents the role colour. An alias exists under ``color``.
-    hoist : bool
+    hoist: bool
          Indicates if the role will be displayed separately from other members.
-    position : int
+    position: int
         The position of the role. This number is usually positive. The bottom
         role has a position of 0.
-    managed : bool
-        Indicates if the role is managed by the server through some form of
+    managed: bool
+        Indicates if the role is managed by the guild through some form of
         integrations such as Twitch.
-    mentionable : bool
+    mentionable: bool
         Indicates if the role can be mentioned by users.
     """
 
-    __slots__ = ['id', 'name', 'permissions', 'color', 'colour', 'position',
-                 'managed', 'mentionable', 'hoist', 'server' ]
+    __slots__ = ('id', 'name', 'permissions', 'color', 'colour', 'position',
+                 'managed', 'mentionable', 'hoist', 'guild', '_state' )
 
-    def __init__(self, **kwargs):
-        self.server = kwargs.pop('server')
-        self._update(**kwargs)
+    def __init__(self, *, guild, state, data):
+        self.guild = guild
+        self._state = state
+        self.id = int(data['id'])
+        self._update(data)
 
     def __str__(self):
         return self.name
+
+    def __repr__(self):
+        return '<Role id={0.id} name={0.name!r}>'.format(self)
 
     def __lt__(self, other):
         if not isinstance(other, Role) or  not isinstance(self, Role):
             return NotImplemented
 
-        if self.server != other.server:
-            raise RuntimeError('cannot compare roles from two different servers.')
+        if self.guild != other.guild:
+            raise RuntimeError('cannot compare roles from two different guilds.')
 
         if self.position < other.position:
             return True
@@ -118,21 +125,20 @@ class Role(Hashable):
             return NotImplemented
         return not r
 
-    def _update(self, **kwargs):
-        self.id = kwargs.get('id')
-        self.name = kwargs.get('name')
-        self.permissions = Permissions(kwargs.get('permissions', 0))
-        self.position = kwargs.get('position', 0)
-        self.colour = Colour(kwargs.get('color', 0))
-        self.hoist = kwargs.get('hoist', False)
-        self.managed = kwargs.get('managed', False)
-        self.mentionable = kwargs.get('mentionable', False)
+    def _update(self, data):
+        self.name = data['name']
+        self.permissions = Permissions(data.get('permissions', 0))
+        self.position = data.get('position', 0)
+        self.colour = Colour(data.get('color', 0))
+        self.hoist = data.get('hoist', False)
+        self.managed = data.get('managed', False)
+        self.mentionable = data.get('mentionable', False)
         self.color = self.colour
 
     @property
     def is_everyone(self):
         """Checks if the role is the @everyone role."""
-        return self.server.id == self.id
+        return self.guild.id == self.id
 
     @property
     def created_at(self):
@@ -143,3 +149,122 @@ class Role(Hashable):
     def mention(self):
         """Returns a string that allows you to mention a role."""
         return '<@&{}>'.format(self.id)
+
+    @property
+    def members(self):
+        """Returns a list of :class:`Member` with this role."""
+        all_members = self.guild.members
+        if self.is_everyone:
+            return all_members
+
+        ret = []
+        for member in all_members:
+            if self in member.roles:
+                ret.append(member)
+        return ret
+
+    @asyncio.coroutine
+    def _move(self, position):
+        if position <= 0:
+            raise InvalidArgument("Cannot move role to position 0 or below")
+
+        if self.is_everyone:
+            raise InvalidArgument("Cannot move default role")
+
+        if self.position == position:
+            return  # Save discord the extra request.
+
+        http = self._state.http
+        url = '{0}/{1}/roles'.format(http.GUILDS, self.guild.id)
+
+        change_range = range(min(self.position, position), max(self.position, position) + 1)
+        sorted_roles = sorted((x for x in self.guild.roles if x.position in change_range and x.id != self.id),
+                              key=lambda x: x.position)
+
+        roles = [r.id for r in sorted_roles]
+
+        if self.position > position:
+            roles.insert(0, self.id)
+        else:
+            roles.append(self.id)
+
+        payload = [{"id": z[0], "position": z[1]} for z in zip(roles, change_range)]
+        yield from http.patch(url, json=payload, bucket='move_role')
+
+    @asyncio.coroutine
+    def edit(self, **fields):
+        """|coro|
+
+        Edits the role.
+
+        You must have the :attr:`Permissions.manage_roles` permission to
+        use this.
+
+        All fields are optional.
+
+        Parameters
+        -----------
+        name: str
+            The new role name to change to.
+        permissions: :class:`Permissions`
+            The new permissions to change to.
+        colour: :class:`Colour`
+            The new colour to change to. (aliased to color as well)
+        hoist: bool
+            Indicates if the role should be shown separately in the member list.
+        mentionable: bool
+            Indicates if the role should be mentionable by others.
+        position: int
+            The new role's position. This must be below your top role's
+            position or it will fail.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to change the role.
+        HTTPException
+            Editing the role failed.
+        InvalidArgument
+            An invalid position was given or the default
+            role was asked to be moved.
+        """
+
+        position = fields.get('position')
+        if position is not None:
+            yield from self._move(position)
+            self.position = position
+
+        try:
+            colour = fields['colour']
+        except KeyError:
+            colour = fields.get('color', self.colour)
+
+        payload = {
+            'name': fields.get('name', self.name),
+            'permissions': fields.get('permissions', self.permissions).value,
+            'color': colour.value,
+            'hoist': fields.get('hoist', self.hoist),
+            'mentionable': fields.get('mentionable', self.mentionable)
+        }
+
+        data = yield from self._state.http.edit_role(self.guild.id, self.id, **payload)
+        self._update(data)
+
+    @asyncio.coroutine
+    def delete(self):
+        """|coro|
+
+        Deletes the role.
+
+        You must have the :attr:`Permissions.manage_roles` permission to
+        use this.
+
+        Raises
+        --------
+        Forbidden
+            You do not have permissions to delete the role.
+        HTTPException
+            Deleting the role failed.
+        """
+
+        yield from self._state.http.delete_role(self.guild.id, self.id)

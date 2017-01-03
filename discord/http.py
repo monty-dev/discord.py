@@ -36,7 +36,7 @@ from random import randint as random_integer
 log = logging.getLogger(__name__)
 
 from .errors import HTTPException, Forbidden, NotFound, LoginFailure, GatewayNotFound
-from . import utils, __version__
+from . import __version__, utils
 
 @asyncio.coroutine
 def json_or_text(response):
@@ -234,14 +234,17 @@ class HTTPClient:
         url = '{0.CHANNELS}/{1}/typing'.format(self, channel_id)
         return self.post(url, bucket=_func_())
 
-    def send_file(self, channel_id, buffer, *, guild_id=None, filename=None, content=None, tts=False):
+    def send_file(self, channel_id, buffer, *, guild_id=None, filename=None, content=None, tts=False, embed=None):
         url = '{0.CHANNELS}/{1}/messages'.format(self, channel_id)
         form = aiohttp.FormData()
 
-        if content is not None:
-            form.add_field('content', str(content))
+        payload = {'tts': tts}
+        if content:
+            payload['content'] = content
+        if embed:
+            payload['embed'] = embed
 
-        form.add_field('tts', 'true' if tts else 'false')
+        form.add_field('payload_json', utils.to_json(payload))
         form.add_field('file', buffer, filename=filename, content_type='application/octet-stream')
 
         return self.post(url, data=form, bucket='messages:' + str(guild_id))
@@ -341,7 +344,7 @@ class HTTPClient:
         url = '{0.GUILDS}/{1}/bans/{2}'.format(self, guild_id, user_id)
         return self.delete(url, bucket=_func_())
 
-    def server_voice_state(self, user_id, guild_id, *, mute=None, deafen=None):
+    def guild_voice_state(self, user_id, guild_id, *, mute=None, deafen=None):
         url = '{0.GUILDS}/{1}/members/{2}'.format(self, guild_id, user_id)
         payload = {}
         if mute is not None:
@@ -383,6 +386,11 @@ class HTTPClient:
         bucket = 'members:{}'.format(guild_id)
         return self.patch(url, json=payload, bucket=bucket)
 
+    def edit_member(self, guild_id, user_id, **fields):
+        url = '{0.GUILDS}/{1}/members/{2}'.format(self, guild_id, user_id)
+        bucket = 'members:%s' % guild_id
+        return self.patch(url, json=fields, bucket=bucket)
+
     # Channel management
 
     def edit_channel(self, channel_id, **options):
@@ -411,17 +419,17 @@ class HTTPClient:
         url = '{0.CHANNELS}/{1}'.format(self, channel_id)
         return self.delete(url, bucket=_func_())
 
-    # Server management
+    # Guild management
 
-    def leave_server(self, guild_id):
+    def leave_guild(self, guild_id):
         url = '{0.USERS}/@me/guilds/{1}'.format(self, guild_id)
         return self.delete(url, bucket=_func_())
 
-    def delete_server(self, guild_id):
+    def delete_guild(self, guild_id):
         url = '{0.GUILDS}/{1}'.format(self, guild_id)
         return self.delete(url, bucket=_func_())
 
-    def create_server(self, name, region, icon):
+    def create_guild(self, name, region, icon):
         payload = {
             'name': name,
             'icon': icon,
@@ -430,7 +438,7 @@ class HTTPClient:
 
         return self.post(self.GUILDS, json=payload, bucket=_func_())
 
-    def edit_server(self, guild_id, **fields):
+    def edit_guild(self, guild_id, **fields):
         valid_keys = ('name', 'region', 'icon', 'afk_timeout', 'owner_id',
                       'afk_channel_id', 'splash', 'verification_level')
 

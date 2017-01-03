@@ -24,18 +24,18 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from .server import Server
+from .guild import Guild
 from .user import User
 from .game import Game
-from .emoji import Emoji
+from .emoji import Emoji, PartialEmoji
 from .reaction import Reaction
 from .message import Message
-from .channel import Channel, PrivateChannel
+from .channel import *
 from .member import Member
 from .role import Role
-from . import utils, compat
 from .enums import Status, ChannelType, try_enum
 from .calls import GroupCall
+from . import utils, compat
 
 from collections import deque, namedtuple
 import copy, enum, math
@@ -48,12 +48,13 @@ class ListenerType(enum.Enum):
 
 Listener = namedtuple('Listener', ('type', 'future', 'predicate'))
 log = logging.getLogger(__name__)
-ReadyState = namedtuple('ReadyState', ('launch', 'servers'))
+ReadyState = namedtuple('ReadyState', ('launch', 'guilds'))
 
 class ConnectionState:
-    def __init__(self, dispatch, chunker, syncer, max_messages, *, loop):
+    def __init__(self, *, dispatch, chunker, syncer, http, loop, **options):
         self.loop = loop
-        self.max_messages = max_messages
+        self.http = http
+        self.max_messages = max(options.get('max_messages', 5000), 100)
         self.dispatch = dispatch
         self.chunker = chunker
         self.syncer = syncer
@@ -66,7 +67,9 @@ class ConnectionState:
         self.sequence = None
         self.session_id = None
         self._calls = {}
-        self._servers = {}
+        self._users = {}
+        self._emojis = {}
+        self._guilds = {}
         self._voice_clients = {}
         self._private_channels = {}
         # extra dict to look up private channels by user id
@@ -100,8 +103,13 @@ class ConnectionState:
             del self._listeners[index]
 
     @property
+    def self_id(self):
+        u = self.user
+        return u.id if u else None
+
+    @property
     def voice_clients(self):
-        return self._voice_clients.values()
+        return list(self._voice_clients.values())
 
     def _get_voice_client(self, guild_id):
         return self._voice_clients.get(guild_id)
@@ -116,22 +124,39 @@ class ConnectionState:
         for vc in self.voice_clients:
             vc.main_ws = ws
 
+    def store_user(self, data):
+        # this way is 300% faster than `dict.setdefault`.
+        user_id = int(data['id'])
+        try:
+            return self._users[user_id]
+        except KeyError:
+            self._users[user_id] = user = User(state=self, data=data)
+            return user
+
+    def store_emoji(self, guild, data):
+        emoji_id = int(data['id'])
+        try:
+            return self._emojis[emoji_id]
+        except KeyError:
+            self._emojis[emoji_id] = emoji = Emoji(guild=guild, state=self, data=data)
+            return emoji
+
     @property
-    def servers(self):
-        return self._servers.values()
+    def guilds(self):
+        return list(self._guilds.values())
 
-    def _get_server(self, server_id):
-        return self._servers.get(server_id)
+    def _get_guild(self, guild_id):
+        return self._guilds.get(guild_id)
 
-    def _add_server(self, server):
-        self._servers[server.id] = server
+    def _add_guild(self, guild):
+        self._guilds[guild.id] = guild
 
-    def _remove_server(self, server):
-        self._servers.pop(server.id, None)
+    def _remove_guild(self, guild):
+        self._guilds.pop(guild.id, None)
 
     @property
     def private_channels(self):
-        return self._private_channels.values()
+        return list(self._private_channels.values())
 
     def _get_private_channel(self, channel_id):
         return self._private_channels.get(channel_id)
@@ -141,27 +166,32 @@ class ConnectionState:
 
     def _add_private_channel(self, channel):
         self._private_channels[channel.id] = channel
-        if channel.type is ChannelType.private:
-            self._private_channels_by_user[channel.user.id] = channel
+        if isinstance(channel, DMChannel):
+            self._private_channels_by_user[channel.recipient.id] = channel
+
+    def add_dm_channel(self, data):
+        channel = DMChannel(me=self.user, state=self, data=data)
+        self._add_private_channel(channel)
+        return channel
 
     def _remove_private_channel(self, channel):
         self._private_channels.pop(channel.id, None)
-        if channel.type is ChannelType.private:
-            self._private_channels_by_user.pop(channel.user.id, None)
+        if isinstance(channel, DMChannel):
+            self._private_channels_by_user.pop(channel.recipient.id, None)
 
     def _get_message(self, msg_id):
         return utils.find(lambda m: m.id == msg_id, self.messages)
 
-    def _add_server_from_data(self, guild):
-        server = Server(**guild)
-        Server.me = property(lambda s: s.get_member(self.user.id))
-        Server.voice_client = property(lambda s: self._get_voice_client(s.id))
-        self._add_server(server)
-        return server
+    def _add_guild_from_data(self, guild):
+        guild = Guild(data=guild, state=self)
+        Guild.me = property(lambda s: s.get_member(self.user.id))
+        Guild.voice_client = property(lambda s: self._get_voice_client(s.id))
+        self._add_guild(guild)
+        return guild
 
-    def chunks_needed(self, server):
-        for chunk in range(math.ceil(server._member_count / 1000)):
-            yield self.receive_chunk(server.id)
+    def chunks_needed(self, guild):
+        for chunk in range(math.ceil(guild._member_count / 1000)):
+            yield self.receive_chunk(guild.id)
 
     @asyncio.coroutine
     def _delay_ready(self):
@@ -172,15 +202,15 @@ class ConnectionState:
             launch.set()
             yield from asyncio.sleep(2, loop=self.loop)
 
-        servers = self._ready_state.servers
+        guilds = self._ready_state.guilds
 
         # get all the chunks
         chunks = []
-        for server in servers:
-            chunks.extend(self.chunks_needed(server))
+        for guild in guilds:
+            chunks.extend(self.chunks_needed(guild))
 
         # we only want to request ~75 guilds per chunk request.
-        splits = [servers[i:i + 75] for i in range(0, len(servers), 75)]
+        splits = [guilds[i:i + 75] for i in range(0, len(guilds), 75)]
         for split in splits:
             yield from self.chunker(split)
 
@@ -199,25 +229,26 @@ class ConnectionState:
 
         # call GUILD_SYNC after we're done chunking
         if not self.is_bot:
-            log.info('Requesting GUILD_SYNC for %s guilds' % len(self.servers))
-            yield from self.syncer([s.id for s in self.servers])
+            log.info('Requesting GUILD_SYNC for %s guilds' % len(self.guilds))
+            yield from self.syncer([s.id for s in self.guilds])
 
         # dispatch the event
         self.dispatch('ready')
 
     def parse_ready(self, data):
-        self._ready_state = ReadyState(launch=asyncio.Event(), servers=[])
-        self.user = User(**data['user'])
+        self._ready_state = ReadyState(launch=asyncio.Event(), guilds=[])
+        self.user = self.store_user(data['user'])
         guilds = data.get('guilds')
 
-        servers = self._ready_state.servers
-        for guild in guilds:
-            server = self._add_server_from_data(guild)
-            if not self.is_bot or server.large:
-                servers.append(server)
+        guilds = self._ready_state.guilds
+        for guild_data in guilds:
+            guild = self._add_server_from_data(guild_data)
+            if not self.is_bot or guild.large:
+                guilds.append(guild)
 
         for pm in data.get('private_channels'):
-            self._add_private_channel(PrivateChannel(self.user, **pm))
+            factory, _ = _channel_factory(pm['type'])
+            self._add_private_channel(factory(me=self.user, data=pm, state=self))
 
         compat.create_task(self._delay_ready(), loop=self.loop)
 
@@ -225,27 +256,27 @@ class ConnectionState:
         self.dispatch('resumed')
 
     def parse_message_create(self, data):
-        channel = self.get_channel(data.get('channel_id'))
-        message = self._create_message(channel=channel, **data)
+        channel = self.get_channel(int(data['channel_id']))
+        message = Message(channel=channel, data=data, state=self)
         self.dispatch('message', message)
         self.messages.append(message)
 
     def parse_message_delete(self, data):
-        message_id = data.get('id')
+        message_id = int(data['id'])
         found = self._get_message(message_id)
         if found is not None:
             self.dispatch('message_delete', found)
             self.messages.remove(found)
 
     def parse_message_delete_bulk(self, data):
-        message_ids = set(data.get('ids', []))
+        message_ids = set(map(int, data.get('ids', [])))
         to_be_deleted = list(filter(lambda m: m.id in message_ids, self.messages))
         for msg in to_be_deleted:
             self.dispatch('message_delete', msg)
             self.messages.remove(msg)
 
     def parse_message_update(self, data):
-        message = self._get_message(data.get('id'))
+        message = self._get_message(int(data['id']))
         if message is not None:
             older_message = copy.copy(message)
             if 'call' in data:
@@ -255,31 +286,16 @@ class ConnectionState:
                 # embed only edit
                 message.embeds = data['embeds']
             else:
-                message._update(channel=message.channel, **data)
+                message._update(channel=message.channel, data=data)
 
             self.dispatch('message_edit', older_message, message)
 
     def parse_message_reaction_add(self, data):
-        message = self._get_message(data['message_id'])
+        message = self._get_message(int(data['message_id']))
         if message is not None:
-            emoji = self._get_reaction_emoji(**data.pop('emoji'))
-            reaction = utils.get(message.reactions, emoji=emoji)
-
-            is_me = data['user_id'] == self.user.id
-
-            if not reaction:
-                reaction = Reaction(
-                    message=message, emoji=emoji, me=is_me, **data)
-                message.reactions.append(reaction)
-            else:
-                reaction.count += 1
-                if is_me:
-                    reaction.me = True
-
-            channel = self.get_channel(data['channel_id'])
-            member = self._get_member(channel, data['user_id'])
-
-            self.dispatch('reaction_add', reaction, member)
+            reaction = message._add_reaction(data)
+            user = self._get_reaction_user(message.channel, int(data['user_id']))
+            self.dispatch('reaction_add', reaction, user)
 
     def parse_message_reaction_remove_all(self, data):
         message =  self._get_message(data['message_id'])
@@ -289,113 +305,96 @@ class ConnectionState:
             self.dispatch('reaction_clear', message, old_reactions)
 
     def parse_message_reaction_remove(self, data):
-        message = self._get_message(data['message_id'])
+        message = self._get_message(int(data['message_id']))
         if message is not None:
-            emoji = self._get_reaction_emoji(**data['emoji'])
-            reaction = utils.get(message.reactions, emoji=emoji)
-
-            # Eventual consistency means we can get out of order or duplicate removes.
-            if not reaction:
-                log.warning("Unexpected reaction remove {}".format(data))
-                return
-
-            reaction.count -= 1
-            if data['user_id'] == self.user.id:
-                reaction.me = False
-            if reaction.count == 0:
-                message.reactions.remove(reaction)
-
-            channel = self.get_channel(data['channel_id'])
-            member = self._get_member(channel, data['user_id'])
-
-            self.dispatch('reaction_remove', reaction, member)
+            try:
+                reaction = message._remove_reaction(data)
+            except (AttributeError, ValueError) as e: # eventual consistency lol
+                pass
+            else:
+                user = self._get_reaction_user(message.channel, int(data['user_id']))
+                self.dispatch('reaction_remove', reaction, user)
 
     def parse_presence_update(self, data):
-        server = self._get_server(data.get('guild_id'))
-        if server is None:
+        guild = self._get_guild(utils._get_as_snowflake(data, 'guild_id'))
+        if guild is None:
             return
 
         status = data.get('status')
         user = data['user']
         member_id = user['id']
-        member = server.get_member(member_id)
+        member = guild.get_member(member_id)
         if member is None:
             if 'username' not in user:
                 # sometimes we receive 'incomplete' member data post-removal.
                 # skip these useless cases.
                 return
 
-            member = self._make_member(server, data)
-            server._add_member(member)
+            member = self._make_member(guild, data)
+            guild._add_member(member)
 
-        old_member = member._copy()
-        member.status = data.get('status')
-        try:
-            member.status = Status(member.status)
-        except:
-            pass
-
-        game = data.get('game', {})
-        member.game = Game(**game) if game else None
-        member.name = user.get('username', member.name)
-        member.avatar = user.get('avatar', member.avatar)
-        member.discriminator = user.get('discriminator', member.discriminator)
-
+        old_member = copy.copy(member)
+        member._presence_update(data=data, user=user)
         self.dispatch('member_update', old_member, member)
 
     def parse_user_update(self, data):
-        self.user = User(**data)
+        self.user = User(state=self, data=data)
 
     def parse_channel_delete(self, data):
-        server =  self._get_server(data.get('guild_id'))
-        if server is not None:
-            channel_id = data.get('id')
-            channel = server.get_channel(channel_id)
+        guild =  self._get_guild(utils._get_as_snowflake(data, 'guild_id'))
+        channel_id = int(data['id'])
+        if guild is not None:
+            channel = guild.get_channel(channel_id)
             if channel is not None:
-                server._remove_channel(channel)
+                guild._remove_channel(channel)
                 self.dispatch('channel_delete', channel)
+        else:
+            # the reason we're doing this is so it's also removed from the
+            # private channel by user cache as well
+            channel = self._get_private_channel(channel_id)
+            self._remove_private_channel(channel)
 
     def parse_channel_update(self, data):
         channel_type = try_enum(ChannelType, data.get('type'))
-        channel_id = data.get('id')
+        channel_id = int(data['id'])
         if channel_type is ChannelType.group:
             channel = self._get_private_channel(channel_id)
             old_channel = copy.copy(channel)
-            channel._update_group(**data)
+            channel._update_group(data)
             self.dispatch('channel_update', old_channel, channel)
             return
 
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
-            channel = server.get_channel(channel_id)
+        guild = self._get_guild(utils._get_as_snowflake(data, 'guild_id'))
+        if guild is not None:
+            channel = guild.get_channel(channel_id)
             if channel is not None:
                 old_channel = copy.copy(channel)
-                channel._update(server=server, **data)
+                channel._update(guild, data)
                 self.dispatch('channel_update', old_channel, channel)
 
     def parse_channel_create(self, data):
-        ch_type = try_enum(ChannelType, data.get('type'))
+        factory, ch_type = _channel_factory(data['type'])
         channel = None
         if ch_type in (ChannelType.group, ChannelType.private):
-            channel = PrivateChannel(self.user, **data)
+            channel = factory(me=self.user, data=data, state=self)
             self._add_private_channel(channel)
         else:
-            server = self._get_server(data.get('guild_id'))
-            if server is not None:
-                channel = Channel(server=server, **data)
-                server._add_channel(channel)
+            guild = self._get_guild(utils._get_as_snowflake(data, 'guild_id'))
+            if guild is not None:
+                channel = factory(guild=guild, state=self, data=data)
+                guild._add_channel(channel)
 
         self.dispatch('channel_create', channel)
 
     def parse_channel_recipient_add(self, data):
-        channel = self._get_private_channel(data.get('channel_id'))
-        user = User(**data.get('user', {}))
+        channel = self._get_private_channel(int(data['channel_id']))
+        user = self.store_user(data['user'])
         channel.recipients.append(user)
         self.dispatch('group_join', channel, user)
 
     def parse_channel_recipient_remove(self, data):
-        channel = self._get_private_channel(data.get('channel_id'))
-        user = User(**data.get('user', {}))
+        channel = self._get_private_channel(int(data['channel_id']))
+        user = self.store_user(data['user'])
         try:
             channel.recipients.remove(user)
         except ValueError:
@@ -403,92 +402,77 @@ class ConnectionState:
         else:
             self.dispatch('group_remove', channel, user)
 
-    def _make_member(self, server, data):
-        roles = [server.default_role]
+    def _make_member(self, guild, data):
+        roles = [guild.default_role]
         for roleid in data.get('roles', []):
-            role = utils.get(server.roles, id=roleid)
+            role = utils.get(guild.roles, id=roleid)
             if role is not None:
                 roles.append(role)
 
-        data['roles'] = sorted(roles, key=lambda r: int(r.id))
-        return Member(server=server, **data)
+        data['roles'] = sorted(roles, key=lambda r: r.id)
+        return Member(guild=guild, data=data, state=self)
 
     def parse_guild_member_add(self, data):
-        server = self._get_server(data.get('guild_id'))
-        member = self._make_member(server, data)
-        server._add_member(member)
-        server._member_count += 1
+        guild = self._get_guild(int(data['guild_id']))
+        member = self._make_member(guild, data)
+        guild._add_member(member)
+        guild._member_count += 1
         self.dispatch('member_join', member)
 
     def parse_guild_member_remove(self, data):
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is not None:
             user_id = data['user']['id']
-            member = server.get_member(user_id)
+            member = guild.get_member(user_id)
             if member is not None:
-                server._remove_member(member)
-                server._member_count -= 1
+                guild._remove_member(member)
+                guild._member_count -= 1
 
                 # remove them from the voice channel member list
-                vc = member.voice_channel
-                if vc is not None:
-                    try:
-                        vc.voice_members.remove(member)
-                    except:
-                        pass
+                vc = guild._voice_state_for(user_id)
+                if vc:
+                    voice_channel = vc.channel
+                    if voice_channel is not None:
+                        try:
+                            voice_channel.voice_members.remove(member)
+                        except ValueError:
+                            pass
 
                 self.dispatch('member_remove', member)
 
     def parse_guild_member_update(self, data):
-        server = self._get_server(data.get('guild_id'))
-        user_id = data['user']['id']
-        member = server.get_member(user_id)
+        guild = self._get_guild(int(data['guild_id']))
+        user = data['user']
+        user_id = user['id']
+        member = guild.get_member(user_id)
         if member is not None:
-            user = data['user']
-            old_member = member._copy()
-            member.name = user['username']
-            member.discriminator = user['discriminator']
-            member.avatar = user['avatar']
-            member.bot = user.get('bot', False)
-
-            # the nickname change is optional,
-            # if it isn't in the payload then it didn't change
-            if 'nick' in data:
-                member.nick = data['nick']
-
-            # update the roles
-            member.roles = [server.default_role]
-            for role in server.roles:
-                if role.id in data['roles']:
-                    member.roles.append(role)
-
-            # sort the roles by ID since they can be "randomised"
-            member.roles.sort(key=lambda r: int(r.id))
+            old_member = copy.copy(member)
+            member._update(data, user)
             self.dispatch('member_update', old_member, member)
 
     def parse_guild_emojis_update(self, data):
-        server = self._get_server(data.get('guild_id'))
-        before_emojis = server.emojis
-        server.emojis = [Emoji(server=server, **e) for e in data.get('emojis', [])]
-        self.dispatch('server_emojis_update', before_emojis, server.emojis)
+        guild = self._get_guild(int(data['guild_id']))
+        before_emojis = guild.emojis
+        guild.emojis = tuple(map(lambda d: self.store_emoji(guild, d), data['emojis']))
+        self.dispatch('guild_emojis_update', before_emojis, guild.emojis)
 
-    def _get_create_server(self, data):
+    def _get_create_guild(self, data):
         if data.get('unavailable') == False:
             # GUILD_CREATE with unavailable in the response
-            # usually means that the server has become available
+            # usually means that the guild has become available
             # and is therefore in the cache
-            server = self._get_server(data.get('id'))
-            if server is not None:
-                server.unavailable = False
-                server._from_data(data)
-                return server
+            guild = self._get_guild(data.get('id'))
+            if guild is not None:
+                guild.unavailable = False
+                guild._from_data(data)
+                return guild
 
-        return self._add_server_from_data(data)
+        return self._add_guild_from_data(data)
 
     @asyncio.coroutine
-    def _chunk_and_dispatch(self, server, unavailable):
-        yield from self.chunker(server)
-        chunks = list(self.chunks_needed(server))
+    def _chunk_and_dispatch(self, guild, unavailable):
+        yield from self.chunker(guild)
+        chunks = list(self.chunks_needed(guild))
         if chunks:
             try:
                 yield from asyncio.wait(chunks, timeout=len(chunks), loop=self.loop)
@@ -496,30 +480,30 @@ class ConnectionState:
                 log.info('Somehow timed out waiting for chunks.')
 
         if unavailable == False:
-            self.dispatch('server_available', server)
+            self.dispatch('guild_available', guild)
         else:
-            self.dispatch('server_join', server)
+            self.dispatch('guild_join', guild)
 
     def parse_guild_create(self, data):
         unavailable = data.get('unavailable')
         if unavailable == True:
-            # joined a server with unavailable == True so..
+            # joined a guild with unavailable == True so..
             return
 
-        server = self._get_create_server(data)
+        guild = self._get_create_guild(data)
 
         # check if it requires chunking
-        if server.large:
+        if guild.large:
             if unavailable == False:
                 # check if we're waiting for 'useful' READY
                 # and if we are, we don't want to dispatch any
-                # event such as server_join or server_available
+                # event such as guild_join or guild_available
                 # because we're still in the 'READY' phase. Or
                 # so we say.
                 try:
                     state = self._ready_state
                     state.launch.clear()
-                    state.servers.append(server)
+                    state.guilds.append(guild)
                 except AttributeError:
                     # the _ready_state attribute is only there during
                     # processing of useful READY.
@@ -529,43 +513,43 @@ class ConnectionState:
 
             # since we're not waiting for 'useful' READY we'll just
             # do the chunk request here
-            compat.create_task(self._chunk_and_dispatch(server, unavailable), loop=self.loop)
+            compat.create_task(self._chunk_and_dispatch(guild, unavailable), loop=self.loop)
             return
 
         # Dispatch available if newly available
         if unavailable == False:
-            self.dispatch('server_available', server)
+            self.dispatch('guild_available', guild)
         else:
-            self.dispatch('server_join', server)
+            self.dispatch('guild_join', guild)
 
     def parse_guild_sync(self, data):
-        server = self._get_server(data.get('id'))
-        server._sync(data)
+        guild = self._get_guild(int(data['id']))
+        guild._sync(data)
 
     def parse_guild_update(self, data):
-        server = self._get_server(data.get('id'))
-        if server is not None:
-            old_server = copy.copy(server)
-            server._from_data(data)
-            self.dispatch('server_update', old_server, server)
+        guild = self._get_guild(int(data['id']))
+        if guild is not None:
+            old_guild = copy.copy(guild)
+            guild._from_data(data)
+            self.dispatch('guild_update', old_guild, guild)
 
     def parse_guild_delete(self, data):
-        server = self._get_server(data.get('id'))
-        if server is None:
+        guild = self._get_guild(int(data['id']))
+        if guild is None:
             return
 
-        if data.get('unavailable', False) and server is not None:
+        if data.get('unavailable', False) and guild is not None:
             # GUILD_DELETE with unavailable being True means that the
-            # server that was available is now currently unavailable
-            server.unavailable = True
-            self.dispatch('server_unavailable', server)
+            # guild that was available is now currently unavailable
+            guild.unavailable = True
+            self.dispatch('guild_unavailable', guild)
             return
 
         # do a cleanup of the messages cache
-        self.messages = deque((msg for msg in self.messages if msg.server != server), maxlen=self.max_messages)
+        self.messages = deque((msg for msg in self.messages if msg.guild != guild), maxlen=self.max_messages)
 
-        self._remove_server(server)
-        self.dispatch('server_remove', server)
+        self._remove_guild(guild)
+        self.dispatch('guild_remove', guild)
 
     def parse_guild_ban_add(self, data):
         # we make the assumption that GUILD_BAN_ADD is done
@@ -573,162 +557,151 @@ class ConnectionState:
         # hence we don't remove it from cache or do anything
         # strange with it, the main purpose of this event
         # is mainly to dispatch to another event worth listening to for logging
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is not None:
             user_id = data.get('user', {}).get('id')
-            member = utils.get(server.members, id=user_id)
+            member = utils.get(guild.members, id=user_id)
             if member is not None:
                 self.dispatch('member_ban', member)
 
     def parse_guild_ban_remove(self, data):
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is not None:
             if 'user' in data:
-                user = User(**data['user'])
-                self.dispatch('member_unban', server, user)
+                user = self.store_user(data['user'])
+                self.dispatch('member_unban', guild, user)
 
     def parse_guild_role_create(self, data):
-        server = self._get_server(data.get('guild_id'))
-        role_data = data.get('role', {})
-        role = Role(server=server, **role_data)
-        server._add_role(role)
-        self.dispatch('server_role_create', role)
+        guild = self._get_guild(int(data['guild_id']))
+        role_data = data['role']
+        role = Role(guild=guild, data=role_data, state=self)
+        guild._add_role(role)
+        self.dispatch('guild_role_create', role)
 
     def parse_guild_role_delete(self, data):
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
-            role_id = data.get('role_id')
-            role = utils.find(lambda r: r.id == role_id, server.roles)
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is not None:
+            role_id = int(data['role_id'])
+            role = utils.find(lambda r: r.id == role_id, guild.roles)
             try:
-                server._remove_role(role)
+                guild._remove_role(role)
             except ValueError:
                 return
             else:
-                self.dispatch('server_role_delete', role)
+                self.dispatch('guild_role_delete', role)
 
     def parse_guild_role_update(self, data):
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
-            role_id = data['role']['id']
-            role = utils.find(lambda r: r.id == role_id, server.roles)
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is not None:
+            role_data = data['role']
+            role_id = int(role_data['id'])
+            role = utils.find(lambda r: r.id == role_id, guild.roles)
             if role is not None:
                 old_role = copy.copy(role)
-                role._update(**data['role'])
-                self.dispatch('server_role_update', old_role, role)
+                role._update(role_data)
+                self.dispatch('guild_role_update', old_role, role)
 
     def parse_guild_members_chunk(self, data):
-        server = self._get_server(data.get('guild_id'))
+        guild = self._get_guild(int(data['guild_id']))
         members = data.get('members', [])
         for member in members:
-            m = self._make_member(server, member)
-            existing = server.get_member(m.id)
+            m = self._make_member(guild, member)
+            existing = guild.get_member(m.id)
             if existing is None or existing.joined_at is None:
-                server._add_member(m)
+                guild._add_member(m)
 
-        # if the owner is offline, server.owner is potentially None
-        # therefore we should check if this chunk makes it point to a valid
-        # member.
-        server.owner = server.get_member(server.owner_id)
         log.info('processed a chunk for {} members.'.format(len(members)))
-        self.process_listeners(ListenerType.chunk, server, len(members))
+        self.process_listeners(ListenerType.chunk, guild, len(members))
 
     def parse_voice_state_update(self, data):
-        server = self._get_server(data.get('guild_id'))
-        if server is not None:
-            channel = server.get_channel(data.get('channel_id'))
-            if data.get('user_id') == self.user.id:
-                voice = self._get_voice_client(server.id)
+        guild = self._get_guild(utils._get_as_snowflake(data, 'guild_id'))
+        channel_id = utils._get_as_snowflake(data, 'channel_id')
+        if guild is not None:
+            if int(data['user_id']) == self.user.id:
+                voice = self._get_voice_client(guild.id)
                 if voice is not None:
-                    voice.channel = channel
+                    voice.channel = guild.get_channel(channel_id)
 
-            before, after = server._update_voice_state(data)
+            member, before, after = guild._update_voice_state(data, channel_id)
             if after is not None:
-                self.dispatch('voice_state_update', before, after)
+                self.dispatch('voice_state_update', member, before, after)
         else:
             # in here we're either at private or group calls
-            call = self._calls.get(data.get('channel_id'), None)
+            call = self._calls.get(channel_id)
             if call is not None:
                 call._update_voice_state(data)
 
     def parse_typing_start(self, data):
-        channel = self.get_channel(data.get('channel_id'))
+        channel = self.get_channel(int(data['channel_id']))
         if channel is not None:
             member = None
-            user_id = data.get('user_id')
-            is_private = getattr(channel, 'is_private', None)
-            if is_private == None:
-                return
-
-            if is_private:
-                member = channel.user
-            else:
-                member = channel.server.get_member(user_id)
+            user_id = utils._get_as_snowflake(data, 'user_id')
+            if isinstance(channel, DMChannel):
+                member = channel.recipient
+            elif isinstance(channel, TextChannel):
+                member = channel.guild.get_member(user_id)
+            elif isinstance(channel, GroupChannel):
+                member = utils.find(lambda x: x.id == user_id, channel.recipients)
 
             if member is not None:
                 timestamp = datetime.datetime.utcfromtimestamp(data.get('timestamp'))
                 self.dispatch('typing', channel, member, timestamp)
 
     def parse_call_create(self, data):
-        message = self._get_message(data.get('message_id'))
+        message = self._get_message(int(data['message_id']))
         if message is not None:
             call = GroupCall(call=message, **data)
-            self._calls[data['channel_id']] = call
+            self._calls[int(data['channel_id'])] = call
             self.dispatch('call', call)
 
     def parse_call_update(self, data):
-        call = self._calls.get(data.get('channel_id'), None)
+        call = self._calls.get(int(data['channel_id']))
         if call is not None:
             before = copy.copy(call)
             call._update(**data)
             self.dispatch('call_update', before, call)
 
     def parse_call_delete(self, data):
-        call = self._calls.pop(data.get('channel_id'), None)
+        call = self._calls.pop(int(data['channel_id']), None)
         if call is not None:
             self.dispatch('call_remove', call)
 
-    def _get_member(self, channel, id):
-        if channel.is_private:
-            return utils.get(channel.recipients, id=id)
+    def _get_reaction_user(self, channel, user_id):
+        if isinstance(channel, DMChannel) and user_id == channel.recipient.id:
+            return channel.recipient
+        elif isinstance(channel, TextChannel):
+            return channel.guild.get_member(user_id)
+        elif isinstance(channel, GroupChannel):
+            return utils.find(lambda m: m.id == user_id, channel.recipients)
         else:
-            return channel.server.get_member(id)
+            return None
 
-    def _create_message(self, **message):
-        """Helper mostly for injecting reactions."""
-        reactions = [
-            self._create_reaction(**r) for r in message.pop('reactions', [])
-        ]
-        return Message(channel=message.pop('channel'),
-                       reactions=reactions, **message)
+    def get_reaction_emoji(self, data):
+        emoji_id = utils._get_as_snowflake(data, 'id')
 
-    def _create_reaction(self, **reaction):
-        emoji = self._get_reaction_emoji(**reaction.pop('emoji'))
-        return Reaction(emoji=emoji, **reaction)
-
-    def _get_reaction_emoji(self, **data):
-        id = data['id']
-
-        if not id:
+        if not emoji_id:
             return data['name']
 
-        for server in self.servers:
-            for emoji in server.emojis:
-                if emoji.id == id:
-                    return emoji
-        return Emoji(server=None, **data)
+        try:
+            return self._emojis[emoji_id]
+        except KeyError:
+            return PartialEmoji(id=emoji_id, name=data['name'])
 
     def get_channel(self, id):
         if id is None:
             return None
 
-        for server in self.servers:
-            channel = server.get_channel(id)
+        for guild in self.guilds:
+            channel = guild.get_channel(id)
             if channel is not None:
                 return channel
 
         pm = self._get_private_channel(id)
         if pm is not None:
             return pm
+
+    def create_message(self, *, channel, data):
+        return Message(state=self, channel=channel, data=data)
 
     def receive_chunk(self, guild_id):
         future = asyncio.Future(loop=self.loop)

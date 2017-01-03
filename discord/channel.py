@@ -23,20 +23,23 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-import copy
-from . import utils
 from .permissions import Permissions, PermissionOverwrite
-from .enums import ChannelType
-from collections import namedtuple
+from .enums import ChannelType, try_enum
 from .mixins import Hashable
 from .role import Role
 from .user import User
 from .member import Member
+from . import utils
 
-Overwrites = namedtuple('Overwrites', 'id allow deny type')
+import discord.abc
 
-class Channel(Hashable):
-    """Represents a Discord server channel.
+import copy
+import asyncio
+
+__all__ = ('TextChannel', 'VoiceChannel', 'DMChannel', 'GroupChannel', '_channel_factory')
+
+class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
+    """Represents a Discord guild text channel.
 
     Supported Operations:
 
@@ -54,268 +57,261 @@ class Channel(Hashable):
 
     Attributes
     -----------
-    name : str
+    name: str
         The channel name.
-    server : :class:`Server`
-        The server the channel belongs to.
-    id : str
+    guild: :class:`Guild`
+        The guild the channel belongs to.
+    id: int
         The channel ID.
-    topic : Optional[str]
+    topic: Optional[str]
         The channel's topic. None if it doesn't exist.
-    is_private : bool
-        ``True`` if the channel is a private channel (i.e. PM). ``False`` in this case.
-    position : int
+    position: int
         The position in the channel list. This is a number that starts at 0. e.g. the
-        top channel is position 0. The position varies depending on being a voice channel
-        or a text channel, so a 0 position voice channel is on top of the voice channel
-        list.
-    type : :class:`ChannelType`
-        The channel type. There is a chance that the type will be ``str`` if
-        the channel type is not within the ones recognised by the enumerator.
-    bitrate : int
-        The channel's preferred audio bitrate in bits per second.
-    voice_members
-        A list of :class:`Members` that are currently inside this voice channel.
-        If :attr:`type` is not :attr:`ChannelType.voice` then this is always an empty array.
-    user_limit : int
-        The channel's limit for number of members that can be in a voice channel.
+        top channel is position 0.
     """
 
-    __slots__ = [ 'voice_members', 'name', 'id', 'server', 'topic', 'position',
-                  'is_private', 'type', 'bitrate', 'user_limit',
-                  '_permission_overwrites' ]
+    __slots__ = ( 'name', 'id', 'guild', 'topic', '_state',
+                  'position', '_overwrites' )
 
-    def __init__(self, **kwargs):
-        self._update(**kwargs)
-        self.voice_members = []
+    def __init__(self, *, state, guild, data):
+        self._state = state
+        self.id = int(data['id'])
+        self._update(guild, data)
 
-    def __str__(self):
-        return self.name
+    def __repr__(self):
+        return '<TextChannel id={0.id} name={0.name!r} position={0.position}>'.format(self)
 
-    def _update(self, **kwargs):
-        self.name = kwargs.get('name')
-        self.server = kwargs.get('server')
-        self.id = kwargs.get('id')
-        self.topic = kwargs.get('topic')
-        self.is_private = False
-        self.position = kwargs.get('position')
-        self.bitrate = kwargs.get('bitrate')
-        self.type = kwargs.get('type')
-        self.user_limit = kwargs.get('user_limit')
-        try:
-            self.type = ChannelType(self.type)
-        except:
-            pass
+    def _update(self, guild, data):
+        self.guild = guild
+        self.name = data['name']
+        self.topic = data.get('topic')
+        self.position = data['position']
+        self._fill_overwrites(data)
 
-        self._permission_overwrites = []
-        everyone_index = 0
-        everyone_id = self.server.id
+    @asyncio.coroutine
+    def _get_channel(self):
+        return self
 
-        for index, overridden in enumerate(kwargs.get('permission_overwrites', [])):
-            overridden_id = overridden['id']
-            self._permission_overwrites.append(Overwrites(**overridden))
+    def _get_guild_id(self):
+        return self.guild.id
 
-            if overridden.get('type') == 'member':
-                continue
+    @asyncio.coroutine
+    def edit(self, **options):
+        """|coro|
 
-            if overridden_id == everyone_id:
-                # the @everyone role is not guaranteed to be the first one
-                # in the list of permission overwrites, however the permission
-                # resolution code kind of requires that it is the first one in
-                # the list since it is special. So we need the index so we can
-                # swap it to be the first one.
-                everyone_index = index
+        Edits the channel.
 
-        # do the swap
-        tmp = self._permission_overwrites
-        if tmp:
-            tmp[everyone_index], tmp[0] = tmp[0], tmp[everyone_index]
-
-    @property
-    def changed_roles(self):
-        """Returns a list of :class:`Roles` that have been overridden from
-        their default values in the :attr:`Server.roles` attribute."""
-        ret = []
-        for overwrite in filter(lambda o: o.type == 'role', self._permission_overwrites):
-            role = utils.get(self.server.roles, id=overwrite.id)
-            if role is None:
-                continue
-
-            role = copy.copy(role)
-            role.permissions.handle_overwrite(overwrite.allow, overwrite.deny)
-            ret.append(role)
-        return ret
-
-    @property
-    def is_default(self):
-        """bool : Indicates if this is the default channel for the :class:`Server` it belongs to."""
-        return self.server.id == self.id
-
-    @property
-    def mention(self):
-        """str : The string that allows you to mention the channel."""
-        return '<#{0.id}>'.format(self)
-
-    @property
-    def created_at(self):
-        """Returns the channel's creation time in UTC."""
-        return utils.snowflake_time(self.id)
-
-    def overwrites_for(self, obj):
-        """Returns the channel-specific overwrites for a member or a role.
-
-        Parameters
-        -----------
-        obj
-            The :class:`Role` or :class:`Member` or :class:`Object` denoting
-            whose overwrite to get.
-
-        Returns
-        ---------
-        :class:`PermissionOverwrite`
-            The permission overwrites for this object.
-        """
-
-        if isinstance(obj, Member):
-            predicate = lambda p: p.type == 'member'
-        elif isinstance(obj, Role):
-            predicate = lambda p: p.type == 'role'
-        else:
-            predicate = lambda p: True
-
-        for overwrite in filter(predicate, self._permission_overwrites):
-            if overwrite.id == obj.id:
-                allow = Permissions(overwrite.allow)
-                deny = Permissions(overwrite.deny)
-                return PermissionOverwrite.from_pair(allow, deny)
-
-        return PermissionOverwrite()
-
-    @property
-    def overwrites(self):
-        """Returns all of the channel's overwrites.
-
-        This is returned as a list of two-element tuples containing the target,
-        which can be either a :class:`Role` or a :class:`Member` and the overwrite
-        as the second element as a :class:`PermissionOverwrite`.
-
-        Returns
-        --------
-        List[Tuple[Union[:class:`Role`, :class:`Member`], :class:`PermissionOverwrite`]]:
-            The channel's permission overwrites.
-        """
-        ret = []
-        for ow in self._permission_overwrites:
-            allow = Permissions(ow.allow)
-            deny = Permissions(ow.deny)
-            overwrite = PermissionOverwrite.from_pair(allow, deny)
-
-            if ow.type == 'role':
-                # accidentally quadratic
-                target = utils.find(lambda r: r.id == ow.id, self.server.roles)
-            elif ow.type == 'member':
-                target = self.server.get_member(ow.id)
-
-            ret.append((target, overwrite))
-        return ret
-
-    def permissions_for(self, member):
-        """Handles permission resolution for the current :class:`Member`.
-
-        This function takes into consideration the following cases:
-
-        - Server owner
-        - Server roles
-        - Channel overrides
-        - Member overrides
-        - Whether the channel is the default channel.
+        You must have the :attr:`Permissions.manage_channel` permission to
+        use this.
 
         Parameters
         ----------
-        member : :class:`Member`
-            The member to resolve permissions for.
+        name: str
+            The new channel name.
+        topic: str
+            The new channel's topic.
+        position: int
+            The new channel's position.
 
-        Returns
-        -------
-        :class:`Permissions`
-            The resolved permissions for the member.
+        Raises
+        ------
+        InvalidArgument
+            If position is less than 0 or greater than the number of channels.
+        Forbidden
+            You do not have permissions to edit the channel.
+        HTTPException
+            Editing the channel failed.
+        """
+        try:
+            position = options.pop('position')
+        except KeyError:
+            pass
+        else:
+            yield from self._move(position)
+            self.position = position
+
+        if options:
+            data = yield from self._state.http.edit_channel(self.id, **options)
+            self._update(self.guild, data)
+
+class VoiceChannel(discord.abc.GuildChannel, Hashable):
+    """Represents a Discord guild voice channel.
+
+    Supported Operations:
+
+    +-----------+---------------------------------------+
+    | Operation |              Description              |
+    +===========+=======================================+
+    | x == y    | Checks if two channels are equal.     |
+    +-----------+---------------------------------------+
+    | x != y    | Checks if two channels are not equal. |
+    +-----------+---------------------------------------+
+    | hash(x)   | Returns the channel's hash.           |
+    +-----------+---------------------------------------+
+    | str(x)    | Returns the channel's name.           |
+    +-----------+---------------------------------------+
+
+    Attributes
+    -----------
+    name: str
+        The channel name.
+    guild: :class:`Guild`
+        The guild the channel belongs to.
+    id: int
+        The channel ID.
+    position: int
+        The position in the channel list. This is a number that starts at 0. e.g. the
+        top channel is position 0.
+    bitrate: int
+        The channel's preferred audio bitrate in bits per second.
+    voice_members
+        A list of :class:`Members` that are currently inside this voice channel.
+    user_limit: int
+        The channel's limit for number of members that can be in a voice channel.
+    """
+
+    __slots__ = ( 'voice_members', 'name', 'id', 'guild', 'bitrate',
+                  'user_limit', '_state', 'position', '_overwrites' )
+
+    def __init__(self, *, state, guild, data):
+        self._state = state
+        self.id = int(data['id'])
+        self._update(guild, data)
+        self.voice_members = []
+
+    def __repr__(self):
+        return '<VoiceChannel id={0.id} name={0.name!r} position={0.position}>'.format(self)
+
+    def _update(self, guild, data):
+        self.guild = guild
+        self.name = data['name']
+        self.position = data['position']
+        self.bitrate = data.get('bitrate')
+        self.user_limit = data.get('user_limit')
+        self._fill_overwrites(data)
+
+    @asyncio.coroutine
+    def edit(self, **options):
+        """|coro|
+
+        Edits the channel.
+
+        You must have the :attr:`Permissions.manage_channel` permission to
+        use this.
+
+        Parameters
+        ----------
+        bitrate: int
+            The new channel's bitrate.
+        user_limit: int
+            The new channel's user limit.
+        position: int
+            The new channel's position.
+
+        Raises
+        ------
+        Forbidden
+            You do not have permissions to edit the channel.
+        HTTPException
+            Editing the channel failed.
         """
 
-        # The current cases can be explained as:
-        # Server owner get all permissions -- no questions asked. Otherwise...
-        # The @everyone role gets the first application.
-        # After that, the applied roles that the user has in the channel
-        # (or otherwise) are then OR'd together.
-        # After the role permissions are resolved, the member permissions
-        # have to take into effect.
-        # After all that is done.. you have to do the following:
+        try:
+            position = options.pop('position')
+        except KeyError:
+            pass
+        else:
+            yield from self._move(position)
+            self.position = position
 
-        # If manage permissions is True, then all permissions are set to
-        # True. If the channel is the default channel then everyone gets
-        # read permissions regardless.
+        if options:
+            data = yield from self._state.http.edit_channel(self.id, **options)
+            self._update(self.guild, data)
 
-        # The operation first takes into consideration the denied
-        # and then the allowed.
+class DMChannel(discord.abc.Messageable, Hashable):
+    """Represents a Discord direct message channel.
 
-        if member.id == self.server.owner.id:
-            return Permissions.all()
+    Supported Operations:
 
-        default = self.server.default_role
-        base = Permissions(default.permissions.value)
+    +-----------+-------------------------------------------------+
+    | Operation |                   Description                   |
+    +===========+=================================================+
+    | x == y    | Checks if two channels are equal.               |
+    +-----------+-------------------------------------------------+
+    | x != y    | Checks if two channels are not equal.           |
+    +-----------+-------------------------------------------------+
+    | hash(x)   | Returns the channel's hash.                     |
+    +-----------+-------------------------------------------------+
+    | str(x)    | Returns a string representation of the channel  |
+    +-----------+-------------------------------------------------+
 
-        # Apply server roles that the member has.
-        for role in member.roles:
-            base.value |= role.permissions.value
+    Attributes
+    ----------
+    recipient: :class:`User`
+        The user you are participating with in the direct message channel.
+    me: :class:`User`
+        The user presenting yourself.
+    id: int
+        The direct message channel ID.
+    """
 
-        # Server-wide Administrator -> True for everything
-        # Bypass all channel-specific overrides
-        if base.administrator:
-            return Permissions.all()
+    __slots__ = ('id', 'recipient', 'me', '_state')
 
-        member_role_ids = set(map(lambda r: r.id, member.roles))
-        denies = 0
-        allows = 0
+    def __init__(self, *, me, state, data):
+        self._state = state
+        self.recipient = state.store_user(data['recipients'][0])
+        self.me = me
+        self.id = int(data['id'])
 
-        # Apply channel specific role permission overwrites
-        for overwrite in self._permission_overwrites:
-            if overwrite.type == 'role' and overwrite.id in member_role_ids:
-                denies |= overwrite.deny
-                allows |= overwrite.allow
+    @asyncio.coroutine
+    def _get_channel(self):
+        return self
 
-        base.handle_overwrite(allow=allows, deny=denies)
+    def _get_guild_id(self):
+        return None
 
-        # Apply member specific permission overwrites
-        for overwrite in self._permission_overwrites:
-            if overwrite.type == 'member' and overwrite.id == member.id:
-                base.handle_overwrite(allow=overwrite.allow, deny=overwrite.deny)
-                break
+    def __str__(self):
+        return 'Direct Message with %s' % self.recipient
 
-        # default channels can always be read
-        if self.is_default:
-            base.read_messages = True
+    def __repr__(self):
+        return '<DMChannel id={0.id} recipient={0.recipient!r}>'.format(self)
 
-        # if you can't send a message in a channel then you can't have certain
-        # permissions as well
-        if not base.send_messages:
-            base.send_tts_messages = False
-            base.mention_everyone = False
-            base.embed_links = False
-            base.attach_files = False
+    @property
+    def created_at(self):
+        """Returns the direct message channel's creation time in UTC."""
+        return utils.snowflake_time(self.id)
 
-        # if you can't read a channel then you have no permissions there
-        if not base.read_messages:
-            denied = Permissions.all_channel()
-            base.value &= ~denied.value
+    def permissions_for(self, user=None):
+        """Handles permission resolution for a :class:`User`.
 
-        # text channels do not have voice related permissions
-        if self.type is ChannelType.text:
-            denied = Permissions.voice()
-            base.value &= ~denied.value
+        This function is there for compatibility with other channel types.
 
+        Actual direct messages do not really have the concept of permissions.
+
+        This returns all the Text related permissions set to true except:
+
+        - send_tts_messages: You cannot send TTS messages in a DM.
+        - manage_messages: You cannot delete others messages in a DM.
+
+        Parameters
+        -----------
+        user: :class:`User`
+            The user to check permissions for. This parameter is ignored
+            but kept for compatibility.
+
+        Returns
+        --------
+        :class:`Permissions`
+            The resolved permissions.
+        """
+
+        base = Permissions.text()
+        base.send_tts_messages = False
+        base.manage_messages = False
         return base
 
-class PrivateChannel(Hashable):
-    """Represents a Discord private channel.
+class GroupChannel(discord.abc.Messageable, Hashable):
+    """Represents a Discord group channel.
 
     Supported Operations:
 
@@ -334,49 +330,46 @@ class PrivateChannel(Hashable):
     Attributes
     ----------
     recipients: list of :class:`User`
-        The users you are participating with in the private channel.
+        The users you are participating with in the group channel.
     me: :class:`User`
         The user presenting yourself.
-    id: str
-        The private channel ID.
-    is_private: bool
-        ``True`` if the channel is a private channel (i.e. PM). ``True`` in this case.
-    type: :class:`ChannelType`
-        The type of private channel.
-    owner: Optional[:class:`User`]
-        The user that owns the private channel. If the channel type is not
-        :attr:`ChannelType.group` then this is always ``None``.
+    id: int
+        The group channel ID.
+    owner: :class:`User`
+        The user that owns the group channel.
     icon: Optional[str]
-        The private channel's icon hash. If the channel type is not
-        :attr:`ChannelType.group` then this is always ``None``.
+        The group channel's icon hash if provided.
     name: Optional[str]
-        The private channel's name. If the channel type is not
-        :attr:`ChannelType.group` then this is always ``None``.
+        The group channel's name if provided.
     """
 
-    __slots__ = ['id', 'recipients', 'type', 'owner', 'icon', 'name', 'me']
+    __slots__ = ('id', 'recipients', 'owner', 'icon', 'name', 'me', '_state')
 
-    def __init__(self, me, **kwargs):
-        self.recipients = [User(**u) for u in kwargs['recipients']]
-        self.id = kwargs['id']
+    def __init__(self, *, me, state, data):
+        self._state = state
+        self.recipients = [state.store_user(u) for u in data['recipients']]
+        self.id = int(data['id'])
         self.me = me
-        self.type = ChannelType(kwargs['type'])
-        self._update_group(**kwargs)
+        self._update_group(data)
 
-    def _update_group(self, **kwargs):
-        owner_id = kwargs.get('owner_id')
-        self.icon = kwargs.get('icon')
-        self.name = kwargs.get('name')
-        self.owner = utils.find(lambda u: u.id == owner_id, self.recipients)
+    def _update_group(self, data):
+        owner_id = utils._get_as_snowflake(data, 'owner_id')
+        self.icon = data.get('icon')
+        self.name = data.get('name')
 
-    @property
-    def is_private(self):
-        return True
+        if owner_id == self.me.id:
+            self.owner = self.me
+        else:
+            self.owner = utils.find(lambda u: u.id == owner_id, self.recipients)
+
+    @asyncio.coroutine
+    def _get_channel(self):
+        return self
+
+    def _get_guild_id(self):
+        return None
 
     def __str__(self):
-        if self.type is ChannelType.private:
-            return 'Direct Message with {0.name}'.format(self.user)
-
         if self.name:
             return self.name
 
@@ -385,14 +378,8 @@ class PrivateChannel(Hashable):
 
         return ', '.join(map(lambda x: x.name, self.recipients))
 
-    @property
-    def user(self):
-        """A property that returns the first recipient of the private channel.
-
-        This is mainly for compatibility and ease of use with old style private
-        channels that had a single recipient.
-        """
-        return self.recipients[0]
+    def __repr__(self):
+        return '<GroupChannel id={0.id} name={0.name!r}>'.format(self)
 
     @property
     def icon_url(self):
@@ -404,27 +391,26 @@ class PrivateChannel(Hashable):
 
     @property
     def created_at(self):
-        """Returns the private channel's creation time in UTC."""
+        """Returns the channel's creation time in UTC."""
         return utils.snowflake_time(self.id)
 
     def permissions_for(self, user):
         """Handles permission resolution for a :class:`User`.
 
-        This function is there for compatibility with :class:`Channel`.
+        This function is there for compatibility with other channel types.
 
-        Actual private messages do not really have the concept of permissions.
+        Actual direct messages do not really have the concept of permissions.
 
         This returns all the Text related permissions set to true except:
 
-        - send_tts_messages: You cannot send TTS messages in a PM.
-        - manage_messages: You cannot delete others messages in a PM.
+        - send_tts_messages: You cannot send TTS messages in a DM.
+        - manage_messages: You cannot delete others messages in a DM.
 
-        This also handles permissions for :attr:`ChannelType.group` channels
-        such as kicking or mentioning everyone.
+        This also checks the kick_members permission if the user is the owner.
 
         Parameters
         -----------
-        user : :class:`User`
+        user: :class:`User`
             The user to check permissions for.
 
         Returns
@@ -436,11 +422,22 @@ class PrivateChannel(Hashable):
         base = Permissions.text()
         base.send_tts_messages = False
         base.manage_messages = False
-        base.mention_everyone = self.type is ChannelType.group
+        base.mention_everyone = True
 
-        if user == self.owner:
+        if user.id == self.owner.id:
             base.kick_members = True
 
         return base
 
-
+def _channel_factory(channel_type):
+    value = try_enum(ChannelType, channel_type)
+    if value is ChannelType.text:
+        return TextChannel, value
+    elif value is ChannelType.voice:
+        return VoiceChannel, value
+    elif value is ChannelType.private:
+        return DMChannel, value
+    elif value is ChannelType.group:
+        return GroupChannel, value
+    else:
+        return None, value

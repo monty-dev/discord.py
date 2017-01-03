@@ -24,8 +24,13 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+import asyncio
+from collections import namedtuple
+
 from . import utils
 from .mixins import Hashable
+
+PartialEmoji = namedtuple('PartialEmoji', 'id name')
 
 class Emoji(Hashable):
     """Represents a custom emoji.
@@ -54,47 +59,52 @@ class Emoji(Hashable):
 
     Attributes
     -----------
-    name : str
+    name: str
         The name of the emoji.
-    id : str
+    id: int
         The emoji's ID.
-    require_colons : bool
+    require_colons: bool
         If colons are required to use this emoji in the client (:PJSalt: vs PJSalt).
-    managed : bool
+    managed: bool
         If this emoji is managed by a Twitch integration.
-    server : :class:`Server`
-        The server the emoji belongs to.
-    roles : List[:class:`Role`]
+    guild: :class:`Guild`
+        The guild the emoji belongs to.
+    roles: List[:class:`Role`]
         A list of :class:`Role` that is allowed to use this emoji. If roles is empty,
         the emoji is unrestricted.
     """
-    __slots__ = ["require_colons", "managed", "id", "name", "roles", 'server']
+    __slots__ = ('require_colons', 'managed', 'id', 'name', 'roles', 'guild', '_state')
 
-    def __init__(self, **kwargs):
-        self.server = kwargs.pop('server')
-        self._from_data(kwargs)
+    def __init__(self, *, guild, state, data):
+        self.guild = guild
+        self._state = state
+        self._from_data(data)
 
     def _from_data(self, emoji):
-        self.require_colons = emoji.get('require_colons')
-        self.managed = emoji.get('managed')
-        self.id = emoji.get('id')
-        self.name = emoji.get('name')
+        self.require_colons = emoji['require_colons']
+        self.managed = emoji['managed']
+        self.id = int(emoji['id'])
+        self.name = emoji['name']
         self.roles = emoji.get('roles', [])
         if self.roles:
             roles = set(self.roles)
-            self.roles = [role for role in self.server.roles if role.id in roles]
+            self.roles = [role for role in self.guild.roles if role.id in roles]
 
     def _iterator(self):
         for attr in self.__slots__:
-            value = getattr(self, attr, None)
-            if value is not None:
-                yield (attr, value)
+            if attr[0] != '_':
+                value = getattr(self, attr, None)
+                if value is not None:
+                    yield (attr, value)
 
     def __iter__(self):
         return self._iterator()
 
     def __str__(self):
         return "<:{0.name}:{0.id}>".format(self)
+
+    def __repr__(self):
+        return '<Emoji id={0.id} name={0.name!r}>'.format(self)
 
     @property
     def created_at(self):
@@ -105,3 +115,51 @@ class Emoji(Hashable):
     def url(self):
         """Returns a URL version of the emoji."""
         return "https://discordapp.com/api/emojis/{0.id}.png".format(self)
+
+
+    @asyncio.coroutine
+    def delete(self):
+        """|coro|
+
+        Deletes the custom emoji.
+
+        You must have :attr:`Permissions.manage_emojis` permission to
+        do this.
+
+        Guild local emotes can only be deleted by user bots.
+
+        Raises
+        -------
+        Forbidden
+            You are not allowed to delete emojis.
+        HTTPException
+            An error occurred deleting the emoji.
+        """
+
+        yield from self._state.http.delete_custom_emoji(self.guild.id, self.id)
+
+    @asyncio.coroutine
+    def edit(self, *, name):
+        """|coro|
+
+        Edits the custom emoji.
+
+        You must have :attr:`Permissions.manage_emojis` permission to
+        do this.
+
+        Guild local emotes can only be edited by user bots.
+
+        Parameters
+        -----------
+        name: str
+            The new emoji name.
+
+        Raises
+        -------
+        Forbidden
+            You are not allowed to edit emojis.
+        HTTPException
+            An error occurred editing the emoji.
+        """
+
+        yield from self._state.http.edit_custom_emoji(self.guild.id, self.id, name=name)

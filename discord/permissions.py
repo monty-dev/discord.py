@@ -67,7 +67,7 @@ class Permissions:
         permissions via the properties rather than using this raw value.
     """
 
-    __slots__ = [ 'value' ]
+    __slots__ = ('value',)
     def __init__(self, permissions=0, **kwargs):
         self.value = permissions
 
@@ -79,6 +79,9 @@ class Permissions:
 
     def __hash__(self):
         return hash(self.value)
+
+    def __repr__(self):
+        return '<Permissions value=%s>' % self.value
 
     def _perm_iterator(self):
         for attr in dir(self):
@@ -132,10 +135,10 @@ class Permissions:
     @classmethod
     def all_channel(cls):
         """A :class:`Permissions` with all channel-specific permissions set to
-        True and the server-specific ones set to False. The server-specific
+        True and the guild-specific ones set to False. The guild-specific
         permissions are currently:
 
-        - manager_server
+        - manager_guild
         - kick_members
         - ban_members
         - administrator
@@ -220,7 +223,7 @@ class Permissions:
 
     @property
     def kick_members(self):
-        """Returns True if the user can kick users from the server."""
+        """Returns True if the user can kick users from the guild."""
         return self._bit(1)
 
     @kick_members.setter
@@ -229,7 +232,7 @@ class Permissions:
 
     @property
     def ban_members(self):
-        """Returns True if a user can ban users from the server."""
+        """Returns True if a user can ban users from the guild."""
         return self._bit(2)
 
     @ban_members.setter
@@ -250,7 +253,7 @@ class Permissions:
 
     @property
     def manage_channels(self):
-        """Returns True if a user can edit, delete, or create channels in the server.
+        """Returns True if a user can edit, delete, or create channels in the guild.
 
         This also corresponds to the "manage channel" channel-specific override."""
         return self._bit(4)
@@ -260,12 +263,12 @@ class Permissions:
         self._set(4, value)
 
     @property
-    def manage_server(self):
-        """Returns True if a user can edit server properties."""
+    def manage_guild(self):
+        """Returns True if a user can edit guild properties."""
         return self._bit(5)
 
-    @manage_server.setter
-    def manage_server(self, value):
+    @manage_guild.setter
+    def manage_guild(self, value):
         self._set(5, value)
 
     @property
@@ -353,7 +356,7 @@ class Permissions:
 
     @property
     def external_emojis(self):
-        """Returns True if a user can use emojis from other servers."""
+        """Returns True if a user can use emojis from other guilds."""
         return self._bit(18)
 
     @external_emojis.setter
@@ -418,7 +421,7 @@ class Permissions:
 
     @property
     def change_nickname(self):
-        """Returns True if a user can change their nickname in the server."""
+        """Returns True if a user can change their nickname in the guild."""
         return self._bit(26)
 
     @change_nickname.setter
@@ -427,7 +430,7 @@ class Permissions:
 
     @property
     def manage_nicknames(self):
-        """Returns True if a user can change other user's nickname in the server."""
+        """Returns True if a user can change other user's nickname in the guild."""
         return self._bit(27)
 
     @manage_nicknames.setter

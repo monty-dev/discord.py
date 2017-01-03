@@ -39,13 +39,10 @@ __all__ = [ 'Command', 'Group', 'GroupMixin', 'command', 'group',
             'bot_has_role', 'bot_has_permissions', 'bot_has_any_role',
             'cooldown' ]
 
-def inject_context(ctx, coro):
+def wrap_callback(coro):
     @functools.wraps(coro)
     @asyncio.coroutine
     def wrapped(*args, **kwargs):
-        _internal_channel = ctx.message.channel
-        _internal_author = ctx.message.author
-
         try:
             ret = yield from coro(*args, **kwargs)
         except CommandError:
@@ -85,7 +82,7 @@ class Command:
         The list of aliases the command can be invoked under.
     pass_context : bool
         A boolean that indicates that the current :class:`Context` should
-        be passed as the **first parameter**. Defaults to `False`.
+        be passed as the **first parameter**. Defaults to `True`.
     enabled : bool
         A boolean that indicates if the command is currently enabled.
         If the command is invoked while it is disabled, then
@@ -135,7 +132,7 @@ class Command:
         self.brief = kwargs.get('brief')
         self.rest_is_raw = kwargs.get('rest_is_raw', False)
         self.aliases = kwargs.get('aliases', [])
-        self.pass_context = kwargs.get('pass_context', False)
+        self.pass_context = kwargs.get('pass_context', True)
         self.description = inspect.cleandoc(kwargs.get('description', ''))
         self.hidden = kwargs.get('hidden', False)
         signature = inspect.signature(callback)
@@ -155,7 +152,7 @@ class Command:
             pass
         else:
             loop = ctx.bot.loop
-            injected = inject_context(ctx, coro)
+            injected = wrap_callback(coro)
             if self.instance is not None:
                 discord.compat.create_task(injected(self.instance, error, ctx), loop=loop)
             else:
@@ -365,7 +362,7 @@ class Command:
         # since we're in a regular command (and not a group) then
         # the invoked subcommand is None.
         ctx.invoked_subcommand = None
-        injected = inject_context(ctx, self.callback)
+        injected = wrap_callback(self.callback)
         yield from injected(*ctx.args, **ctx.kwargs)
 
     def error(self, coro):
@@ -598,7 +595,7 @@ class Group(GroupMixin, Command):
             ctx.invoked_subcommand = self.commands.get(trigger, None)
 
         if early_invoke:
-            injected = inject_context(ctx, self.callback)
+            injected = wrap_callback(self.callback)
             yield from injected(*ctx.args, **ctx.kwargs)
 
         if trigger and ctx.invoked_subcommand:
@@ -847,7 +844,7 @@ def bot_has_role(name):
         ch = ctx.message.channel
         if ch.is_private:
             return False
-        me = ch.server.me
+        me = ch.guild.me
         role = discord.utils.get(me.roles, name=name)
         return role is not None
     return check(predicate)
@@ -860,7 +857,7 @@ def bot_has_any_role(*names):
         ch = ctx.message.channel
         if ch.is_private:
             return False
-        me = ch.server.me
+        me = ch.guild.me
         getter = functools.partial(discord.utils.get, me.roles)
         return any(getter(name=name) is not None for name in names)
     return check(predicate)
@@ -871,7 +868,7 @@ def bot_has_permissions(**perms):
     """
     def predicate(ctx):
         ch = ctx.message.channel
-        me = ch.server.me if not ch.is_private else ctx.bot.user
+        me = ch.guild.me if not ch.is_private else ctx.bot.user
         permissions = ch.permissions_for(me)
         return all(getattr(permissions, perm, None) == value for perm, value in perms.items())
     return check(predicate)
@@ -882,13 +879,13 @@ def cooldown(rate, per, type=BucketType.default):
 
     A cooldown allows a command to only be used a specific amount
     of times in a specific time frame. These cooldowns can be based
-    either on a per-server, per-channel, per-user, or global basis.
+    either on a per-guild, per-channel, per-user, or global basis.
     Denoted by the third argument of ``type`` which must be of enum
     type ``BucketType`` which could be either:
 
     - ``BucketType.default`` for a global basis.
     - ``BucketType.user`` for a per-user basis.
-    - ``BucketType.server`` for a per-server basis.
+    - ``BucketType.guild`` for a per-guild basis.
     - ``BucketType.channel`` for a per-channel basis.
 
     If a cooldown is triggered, then :exc:`CommandOnCooldown` is triggered in
