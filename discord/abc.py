@@ -346,11 +346,6 @@ class GuildChannel:
             denied = Permissions.all_channel()
             base.value &= ~denied.value
 
-        # text channels do not have voice related permissions
-        if isinstance(self, TextChannel):
-            denied = Permissions.voice()
-            base.value &= ~denied.value
-
         return base
 
     @asyncio.coroutine
@@ -597,8 +592,7 @@ class Messageable(metaclass=abc.ABCMeta):
                 await channel.send_message('done!')
 
         """
-        channel = yield from self._get_channel()
-        return Typing(channel)
+        return Typing(self)
 
     @asyncio.coroutine
     def get_message(self, id):
