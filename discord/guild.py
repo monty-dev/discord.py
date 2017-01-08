@@ -32,6 +32,8 @@ from .role import Role
 from .member import Member, VoiceState
 from .emoji import Emoji
 from .game import Game
+from .permissions import PermissionOverwrite
+from .errors import InvalidArgument
 from .channel import *
 from .enums import GuildRegion, Status, ChannelType, try_enum, VerificationLevel
 from .mixins import Hashable
@@ -143,8 +145,7 @@ class Guild(Hashable):
         return self.name
 
     def __repr__(self):
-        chunked = getattr(self, '_member_count', None) == len(self._members)
-        return '<Guild id={0.id} name={0.name!r} chunked={1}>'.format(self, chunked)
+        return '<Guild id={0.id} name={0.name!r} chunked={0.chunked}>'.format(self)
 
     def _update_voice_state(self, data, channel_id):
         user_id = int(data['user_id'])
@@ -165,23 +166,6 @@ class Guild(Hashable):
             self._voice_states[user_id] = after
 
         member = self.get_member(user_id)
-        if member is not None:
-            old = before.channel
-            # update the references pointed to by the voice channels
-            if old is None and channel is not None:
-                # we joined a channel
-                channel.voice_members.append(member)
-            elif old is not None:
-                try:
-                    # we either left a channel or switched channels
-                    old.voice_members.remove(member)
-                except ValueError:
-                    pass
-                finally:
-                    # we switched channels
-                    if channel is not None:
-                        channel.voice_members.append(self)
-
         return member, before, after
 
     def _add_role(self, role):
@@ -325,6 +309,29 @@ class Guild(Hashable):
         return self._member_count
 
     @property
+    def chunked(self):
+        """Returns a boolean indicating if the guild is "chunked".
+
+        A chunked guild means that :attr:`member_count` is equal to the
+        number of members stored in the internal :attr:`members` cache.
+
+        If this value returns ``False``, then you should request for
+        offline members.
+        """
+        count = getattr(self, '_member_count', None)
+        if count is None:
+            return False
+        return count == len(self._members)
+
+    @property
+    def shard_id(self):
+        """Returns the shard ID for this guild if applicable."""
+        count = self._state.shard_count
+        if count is None:
+            return None
+        return (self.id >> 22) % count
+
+    @property
     def created_at(self):
         """Returns the guild's creation time in UTC."""
         return utils.snowflake_time(self.id)
@@ -384,6 +391,101 @@ class Guild(Hashable):
 
         return utils.find(pred, members)
 
+    def _create_channel(self, name, overwrites, type):
+        if overwrites is None:
+            overwrites = {}
+        elif not isinstance(overwrites, dict):
+            raise InvalidArgument('overwrites parameter expects a dict.')
+
+        perms = []
+        for target, perm in overwrites.items():
+            if not isinstance(perm, PermissionOverwrite):
+                raise InvalidArgument('Expected PermissionOverwrite received {0.__name__}'.format(type(perm)))
+
+            allow, deny = perm.pair()
+            payload = {
+                'allow': allow.value,
+                'deny': deny.value,
+                'id': target.id
+            }
+
+            if isinstance(target, Role):
+                payload['type'] = 'role'
+            else:
+                payload['type'] = 'member'
+
+            perms.append(payload)
+
+        return self._state.http.create_channel(self.id, name, str(type), permission_overwrites=perms)
+
+    @asyncio.coroutine
+    def create_text_channel(self, name, *, overwrites=None):
+        """|coro|
+
+        Creates a :class:`TextChannel` for the guild.
+
+        Note that you need the proper permissions to create the channel.
+
+        The ``overwrites`` parameter can be used to create a 'secret'
+        channel upon creation. This parameter expects a `dict` of
+        overwrites with the target (either a :class:`Member` or a :class:`Role`)
+        as the key and a :class:`PermissionOverwrite` as the value.
+
+        Examples
+        ----------
+
+        Creating a basic channel:
+
+        .. code-block:: python
+
+            channel = await guild.create_text_channel('cool-channel')
+
+        Creating a "secret" channel:
+
+        .. code-block:: python
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True)
+            }
+
+            channel = await guild.create_text_channel('secret', overwrites=overwrites)
+
+        Parameters
+        -----------
+        name: str
+            The channel's name.
+        overwrites
+            A `dict` of target (either a role or a member) to
+            :class:`PermissionOverwrite` to apply upon creation of a channel.
+            Useful for creating secret channels.
+
+        Raises
+        -------
+        Forbidden
+            You do not have the proper permissions to create this channel.
+        HTTPException
+            Creating the channel failed.
+        InvalidArgument
+            The permission overwrite information is not in proper form.
+
+        Returns
+        -------
+        :class:`TextChannel`
+            The channel that was just created.
+        """
+        data = yield from self._create_channel(name, overwrites, ChannelType.text)
+        return TextChannel(state=self._state, guild=self, data=data)
+
+    @asyncio.coroutine
+    def create_voice_channel(self, name, *, overwrites=None):
+        """|coro|
+
+        Same as :meth:`create_text_channel` except makes a
+        :class:`VoiceChannel` instead.
+        """
+        data = yield from self._create_channel(name, overwrites, ChannelType.voice)
+        return VoiceChannel(state=self._state, guild=self, data=data)
 
     @asyncio.coroutine
     def leave(self):
@@ -436,6 +538,11 @@ class Guild(Hashable):
         icon: bytes
             A *bytes-like* object representing the icon. Only PNG/JPEG supported.
             Could be ``None`` to denote removal of the icon.
+        splash: bytes
+            A *bytes-like* object representing the invite splash.
+            Only PNG/JPEG supported. Could be ``None`` to denote removing the
+            splash. Only available for partnered guilds with ``INVITE_SPLASH``
+            feature.
         region: :class:`GuildRegion`
             The new region for the guild's voice communication.
         afk_channel: :class:`VoiceChannel`
@@ -470,7 +577,18 @@ class Guild(Hashable):
             else:
                 icon = None
 
+        try:
+            splash_bytes = fields['splash']
+        except KeyError:
+            splash = self.splash
+        else:
+            if splash_bytes is not None:
+                splash = utils._bytes_to_base64_data(splash_bytes)
+            else:
+                splash = None
+
         fields['icon'] = icon
+        fields['splash'] = splash
         if 'afk_channel' in fields:
             fields['afk_channel_id'] = fields['afk_channel'].id
 

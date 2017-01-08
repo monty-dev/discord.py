@@ -142,6 +142,7 @@ class Client:
         self.connection = ConnectionState(dispatch=self.dispatch, chunker=self.request_offline_members,
                                           syncer=self._syncer, http=self.http, loop=self.loop, **options)
 
+        self.connection.shard_count = self.shard_count
         self._closed = asyncio.Event(loop=self.loop)
         self._is_logged_in = asyncio.Event(loop=self.loop)
         self._is_ready = asyncio.Event(loop=self.loop)
@@ -409,7 +410,10 @@ class Client:
             except (ReconnectWebSocket, ResumeWebSocket) as e:
                 resume = type(e) is ResumeWebSocket
                 log.info('Got ' + type(e).__name__)
-                self.ws = yield from DiscordWebSocket.from_client(self, resume=resume)
+                self.ws = yield from DiscordWebSocket.from_client(self, shard_id=self.shard_id,
+                                                                        session=self.ws.session_id,
+                                                                        sequence=self.ws.sequence,
+                                                                        resume=resume)
             except ConnectionClosed as e:
                 yield from self.close()
                 if e.code != 1000:
@@ -1002,12 +1006,23 @@ class Client:
 
         if status is None:
             status = 'online'
+            status_enum = Status.online
         elif status is Status.offline:
             status = 'invisible'
+            status_enum = Status.offline
         else:
+            status_enum = status
             status = str(status)
 
         yield from self.ws.change_presence(game=game, status=status, afk=afk)
+
+        for guild in self.connection.guilds:
+            me = guild.me
+            if me is None:
+                continue
+
+            me.game = game
+            me.status = status_enum
 
     # Invite management
 
