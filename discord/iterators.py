@@ -29,14 +29,89 @@ import asyncio
 import aiohttp
 import datetime
 
-from .errors import NoMoreMessages
+from .errors import NoMoreItems
 from .utils import time_snowflake
 from .object import Object
 
 PY35 = sys.version_info >= (3, 5)
 
-class LogsFromIterator:
-    """Iterator for receiving logs.
+class ReactionIterator:
+    def __init__(self, message, emoji, limit=100, after=None):
+        self.message = message
+        self.limit = limit
+        self.after = after
+        state = message._state
+        self.getter = state.http.get_reaction_users
+        self.state = state
+        self.emoji = emoji
+        self.guild = message.guild
+        self.channel_id = message.channel.id
+        self.users = asyncio.Queue(loop=state.loop)
+
+    @asyncio.coroutine
+    def get(self):
+        if self.users.empty():
+            yield from self.fill_users()
+
+        try:
+            return self.users.get_nowait()
+        except asyncio.QueueEmpty:
+            raise NoMoreItems()
+
+    @asyncio.coroutine
+    def fill_users(self):
+        # this is a hack because >circular imports<
+        from .user import User
+
+        if self.limit > 0:
+            retrieve = self.limit if self.limit <= 100 else 100
+
+            after = self.after.id if self.after else None
+            data = yield from self.getter(self.message.id, self.channel_id, self.emoji, retrieve, after=after)
+
+            if data:
+                self.limit -= retrieve
+                self.after = Object(id=int(data[0]['id']))
+
+            if self.guild is None:
+                for element in reversed(data):
+                    yield from self.users.put(User(state=self.state, data=element))
+            else:
+                for element in reversed(data):
+                    member_id = int(element['id'])
+                    member = self.guild.get_member(member_id)
+                    if member is not None:
+                        yield from self.users.put(member)
+                    else:
+                        yield from self.users.put(User(state=self.state, data=element))
+
+    @asyncio.coroutine
+    def flatten(self):
+        ret = []
+        while True:
+            try:
+                user = yield from self.get()
+            except NoMoreItems:
+                return ret
+            else:
+                ret.append(user)
+
+    if PY35:
+        @asyncio.coroutine
+        def __aiter__(self):
+            return self
+
+        @asyncio.coroutine
+        def __anext__(self):
+            try:
+                msg = yield from self.get()
+            except NoMoreItems:
+                raise StopAsyncIteration()
+            else:
+                return msg
+
+class HistoryIterator:
+    """Iterator for receiving a channel's message history.
 
     The messages endpoint has two behaviours we care about here:
     If `before` is specified, the messages endpoint returns the `limit`
@@ -53,8 +128,8 @@ class LogsFromIterator:
 
     Parameters
     -----------
-    channel: class:`Channel`
-        Channel from which to request logs
+    messageable: :class:`abc.Messageable`
+        Messageable class to retrieve message history fro.
     limit : int
         Maximum number of messages to retrieve
     before : :class:`Message` or id-like
@@ -132,7 +207,26 @@ class LogsFromIterator:
         try:
             return self.messages.get_nowait()
         except asyncio.QueueEmpty:
-            raise NoMoreMessages()
+            raise NoMoreItems()
+
+    @asyncio.coroutine
+    def flatten(self):
+        # this is similar to fill_messages except it uses a list instead
+        # of a queue to place the messages in.
+        result = []
+        channel = yield from self.messageable._get_channel()
+        self.channel = channel
+        while self.limit > 0:
+            retrieve = self.limit if self.limit <= 100 else 100
+            data = yield from self._retrieve_messages(retrieve)
+            if self.reverse:
+                data = reversed(data)
+            if self._filter:
+                data = filter(self._filter, data)
+
+            for element in data:
+                result.append(self.state.create_message(channel=channel, data=element))
+        return result
 
     @asyncio.coroutine
     def fill_messages(self):
@@ -161,7 +255,8 @@ class LogsFromIterator:
     @asyncio.coroutine
     def _retrieve_messages_before_strategy(self, retrieve):
         """Retrieve messages using before parameter."""
-        data = yield from self.logs_from(self.channel.id, retrieve, before=getattr(self.before, 'id', None))
+        before = self.before.id if self.before else None
+        data = yield from self.logs_from(self.channel.id, retrieve, before=before)
         if len(data):
             self.limit -= retrieve
             self.before = Object(id=int(data[-1]['id']))
@@ -170,7 +265,8 @@ class LogsFromIterator:
     @asyncio.coroutine
     def _retrieve_messages_after_strategy(self, retrieve):
         """Retrieve messages using after parameter."""
-        data = yield from self.logs_from(self.channel.id, retrieve, after=getattr(self.after, 'id', None))
+        after = self.after.id if self.after else None
+        data = yield from self.logs_from(self.channel.id, retrieve, after=after)
         if len(data):
             self.limit -= retrieve
             self.after = Object(id=int(data[0]['id']))
@@ -180,7 +276,8 @@ class LogsFromIterator:
     def _retrieve_messages_around_strategy(self, retrieve):
         """Retrieve messages using around parameter."""
         if self.around:
-            data = yield from self.logs_from(self.channel.id, retrieve, around=getattr(self.around, 'id', None))
+            after = self.after.id if self.after else None
+            data = yield from self.logs_from(self.channel.id, retrieve, around=around)
             self.around = None
             return data
         return []
@@ -195,7 +292,7 @@ class LogsFromIterator:
             try:
                 msg = yield from self.get()
                 return msg
-            except NoMoreMessages:
+            except NoMoreItems:
                 # if we're still empty at this point...
                 # we didn't get any new messages so stop looping
                 raise StopAsyncIteration()

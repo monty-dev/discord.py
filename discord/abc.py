@@ -31,9 +31,9 @@ import asyncio
 
 from collections import namedtuple
 
-from .iterators import LogsFromIterator
+from .iterators import HistoryIterator
 from .context_managers import Typing
-from .errors import ClientException, NoMoreMessages, InvalidArgument
+from .errors import ClientException, NoMoreItems, InvalidArgument
 from .permissions import PermissionOverwrite, Permissions
 from .role import Role
 from . import utils, compat
@@ -624,7 +624,7 @@ class Messageable(metaclass=abc.ABCMeta):
 
         channel = yield from self._get_channel()
         data = yield from self._state.http.get_message(channel.id, id)
-        return state.create_message(channel=channel, data=data)
+        return self._state.create_message(channel=channel, data=data)
 
     @asyncio.coroutine
     def delete_messages(self, messages):
@@ -728,6 +728,11 @@ class Messageable(metaclass=abc.ABCMeta):
                 if message.author == client.user:
                     counter += 1
 
+        Flattening into a list: ::
+
+            messages = await channel.history(limit=123).flatten()
+            # messages is now a list of Message...
+
         Python 3.4 Usage ::
 
             count = 0
@@ -735,13 +740,13 @@ class Messageable(metaclass=abc.ABCMeta):
             while True:
                 try:
                     message = yield from iterator.get()
-                except discord.NoMoreMessages:
+                except discord.NoMoreItems:
                     break
                 else:
                     if message.author == client.user:
                         counter += 1
         """
-        return LogsFromIterator(self, limit=limit, before=before, after=after, around=around, reverse=reverse)
+        return HistoryIterator(self, limit=limit, before=before, after=after, around=around, reverse=reverse)
 
     @asyncio.coroutine
     def purge(self, *, limit=100, check=None, before=None, after=None, around=None):
@@ -808,7 +813,7 @@ class Messageable(metaclass=abc.ABCMeta):
         while True:
             try:
                 msg = yield from iterator.get()
-            except NoMoreMessages:
+            except NoMoreItems:
                 # no more messages to poll
                 if count >= 2:
                     # more than 2 messages -> bulk delete
