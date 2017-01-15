@@ -117,13 +117,14 @@ class Context(discord.abc.Messageable):
         ret = yield from command.callback(*arguments, **kwargs)
         return ret
 
+    @property
+    def valid(self):
+        """Checks if the invocation context is valid to be invoked with."""
+        return self.prefix is not None and self.command is not None
+
     @asyncio.coroutine
     def _get_channel(self):
         return self.channel
-
-    def _get_guild_id(self):
-        g = self.guild
-        return g.id if g is not None else None
 
     @property
     def cog(self):
