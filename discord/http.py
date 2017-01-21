@@ -3,7 +3,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2015-2016 Rapptz
+Copyright (c) 2015-2017 Rapptz
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -544,7 +544,8 @@ class HTTPClient:
         payload = {
             'max_age': options.get('max_age', 0),
             'max_uses': options.get('max_uses', 0),
-            'temporary': options.get('temporary', False)
+            'temporary': options.get('temporary', False),
+            'unique': options.get('unique', True)
         }
 
         return self.request(r, json=payload)
@@ -617,6 +618,29 @@ class HTTPClient:
 
     def move_member(self, user_id, guild_id, channel_id):
         return self.edit_member(guild_id=guild_id, user_id=user_id, channel_id=channel_id)
+
+
+    # Relationship related
+
+    def remove_relationship(self, user_id):
+        r = Route('DELETE', '/users/@me/relationships/{user_id}', user_id=user_id)
+        return self.request(r)
+
+    def add_relationship(self, user_id, type=None):
+        r = Route('PUT', '/users/@me/relationships/{user_id}', user_id=user_id)
+        payload = {}
+        if type is not None:
+            payload['type'] = type
+
+        return self.request(r, json=payload)
+
+    def send_friend_request(self, username, discriminator):
+        r = Route('POST', '/users/@me/relationships')
+        payload = {
+            'username': username,
+            'discriminator': int(discriminator)
+        }
+        return self.request(r, json=payload)
 
     # Misc
 

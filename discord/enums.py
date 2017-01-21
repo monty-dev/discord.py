@@ -3,7 +3,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2015-2016 Rapptz
+Copyright (c) 2015-2017 Rapptz
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -95,6 +95,12 @@ class DefaultAvatar(Enum):
 
     def __str__(self):
         return self.name
+
+class RelationshipType(Enum):
+    friend           = 1
+    blocked          = 2
+    incoming_request = 3
+    outgoing_request = 4
 
 def try_enum(cls, val):
     """A function that tries to turn the value into enum ``cls``.

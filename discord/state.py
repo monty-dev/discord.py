@@ -3,7 +3,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2015-2016 Rapptz
+Copyright (c) 2015-2017 Rapptz
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@ from .game import Game
 from .emoji import Emoji, PartialEmoji
 from .reaction import Reaction
 from .message import Message
+from .relationship import Relationship
 from .channel import *
 from .member import Member
 from .role import Role
@@ -244,8 +245,16 @@ class ConnectionState:
         guilds = self._ready_state.guilds
         for guild_data in data['guilds']:
             guild = self._add_guild_from_data(guild_data)
-            if not self.is_bot or guild.large:
+            if (not self.is_bot and not guild.unavailable) or guild.large:
                 guilds.append(guild)
+
+        for relationship in data.get('relationships', []):
+            try:
+                r_id = int(relationship['id'])
+            except KeyError:
+                continue
+            else:
+                self.user._relationships[r_id] = Relationship(state=self, data=relationship)
 
         for pm in data.get('private_channels', []):
             factory, _ = _channel_factory(pm['type'])
@@ -663,6 +672,25 @@ class ConnectionState:
         if call is not None:
             self.dispatch('call_remove', call)
 
+    def parse_relationship_add(self, data):
+        key = int(data['id'])
+        old = self.user.get_relationship(key)
+        new = Relationship(state=self, data=data)
+        self.user._relationships[key] = new
+        if old is not None:
+            self.dispatch('relationship_update', old, new)
+        else:
+            self.dispatch('relationship_add', new)
+
+    def parse_relationship_remove(self, data):
+        key = int(data['id'])
+        try:
+            old = self.user._relationships.pop(key)
+        except KeyError:
+            pass
+        else:
+            self.dispatch('relationship_remove', old)
+
     def _get_reaction_user(self, channel, user_id):
         if isinstance(channel, DMChannel) and user_id == channel.recipient.id:
             return channel.recipient
@@ -761,12 +789,12 @@ class AutoShardedConnectionState(ConnectionState):
         if not hasattr(self, '_ready_state'):
             self._ready_state = ReadyState(launch=asyncio.Event(), guilds=[])
 
-        self.user = self.store_user(data['user'])
+        self.user = ClientUser(state=self, data=data['user'])
 
         guilds = self._ready_state.guilds
         for guild_data in data['guilds']:
             guild = self._add_guild_from_data(guild_data)
-            if not self.is_bot or guild.large:
+            if guild.large:
                 guilds.append(guild)
 
         for pm in data.get('private_channels', []):
