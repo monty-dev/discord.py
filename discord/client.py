@@ -66,9 +66,6 @@ class WaitForType(enum.Enum):
     message  = 0
     reaction = 1
 
-ChannelPermissions = namedtuple('ChannelPermissions', 'target overwrite')
-ChannelPermissions.__new__.__defaults__ = (PermissionOverwrite(),)
-
 class Client:
     """Represents a client connection that connects to Discord.
     This class is used to interact with the Discord WebSocket and API.
@@ -104,20 +101,6 @@ class Client:
 
     Attributes
     -----------
-    user : Optional[:class:`ClientUser`]
-        Represents the connected client. None if not logged in.
-    voice_clients: List[:class:`VoiceClient`]
-        Represents a list of voice connections. To connect to voice use
-        :meth:`join_voice_channel`. To query the voice connection state use
-        :meth:`is_voice_connected`.
-    guilds: List[:class:`Guild`]
-        The guilds that the connected client is a member of.
-    private_channels: List[:class:`abc.PrivateChannel`]
-        The private channels that the connected client is participating on.
-    messages
-        A deque_ of :class:`Message` that the client has received from all
-        guilds and private messages. The number of messages stored in this
-        deque is controlled by the ``max_messages`` parameter.
     email
         The email used to login. This is only set if login is successful,
         otherwise it's None.
@@ -234,28 +217,45 @@ class Client:
                 return m.group(1)
         return invite
 
-    def __getattr__(self, name):
-        if name in ('user', 'guilds', 'private_channels', 'messages', 'voice_clients'):
-            return getattr(self.connection, name)
-        else:
-            msg = "'{}' object has no attribute '{}'"
-            raise AttributeError(msg.format(self.__class__, name))
+    @property
+    def user(self):
+        """Optional[:class:`ClientUser`]: Represents the connected client. None if not logged in."""
+        return self.connection.user
 
-    def __setattr__(self, name, value):
-        if name in ('user', 'guilds', 'private_channels', 'messages', 'voice_clients'):
-            return setattr(self.connection, name, value)
-        else:
-            object.__setattr__(self, name, value)
+    @property
+    def guilds(self):
+        """List[:class:`Guild`]: The guilds that the connected client is a member of."""
+        return self.connection.guilds
+
+    @property
+    def private_channels(self):
+        """List[:class:`abc.PrivateChannel`]: The private channels that the connected client is participating on."""
+        return self.connection.private_channels
+
+    @property
+    def messages(self):
+        """A deque_ of :class:`Message` that the client has received from all
+        guilds and private messages.
+
+        The number of messages stored in this deque is controlled by the
+        ``max_messages`` parameter.
+        """
+        return self.connection.messages
+
+    @property
+    def voice_clients(self):
+        """List[:class:`VoiceClient`]: Represents a list of voice connections."""
+        return self.connection.voice_clients
 
     @asyncio.coroutine
-    def _run_event(self, event, *args, **kwargs):
+    def _run_event(self, coro, event_name, *args, **kwargs):
         try:
-            yield from getattr(self, event)(*args, **kwargs)
+            yield from coro(*args, **kwargs)
         except asyncio.CancelledError:
             pass
         except Exception:
             try:
-                yield from self.on_error(event, *args, **kwargs)
+                yield from self.on_error(event_name, *args, **kwargs)
             except asyncio.CancelledError:
                 pass
 
@@ -264,11 +264,19 @@ class Client:
         method = 'on_' + event
         handler = 'handle_' + event
 
-        if hasattr(self, handler):
-            getattr(self, handler)(*args, **kwargs)
+        try:
+            actual_handler = getattr(self, handler)
+        except AttributeError:
+            pass
+        else:
+            actual_handler(*args, **kwargs)
 
-        if hasattr(self, method):
-            compat.create_task(self._run_event(method, *args, **kwargs), loop=self.loop)
+        try:
+            coro = getattr(self, method)
+        except AttributeError:
+            pass
+        else:
+            compat.create_task(self._run_event(coro, method, *args, **kwargs), loop=self.loop)
 
     @asyncio.coroutine
     def on_error(self, event_method, *args, **kwargs):
