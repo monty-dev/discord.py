@@ -369,7 +369,7 @@ class BotBase(GroupMixin):
         They are meant as a way to organize multiple relevant commands
         into a singular class that shares some state or no state at all.
 
-        The cog can also have a ``__check`` member function that allows
+        The cog can also have a ``__global_check`` member function that allows
         you to define a global check. See :meth:`check` for more info.
 
         More information will be documented soon.
@@ -383,7 +383,7 @@ class BotBase(GroupMixin):
         self.cogs[type(cog).__name__] = cog
 
         try:
-            check = getattr(cog, '_{.__class__.__name__}__check'.format(cog))
+            check = getattr(cog, '_{.__class__.__name__}__global_check'.format(cog))
         except AttributeError:
             pass
         else:
@@ -449,7 +449,7 @@ class BotBase(GroupMixin):
                 self.remove_listener(member)
 
         try:
-            check = getattr(cog, '_{0.__class__.__name__}__check'.format(cog))
+            check = getattr(cog, '_{0.__class__.__name__}__global_check'.format(cog))
         except AttributeError:
             pass
         else:
@@ -555,7 +555,7 @@ class BotBase(GroupMixin):
             return prefix
 
     @asyncio.coroutine
-    def get_context(self, message):
+    def get_context(self, message, *, cls=Context):
         """|coro|
 
         Returns the invocation context from the message.
@@ -572,15 +572,21 @@ class BotBase(GroupMixin):
         -----------
         message: :class:`discord.Message`
             The message to get the invocation context from.
+        cls: type
+            The factory class that will be used to create the context.
+            By default, this is :class:`Context`. Should a custom
+            class be provided, it must be similar enough to :class:`Context`\'s
+            interface.
 
         Returns
         --------
         :class:`Context`
-            The invocation context.
+            The invocation context. The type of this can change via the
+            ``cls`` parameter.
         """
 
         view = StringView(message.content)
-        ctx = Context(prefix=None, view=view, bot=self, message=message)
+        ctx = cls(prefix=None, view=view, bot=self, message=message)
 
         if self._skip_check(message.author.id, self.user.id):
             return ctx
