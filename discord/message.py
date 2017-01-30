@@ -333,23 +333,6 @@ class Message:
         pattern = re.compile('|'.join(transformations.keys()))
         return pattern.sub(repl2, result)
 
-    def _handle_upgrades(self, channel_id):
-        self.guild = None
-        if isinstance(self.channel, Object):
-            return
-
-        if self.channel is None:
-            if channel_id is not None:
-                self.channel = Object(id=channel_id)
-                self.channel.is_private = True
-            return
-
-        if isinstance(self.channel, discord.abc.GuildChannel):
-            self.guild = self.channel.guild
-            found = self.guild.get_member(self.author.id)
-            if found is not None:
-                self.author = found
-
     @property
     def created_at(self):
         """Returns the message's creation time in UTC."""
@@ -416,7 +399,7 @@ class Message:
         yield from self._state.http.delete_message(self.channel.id, self.id)
 
     @asyncio.coroutine
-    def edit(self, *, content: str = None, embed: Embed = None):
+    def edit(self, **fields):
         """|coro|
 
         Edits the message.
@@ -427,8 +410,9 @@ class Message:
         -----------
         content: str
             The new content to replace the message with.
-        embed: :class:`Embed`
+        embed: Optional[:class:`Embed`]
             The new embed to replace the original with.
+            Could be ``None`` to remove the embed.
 
         Raises
         -------
@@ -436,9 +420,23 @@ class Message:
             Editing the message failed.
         """
 
-        content = str(content) if content else None
-        embed = embed.to_dict() if embed else None
-        data = yield from self._state.http.edit_message(self.id, self.channel.id, content, embed=embed)
+        try:
+            content = fields['content']
+        except KeyError:
+            pass
+        else:
+            if content is not None:
+                fields['content'] = str(content)
+
+        try:
+            embed = fields['embed']
+        except KeyError:
+            pass
+        else:
+            if embed is not None:
+                fields['embed'] = embed.to_dict()
+
+        data = yield from self._state.http.edit_message(self.id, self.channel.id, **fields)
         self._update(channel=self.channel, data=data)
 
     @asyncio.coroutine
