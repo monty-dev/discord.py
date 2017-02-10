@@ -24,7 +24,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from .user import User
+from .user import User, Profile
 from .invite import Invite
 from .object import Object
 from .errors import *
@@ -172,6 +172,11 @@ class Client:
     def guilds(self):
         """List[:class:`Guild`]: The guilds that the connected client is a member of."""
         return self.connection.guilds
+
+    @property
+    def emojis(self):
+        """List[:class:`Emoji`]: The emojis that the connected client has."""
+        return self.connection.emojis
 
     @property
     def private_channels(self):
@@ -478,12 +483,6 @@ class Client:
         """Returns a :class:`User` with the given ID. If not found, returns None."""
         return self.connection.get_user(id)
 
-    def get_all_emojis(self):
-        """Returns a generator with every :class:`Emoji` the client can see."""
-        for guild in self.guilds:
-            for emoji in guild.emojis:
-                yield emoji
-
     def get_all_channels(self):
         """A generator that retrieves every :class:`Channel` the client can 'access'.
 
@@ -728,7 +727,7 @@ class Client:
 
         invite_id = self._resolve_invite(url)
         data = yield from self.http.get_invite(invite_id)
-        return Invite.from_incomplete(state=self._connection, data=data)
+        return Invite.from_incomplete(state=self.connection, data=data)
 
     @asyncio.coroutine
     def accept_invite(self, invite):
@@ -835,3 +834,40 @@ class Client:
         """
         data = yield from self.http.get_user_info(user_id)
         return User(state=self.connection, data=data)
+
+    @asyncio.coroutine
+    def get_user_profile(self, user_id):
+        """|coro|
+
+        Gets an arbitrary user's profile. This can only be used by non-bot accounts.
+
+        Parameters
+        ------------
+        user_id: int
+            The ID of the user to fetch their profile for.
+
+        Raises
+        -------
+        Forbidden
+            Not allowed to fetch profiles.
+        HTTPException
+            Fetching the profile failed.
+
+        Returns
+        --------
+        :class:`Profile`
+            The profile of the user.
+        """
+
+        state = self.connection
+        data = yield from self.http.get_user_profile(user_id)
+
+        def transform(d):
+            return state._get_guild(int(d['id']))
+
+        mutual_guilds = list(filter(None, map(transform, data.get('mutual_guilds', []))))
+        return Profile(premium=data['premium'],
+                       premium_since=utils.parse_time(data.get('premium_since')),
+                       mutual_guilds=mutual_guilds,
+                       user=User(data=data['user'], state=state),
+                       connected_accounts=data['connected_accounts'])
