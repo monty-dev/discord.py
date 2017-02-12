@@ -167,16 +167,25 @@ class Command:
 
     @asyncio.coroutine
     def dispatch_error(self, error, ctx):
+        cog = self.instance
         try:
             coro = self.on_error
         except AttributeError:
             pass
         else:
             injected = wrap_callback(coro)
-            if self.instance is not None:
-                yield from injected(self.instance, error, ctx)
+            if cog is not None:
+                yield from injected(cog, error, ctx)
             else:
                 yield from injected(error, ctx)
+
+        try:
+            local = getattr(cog, '_{0.__class__.__name__}__error'.format(cog))
+        except AttributeError:
+            pass
+        else:
+            wrapped = wrap_callback(local)
+            yield from wrapped(error, ctx)
         finally:
             ctx.bot.dispatch('command_error', error, ctx)
 
@@ -226,7 +235,7 @@ class Command:
             if param.kind == param.VAR_POSITIONAL:
                 raise RuntimeError() # break the loop
             if required:
-                raise MissingRequiredArgument('{0.name} is a required argument that is missing.'.format(param))
+                raise MissingRequiredArgument(param)
             return param.default
 
         if consume_rest_is_special:
@@ -342,6 +351,7 @@ class Command:
                 raise TooManyArguments('Too many arguments passed to ' + self.qualified_name)
 
 
+    @asyncio.coroutine
     def _verify_checks(self, ctx):
         if not self.enabled:
             raise DisabledCommand('{0.name} command is disabled'.format(self))
@@ -349,10 +359,7 @@ class Command:
         if self.no_pm and not isinstance(ctx.channel, discord.abc.GuildChannel):
             raise NoPrivateMessage('This command cannot be used in private messages.')
 
-        if not ctx.bot.can_run(ctx):
-            raise CheckFailure('The global check functions for command {0.qualified_name} failed.'.format(self))
-
-        if not self.can_run(ctx):
+        if not (yield from self.can_run(ctx)):
             raise CheckFailure('The check functions for command {0.qualified_name} failed.'.format(self))
 
     @asyncio.coroutine
@@ -402,7 +409,7 @@ class Command:
     @asyncio.coroutine
     def prepare(self, ctx):
         ctx.command = self
-        self._verify_checks(ctx)
+        yield from self._verify_checks(ctx)
         yield from self._parse_arguments(ctx)
 
         if self._buckets.valid:
@@ -533,20 +540,26 @@ class Command:
             return self.help.split('\n', 1)[0]
         return ''
 
-    def can_run(self, context):
-        """Checks if the command can be executed by checking all the predicates
+    @asyncio.coroutine
+    def can_run(self, ctx):
+        """|coro|
+
+        Checks if the command can be executed by checking all the predicates
         inside the :attr:`checks` attribute.
 
         Parameters
         -----------
-        context : :class:`Context`
-            The context of the command currently being invoked.
+        ctx: :class:`Context`
+            The ctx of the command currently being invoked.
 
         Returns
         --------
         bool
             A boolean indicating if the command can be invoked.
         """
+
+        if not (yield from ctx.bot.can_run(ctx)):
+            raise CheckFailure('The global check functions for command {0.qualified_name} failed.'.format(self))
 
         cog = self.instance
         if cog is not None:
@@ -555,14 +568,16 @@ class Command:
             except AttributeError:
                 pass
             else:
-                if not local_check(context):
+                ret = yield from discord.utils.maybe_coroutine(local_check, ctx)
+                if not ret:
                     return False
 
         predicates = self.checks
         if not predicates:
             # since we have no checks, then we just return True.
             return True
-        return all(predicate(context) for predicate in predicates)
+
+        return (yield from discord.utils.async_all(predicate(ctx) for predicate in predicates))
 
 class GroupMixin:
     """A mixin that implements common functionality for classes that behave
@@ -854,6 +869,10 @@ def check(predicate):
     subclass of :exc:`CommandError`. Any exception not subclassed from it
     will be propagated while those subclassed will be sent to
     :func:`on_command_error`.
+
+    .. info::
+
+        These functions can either be regular functions or coroutines.
 
     Parameters
     -----------
