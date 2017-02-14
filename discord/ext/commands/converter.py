@@ -30,10 +30,12 @@ import re
 import inspect
 
 from .errors import BadArgument, NoPrivateMessage
+from .view import StringView
 
 __all__ = [ 'Converter', 'MemberConverter', 'UserConverter',
             'TextChannelConverter', 'InviteConverter', 'RoleConverter',
-            'GameConverter', 'ColourConverter', 'VoiceChannelConverter' ]
+            'GameConverter', 'ColourConverter', 'VoiceChannelConverter',
+            'clean_content' ]
 
 def _get_from_guilds(bot, getter, argument):
     result = None
@@ -54,6 +56,9 @@ class Converter:
     to do its conversion logic. This method could be a coroutine or a regular
     function.
 
+    Before the convert method is called, :meth:`prepare` is called. This
+    method must set the attributes below if overwritten.
+
     Attributes
     -----------
     ctx: :class:`Context`
@@ -61,7 +66,7 @@ class Converter:
     argument: str
         The argument that is being converted.
     """
-    def __init__(self, ctx, argument):
+    def prepare(self, ctx, argument):
         self.ctx = ctx
         self.argument = argument
 
@@ -69,8 +74,7 @@ class Converter:
         raise NotImplementedError('Derived classes need to implement this.')
 
 class IDConverter(Converter):
-    def __init__(self, ctx, argument):
-        super().__init__(ctx, argument)
+    def __init__(self):
         self._id_regex = re.compile(r'([0-9]{15,21})$')
 
     def _get_id_match(self):
@@ -256,3 +260,61 @@ class EmojiConverter(IDConverter):
             raise BadArgument('Emoji "{}" not found.'.format(self.argument))
 
         return result
+
+class clean_content(Converter):
+    def __init__(self, *, fix_channel_mentions=False, use_nicknames=True):
+        self.fix_channel_mentions = fix_channel_mentions
+        self.use_nicknames = use_nicknames
+
+    def convert(self):
+        message = self.ctx.message
+        transformations = {}
+
+        if self.fix_channel_mentions:
+            transformations.update(
+                ('<#%s>' % channel.id, '#' + channel.name)
+                for channel in message.channel_mentions
+            )
+
+        if self.use_nicknames:
+            transformations.update(
+                ('<@%s>' % member.id, '@' + member.display_name)
+                for member in message.mentions
+            )
+
+            transformations.update(
+                ('<@!%s>' % member.id, '@' + member.display_name)
+                for member in message.mentions
+            )
+        else:
+            transformations.update(
+                ('<@%s>' % member.id, '@' + member.name)
+                for member in message.mentions
+            )
+
+            transformations.update(
+                ('<@!%s>' % member.id, '@' + member.name)
+                for member in message.mentions
+            )
+
+        transformations.update(
+            ('<@&%s>' % role.id, '@' + role.name)
+            for role in message.role_mentions
+        )
+
+        def repl(obj):
+            return transformations.get(obj.group(0), '')
+
+        pattern = re.compile('|'.join(transformations.keys()))
+        result = pattern.sub(repl, self.argument)
+
+        transformations = {
+            '@everyone': '@\u200beveryone',
+            '@here': '@\u200bhere'
+        }
+
+        def repl2(obj):
+            return transformations.get(obj.group(0), '')
+
+        pattern = re.compile('|'.join(transformations.keys()))
+        return pattern.sub(repl2, result)

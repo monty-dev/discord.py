@@ -199,15 +199,19 @@ class Command:
         if converter is bool:
             return _convert_to_bool(argument)
 
-        if converter.__module__.startswith('discord.'):
+        if converter.__module__.startswith('discord.') and not converter.__module__.endswith('converter'):
             converter = getattr(converters, converter.__name__ + 'Converter')
 
         if inspect.isclass(converter) and issubclass(converter, converters.Converter):
-            instance = converter(ctx, argument)
-            if asyncio.iscoroutinefunction(instance.convert):
-                return (yield from instance.convert())
-            else:
-                return instance.convert()
+            instance = converter()
+            instance.prepare(ctx, argument)
+            ret = yield from discord.utils.maybe_coroutine(instance.convert)
+            return ret
+
+        if isinstance(converter, converters.Converter):
+            converter.prepare(ctx, argument)
+            ret = yield from discord.utils.maybe_coroutine(converter.convert)
+            return ret
 
         return converter(argument)
 
