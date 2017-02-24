@@ -79,7 +79,7 @@ class Client:
         The maximum number of messages to store in :attr:`messages`.
         This defaults to 5000. Passing in `None` or a value less than 100
         will use the default instead of the passed in value.
-    loop : Optional[event loop].
+    loop : Optional[event loop]
         The `event loop`_ to use for asynchronous operations. Defaults to ``None``,
         in which case the default event loop is used via ``asyncio.get_event_loop()``.
     connector : aiohttp.BaseConnector
@@ -97,9 +97,6 @@ class Client:
 
     Attributes
     -----------
-    email
-        The email used to login. This is only set if login is successful,
-        otherwise it's None.
     ws
         The websocket gateway the client is currently connected to. Could be None.
     loop
@@ -107,7 +104,6 @@ class Client:
     """
     def __init__(self, *, loop=None, **options):
         self.ws = None
-        self.email = None
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self._listeners = {}
         self.shard_id = options.get('shard_id')
@@ -336,7 +332,6 @@ class Client:
 
         log.info('logging in using static token')
         data = yield from self.http.static_login(token, bot=bot)
-        self.email = data.get('email', None)
         self.connection.is_bot = bot
 
     @asyncio.coroutine
@@ -587,6 +582,8 @@ class Client:
 
         This function returns the **first event that meets the requirements**.
 
+        .. _asyncio.wait_for: https://docs.python.org/3/library/asyncio-task.html#asyncio.wait_for
+
         Examples
         ---------
 
@@ -595,13 +592,14 @@ class Client:
             @client.event
             async def on_message(message):
                 if message.content.startswith('$greet'):
-                    await message.channel.send('Say hello!')
+                    channel = message.channel
+                    await channel.send('Say hello!')
 
                     def check(m):
-                        return m.content == 'hello' and m.channel == message.channel
+                        return m.content == 'hello' and m.channel == channel
 
                     msg = await client.wait_for('message', check=check)
-                    await message.channel.send('Hello {.author}!'.format(msg))
+                    await channel.send('Hello {.author}!'.format(msg))
 
         Parameters
         ------------
