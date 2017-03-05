@@ -90,7 +90,7 @@ class HTTPClient:
     def __init__(self, connector=None, *, loop=None):
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self.connector = connector
-        self.session = aiohttp.ClientSession(connector=connector, loop=self.loop)
+        self._session = aiohttp.ClientSession(connector=connector, loop=self.loop)
         self._locks = weakref.WeakValueDictionary()
         self._global_lock = asyncio.Lock(loop=self.loop)
         self.token = None
@@ -133,7 +133,7 @@ class HTTPClient:
         yield from lock
         with MaybeUnlock(lock) as maybe_lock:
             for tries in range(5):
-                r = yield from self.session.request(method, url, **kwargs)
+                r = yield from self._session.request(method, url, **kwargs)
                 log.debug(self.REQUEST_LOG.format(method=method, url=url, status=r.status, json=kwargs.get('data')))
                 try:
                     # even errors have text involved in them so this is safe to call
@@ -219,10 +219,7 @@ class HTTPClient:
 
     @asyncio.coroutine
     def close(self):
-        yield from self.session.close()
-
-    def recreate(self):
-        self.session = aiohttp.ClientSession(connector=self.connector, loop=self.loop)
+        yield from self._session.close()
 
     def _token(self, token, *, bot=True):
         self.token = token
@@ -580,9 +577,6 @@ class HTTPClient:
 
     def invites_from_channel(self, channel_id):
         return self.request(Route('GET', '/channels/{channel_id}/invites', channel_id=channel_id))
-
-    def accept_invite(self, invite_id):
-        return self.request(Route('POST', '/invite/{invite_id}', invite_id=invite_id))
 
     def delete_invite(self, invite_id):
         return self.request(Route('DELETE', '/invite/{invite_id}', invite_id=invite_id))
