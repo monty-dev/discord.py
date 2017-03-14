@@ -46,8 +46,6 @@ class Message:
 
     Attributes
     -----------
-    edited_timestamp: Optional[datetime.datetime]
-        A naive UTC datetime object containing the edited time of the message.
     tts: bool
         Specifies if the message was done with text-to-speech.
     type: :class:`MessageType`
@@ -111,7 +109,7 @@ class Message:
         Reactions to a message. Reactions can be either custom emoji or standard unicode emoji.
     """
 
-    __slots__ = ( 'edited_timestamp', 'tts', 'content', 'channel', 'webhook_id',
+    __slots__ = ( '_edited_timestamp', 'tts', 'content', 'channel', 'webhook_id',
                   'mention_everyone', 'embeds', 'id', 'mentions', 'author',
                   '_cs_channel_mentions', '_cs_raw_mentions', 'attachments',
                   '_cs_clean_content', '_cs_raw_channel_mentions', 'nonce', 'pinned',
@@ -127,13 +125,16 @@ class Message:
     def __repr__(self):
         return '<Message id={0.id} pinned={0.pinned} author={0.author!r}>'.format(self)
 
-    def _try_patch(self, data, key, transform):
+    def _try_patch(self, data, key, transform=None):
         try:
             value = data[key]
         except KeyError:
             pass
         else:
-            setattr(self, key, transform(value))
+            if transform is None:
+                setattr(self, key, value)
+            else:
+                setattr(self, key, transform(value))
 
     def _add_reaction(self, data):
         emoji = self._state.get_reaction_emoji(data['emoji'])
@@ -172,15 +173,15 @@ class Message:
 
     def _update(self, channel, data):
         self.channel = channel
-        self._try_patch(data, 'edited_timestamp', utils.parse_time)
-        self._try_patch(data, 'pinned', bool)
-        self._try_patch(data, 'mention_everyone', bool)
-        self._try_patch(data, 'tts', bool)
+        self._edited_timestamp = utils.parse_time(data.get('edited_timestamp'))
+        self._try_patch(data, 'pinned')
+        self._try_patch(data, 'mention_everyone')
+        self._try_patch(data, 'tts')
         self._try_patch(data, 'type', lambda x: try_enum(MessageType, x))
-        self._try_patch(data, 'content', str)
-        self._try_patch(data, 'attachments', lambda x: x)
+        self._try_patch(data, 'content')
+        self._try_patch(data, 'attachments')
         self._try_patch(data, 'embeds', lambda x: list(map(Embed.from_data, x)))
-        self._try_patch(data, 'nonce', lambda x: x)
+        self._try_patch(data, 'nonce')
 
         for handler in ('author', 'mentions', 'mention_roles', 'call'):
             try:
@@ -335,8 +336,13 @@ class Message:
 
     @property
     def created_at(self):
-        """Returns the message's creation time in UTC."""
+        """datetime.datetime: The message's creation time in UTC."""
         return utils.snowflake_time(self.id)
+
+    @property
+    def edited_at(self):
+        """Optional[datetime.datetime]: A naive UTC datetime object containing the edited time of the message."""
+        return self._edited_timestamp
 
     @utils.cached_slot_property('_cs_system_content')
     def system_content(self):
