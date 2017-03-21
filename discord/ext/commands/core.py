@@ -544,6 +544,45 @@ class Command:
             return self.help.split('\n', 1)[0]
         return ''
 
+    @property
+    def signature(self):
+        """Returns a POSIX-like signature useful for help command output."""
+        result = []
+        parent = self.full_parent_name
+        if len(self.aliases) > 0:
+            aliases = '|'.join(self.aliases)
+            fmt = '[%s|%s]' % (self.name, aliases)
+            if parent:
+                fmt = parent + ' ' + fmt
+            result.append(fmt)
+        else:
+            name = self.name if not parent else parent + ' ' + self.name
+            result.append(name)
+
+        if self.usage:
+            result.append(self.usage)
+            return ' '.join(result)
+
+        params = self.clean_params
+        if not params:
+            return ' '.join(result)
+
+        for name, param in params.items():
+            if param.default is not param.empty:
+                # We don't want None or '' to trigger the [name=value] case and instead it should
+                # do [name] since [name=None] or [name=] are not exactly useful for the user.
+                should_print = param.default if isinstance(param.default, str) else param.default is not None
+                if should_print:
+                    result.append('[%s=%s]' % (name, param.default))
+                else:
+                    result.append('[%s]' % name)
+            elif param.kind == param.VAR_POSITIONAL:
+                result.append('[%s...]' % name)
+            else:
+                result.append('<%s>' % name)
+
+        return ' '.join(result)
+
     @asyncio.coroutine
     def can_run(self, ctx):
         """|coro|
@@ -589,16 +628,21 @@ class GroupMixin:
 
     Attributes
     -----------
-    commands : dict
+    all_commands: dict
         A mapping of command name to :class:`Command` or superclass
         objects.
     """
     def __init__(self, **kwargs):
-        self.commands = {}
+        self.all_commands = {}
         super().__init__(**kwargs)
 
+    @property
+    def commands(self):
+        """Set[:class:`Command`]: A unique set of commands without aliases that are registered."""
+        return set(self.all_commands.values())
+
     def recursively_remove_all_commands(self):
-        for command in self.commands.copy().values():
+        for command in self.all_commands.copy().values():
             if isinstance(command, GroupMixin):
                 command.recursively_remove_all_commands()
             self.remove_command(command.name)
@@ -629,14 +673,14 @@ class GroupMixin:
         if isinstance(self, Command):
             command.parent = self
 
-        if command.name in self.commands:
+        if command.name in self.all_commands:
             raise discord.ClientException('Command {0.name} is already registered.'.format(command))
 
-        self.commands[command.name] = command
+        self.all_commands[command.name] = command
         for alias in command.aliases:
-            if alias in self.commands:
+            if alias in self.all_commands:
                 raise discord.ClientException('The alias {} is already an existing command or alias.'.format(alias))
-            self.commands[alias] = command
+            self.all_commands[alias] = command
 
     def remove_command(self, name):
         """Remove a :class:`Command` or subclasses from the internal list
@@ -655,7 +699,7 @@ class GroupMixin:
             The command that was removed. If the name is not valid then
             `None` is returned instead.
         """
-        command = self.commands.pop(name, None)
+        command = self.all_commands.pop(name, None)
 
         # does not exist
         if command is None:
@@ -667,12 +711,12 @@ class GroupMixin:
 
         # we're not removing the alias so let's delete the rest of them.
         for alias in command.aliases:
-            self.commands.pop(alias, None)
+            self.all_commands.pop(alias, None)
         return command
 
     def walk_commands(self):
         """An iterator that recursively walks through all commands and subcommands."""
-        for command in tuple(self.commands.values()):
+        for command in tuple(self.all_commands.values()):
             yield command
             if isinstance(command, GroupMixin):
                 yield from command.walk_commands()
@@ -699,13 +743,13 @@ class GroupMixin:
         """
 
         names = name.split()
-        obj = self.commands.get(names[0])
+        obj = self.all_commands.get(names[0])
         if not isinstance(obj, GroupMixin):
             return obj
 
         for name in names[1:]:
             try:
-                obj = obj.commands[name]
+                obj = obj.all_commands[name]
             except (AttributeError, KeyError):
                 return None
 
@@ -769,7 +813,7 @@ class Group(GroupMixin, Command):
 
         if trigger:
             ctx.subcommand_passed = trigger
-            ctx.invoked_subcommand = self.commands.get(trigger, None)
+            ctx.invoked_subcommand = self.all_commands.get(trigger, None)
 
         if early_invoke:
             injected = hooked_wrapped_callback(self, ctx, self.callback)

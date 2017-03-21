@@ -93,7 +93,7 @@ def _default_help_command(ctx, *commands : str):
         if name in bot.cogs:
             command = bot.cogs[name]
         else:
-            command = bot.commands.get(name)
+            command = bot.all_commands.get(name)
             if command is None:
                 yield from destination.send(bot.command_not_found.format(name))
                 return
@@ -101,7 +101,7 @@ def _default_help_command(ctx, *commands : str):
         pages = yield from bot.formatter.format_help_for(ctx, command)
     else:
         name = _mention_pattern.sub(repl, commands[0])
-        command = bot.commands.get(name)
+        command = bot.all_commands.get(name)
         if command is None:
             yield from destination.send(bot.command_not_found.format(name))
             return
@@ -109,7 +109,7 @@ def _default_help_command(ctx, *commands : str):
         for key in commands[1:]:
             try:
                 key = _mention_pattern.sub(repl, key)
-                command = command.commands.get(key)
+                command = command.all_commands.get(key)
                 if command is None:
                     yield from destination.send(bot.command_not_found.format(key))
                     return
@@ -484,6 +484,31 @@ class BotBase(GroupMixin):
         """
         return self.cogs.get(name)
 
+    def get_cog_commands(self, name):
+        """Gets a unique set of the cog's registered commands
+        without aliases.
+
+        If the cog is not found, an empty set is returned.
+
+        Parameters
+        ------------
+        name: str
+            The name of the cog whose commands you are requesting.
+
+        Returns
+        ---------
+        Set[:class:`Command`]
+            A unique set of commands without aliases that belong
+            to the cog.
+        """
+
+        try:
+            cog = self.cogs[name]
+        except KeyError:
+            return set()
+
+        return {c for c in self.all_commands.values() if c.instance is cog}
+
     def remove_cog(self, name):
         """Removes a cog from the bot.
 
@@ -564,7 +589,7 @@ class BotBase(GroupMixin):
                 self.remove_cog(cogname)
 
         # first remove all the commands from the module
-        for command in self.commands.copy().values():
+        for command in self.all_commands.copy().values():
             if command.module is lib:
                 command.module = None
                 if isinstance(command, GroupMixin):
@@ -676,7 +701,7 @@ class BotBase(GroupMixin):
         invoker = view.get_word()
         ctx.invoked_with = invoker
         ctx.prefix = invoked_prefix
-        ctx.command = self.commands.get(invoker)
+        ctx.command = self.all_commands.get(invoker)
         return ctx
 
     @asyncio.coroutine
