@@ -26,6 +26,9 @@ DEALINGS IN THE SOFTWARE.
 
 from enum import Enum
 
+__all__ = ['ChannelType', 'MessageType', 'GuildRegion', 'VerificationLevel',
+           'ContentFilter', 'Status', 'DefaultAvatar', 'RelationshipType' ]
+
 class ChannelType(Enum):
     text    = 0
     private = 1
@@ -70,6 +73,14 @@ class VerificationLevel(Enum):
     medium     = 2
     high       = 3
     table_flip = 3
+
+    def __str__(self):
+        return self.name
+
+class ContentFilter(Enum):
+    disabled    = 0
+    no_role     = 1
+    all_members = 2
 
     def __str__(self):
         return self.name
