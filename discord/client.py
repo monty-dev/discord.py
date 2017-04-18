@@ -28,10 +28,9 @@ from .user import User, Profile
 from .invite import Invite
 from .object import Object
 from .errors import *
-from .permissions import Permissions, PermissionOverwrite
-from .enums import ChannelType, Status
+from .enums import Status
 from .gateway import *
-from .emoji import Emoji
+from .voice_client import VoiceClient
 from .http import HTTPClient
 from .state import ConnectionState
 from . import utils, compat
@@ -42,12 +41,9 @@ import aiohttp
 import websockets
 
 import logging, traceback
-import sys, re, io
-import itertools
-import datetime
+import sys, re
 import signal
 from collections import namedtuple
-from os.path import split as path_split
 
 PY35 = sys.version_info >= (3, 5)
 log = logging.getLogger(__name__)
@@ -119,10 +115,11 @@ class Client:
         self.connection.shard_count = self.shard_count
         self._closed = asyncio.Event(loop=self.loop)
         self._ready = asyncio.Event(loop=self.loop)
+        self.connection._get_websocket = lambda g: self.ws
 
-        # if VoiceClient.warn_nacl:
-        #     VoiceClient.warn_nacl = False
-        #     log.warning("PyNaCl is not installed, voice will NOT be supported")
+        if VoiceClient.warn_nacl:
+            VoiceClient.warn_nacl = False
+            log.warning("PyNaCl is not installed, voice will NOT be supported")
 
     # internals
 
@@ -427,14 +424,12 @@ class Client:
 
         self._closed.set()
 
-        for voice in list(self.voice_clients):
+        for voice in self.voice_clients:
             try:
                 yield from voice.disconnect()
             except:
                 # if an error happens during disconnects, disregard it.
                 pass
-
-            self.connection._remove_voice_client(voice.guild.id)
 
         if self.ws is not None and self.ws.open:
             yield from self.ws.close()

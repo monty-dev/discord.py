@@ -27,7 +27,7 @@ DEALINGS IN THE SOFTWARE.
 from .state import AutoShardedConnectionState
 from .client import Client
 from .gateway import *
-from .errors import ConnectionClosed, ClientException, InvalidArgument
+from .errors import ClientException, InvalidArgument
 from . import compat
 from .enums import Status
 
@@ -110,6 +110,11 @@ class AutoShardedClient(Client):
         # the key is the shard_id
         self.shards = {}
 
+        def _get_websocket(guild_id):
+            i = (guild_id >> 22) % self.shard_count
+            return self.shards[i].ws
+
+        self.connection._get_websocket = _get_websocket
         self._still_sharding = True
 
     @asyncio.coroutine
@@ -234,6 +239,12 @@ class AutoShardedClient(Client):
             return
 
         self._closed.set()
+
+        for vc in self.voice_clients:
+            try:
+                yield from vc.disconnect()
+            except:
+                pass
 
         to_close = [shard.ws.close() for shard in self.shards.values()]
         yield from asyncio.wait(to_close, loop=self.loop)
