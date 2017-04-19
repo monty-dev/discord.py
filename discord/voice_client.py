@@ -144,7 +144,7 @@ class VoiceClient:
         try:
             yield from asyncio.wait_for(self._handshake_complete.wait(), timeout=self.timeout, loop=self.loop)
         except asyncio.TimeoutError as e:
-            yield from ws.voice_state(guild_id, None, self_mute=True)
+            yield from self.terminate_handshake(remove=True)
             raise e
 
         log.info('Voice handshake complete. Endpoint found %s (IP: %s)', self.endpoint, self.endpoint_ip)
@@ -337,6 +337,10 @@ class VoiceClient:
         """Indicates if we're currently playing audio."""
         return self._player is not None and self._player.is_playing()
 
+    def is_paused(self):
+        """Indicates if we're playing audio, but if we're paused."""
+        return self._player is not None and self._player.is_paused()
+
     def stop(self):
         """Stops playing audio."""
         if self._player:
@@ -352,6 +356,24 @@ class VoiceClient:
         """Resumes the audio playing."""
         if self._player:
             self._player.resume()
+
+    @property
+    def source(self):
+        """Optional[:class:`AudioSource`]: The audio source being played, if playing.
+
+        This property can also be used to change the audio source currently being played.
+        """
+        return self._player.source if self._player else None
+
+    @source.setter
+    def source(self, value):
+        if not isinstance(value, AudioSource):
+            raise TypeError('expected AudioSource not {0.__class__.__name__}.'.format(value))
+
+        if self._player is None:
+            raise ValueError('Not playing anything.')
+
+        self._player._set_source(value)
 
     def send_audio_packet(self, data, *, encode=True):
         """Sends an audio packet composed of the data.
