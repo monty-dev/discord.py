@@ -365,6 +365,34 @@ class Message:
         if self.type is MessageType.channel_icon_change:
             return '{0.author.name} changed the channel icon.'.format(self)
 
+        if self.type is MessageType.new_member:
+            formats = [
+                "%s just joined the server - glhf!",
+                "%s just joined. Everyone, look busy!",
+                "%s just joined. Can I get a heal?",
+                "%s joined your party.",
+                "%s joined. You must construct additional pylons.",
+                "Ermagherd. %s is here.",
+                "Welcome, %s. Stay awhile and listen.",
+                "Welcome, %s. We were expecting you ( ͡° ͜ʖ ͡°)",
+                "Welcome, %s. We hope you brought pizza.",
+                "Welcome %s. Leave your weapons by the door.",
+                "A wild %s appeared.",
+                "Swoooosh. %s just landed.",
+                "Brace yourselves. %s just joined the server.",
+                "%s just joined. Hide your bananas.",
+                "%s just arrived. Seems OP - please nerf.",
+                "%s just slid into the server.",
+                "A %s has spawned in the server.",
+                "Big %s showed up!",
+                "Where’s %s? In the server!",
+                "%s hopped into the server. Kangaroo!!",
+                "%s just showed up. Hold my beer.",
+            ]
+
+            index = int(self.created_at.timestamp()) % len(formats)
+            return formats[index] % self.author.name
+
         if self.type is MessageType.call:
             # we're at the call message type now, which is a bit more complicated.
             # we can make the assumption that Message.channel is a PrivateChannel
@@ -492,7 +520,7 @@ class Message:
 
         Parameters
         ------------
-        emoji: :class:`Emoji` or str
+        emoji: Union[:class:`Emoji`, :class:`Reaction`, str]
             The emoji to react with.
 
         Raises
@@ -507,12 +535,14 @@ class Message:
             The emoji parameter is invalid.
         """
 
-        if isinstance(emoji, Emoji):
+        if isinstance(emoji, Reaction):
+            emoji = str(emoji.emoji)
+        elif isinstance(emoji, Emoji):
             emoji = '%s:%s' % (emoji.name, emoji.id)
         elif isinstance(emoji, str):
             pass # this is okay
         else:
-            raise InvalidArgument('emoji argument must be a string or discord.Emoji')
+            raise InvalidArgument('emoji argument must be str, Emoji, or Reaction not {.__class__.__name__}.'.format(emoji))
 
         yield from self._state.http.add_reaction(self.id, self.channel.id, emoji)
 
@@ -532,7 +562,7 @@ class Message:
 
         Parameters
         ------------
-        emoji: :class:`Emoji` or str
+        emoji: Union[:class:`Emoji`, :class:`Reaction`, str]
             The emoji to remove.
         member: :class:`abc.Snowflake`
             The member for which to remove the reaction.
@@ -549,12 +579,14 @@ class Message:
             The emoji parameter is invalid.
         """
 
-        if isinstance(emoji, Emoji):
+        if isinstance(emoji, Reaction):
+            emoji = str(emoji.emoji)
+        elif isinstance(emoji, Emoji):
             emoji = '%s:%s' % (emoji.name, emoji.id)
         elif isinstance(emoji, str):
             pass # this is okay
         else:
-            raise InvalidArgument('emoji argument must be a string or discord.Emoji')
+            raise InvalidArgument('emoji argument must be str, Emoji, or Reaction not {.__class__.__name__}.'.format(emoji))
 
         yield from self._state.http.remove_reaction(self.id, self.channel.id, emoji, member.id)
 
