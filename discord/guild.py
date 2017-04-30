@@ -41,6 +41,7 @@ from .enums import GuildRegion, Status, ChannelType, try_enum, VerificationLevel
 from .mixins import Hashable
 from .user import User
 from .invite import Invite
+from .iterators import AuditLogIterator
 
 BanEntry = namedtuple('BanEntry', 'reason user')
 
@@ -921,7 +922,7 @@ class Guild(Hashable):
         return role
 
     @asyncio.coroutine
-    def kick(self, user):
+    def kick(self, user, *, reason=None):
         """|coro|
 
         Kicks a user from the guild.
@@ -935,6 +936,8 @@ class Guild(Hashable):
         -----------
         user: :class:`abc.Snowflake`
             The user to kick from their guild.
+        reason: Optional[str]
+            The reason the user got kicked.
 
         Raises
         -------
@@ -943,10 +946,10 @@ class Guild(Hashable):
         HTTPException
             Kicking failed.
         """
-        yield from self._state.http.kick(user.id, self.id)
+        yield from self._state.http.kick(user.id, self.id, reason=reason)
 
     @asyncio.coroutine
-    def ban(self, user, *, delete_message_days=1):
+    def ban(self, user, *, reason=None, delete_message_days=1):
         """|coro|
 
         Bans a user from the guild.
@@ -963,6 +966,8 @@ class Guild(Hashable):
         delete_message_days: int
             The number of days worth of messages to delete from the user
             in the guild. The minimum is 0 and the maximum is 7.
+        reason: Optional[str]
+            The reason the user got banned.
 
         Raises
         -------
@@ -971,7 +976,7 @@ class Guild(Hashable):
         HTTPException
             Banning failed.
         """
-        yield from self._state.http.ban(user.id, self.id, delete_message_days)
+        yield from self._state.http.ban(user.id, self.id, delete_message_days, reason=reason)
 
     @asyncio.coroutine
     def unban(self, user):
@@ -998,6 +1003,61 @@ class Guild(Hashable):
         """
         yield from self._state.http.unban(user.id, self.id)
 
+    @asyncio.coroutine
+    def vanity_invite(self):
+        """|coro|
+
+        Returns the guild's special vanity invite.
+
+        The guild must be partnered, i.e. have 'VANITY_URL' in
+        :attr:`~Guild.features`.
+
+        You must have :attr:`Permissions.manage_guild` to use this as well.
+
+        Returns
+        --------
+        :class:`Invite`
+            The special vanity invite.
+
+        Raises
+        -------
+        Forbidden
+            You do not have the proper permissions to get this.
+        HTTPException
+            Retrieving the vanity invite failed.
+        """
+
+        # we start with { code: abc }
+        payload = yield from self._state.http.get_vanity_code(self.id)
+        payload['guild'] = self
+        payload['channel'] = self.default_channel
+        payload['revoked'] = False
+        payload['temporary'] = False
+        payload['max_uses'] = 0
+        payload['max_age'] = 0
+        return Invite(state=self._state, data=payload)
+
+    @asyncio.coroutine
+    def change_vanity_invite(self, new_code):
+        """|coro|
+
+        Changes the guild's special vanity invite.
+
+        The guild must be partnered, i.e. have 'VANITY_URL' in
+        :attr:`~Guild.features`.
+
+        You must have :attr:`Permissions.manage_guild` to use this as well.
+
+        Raises
+        -------
+        Forbidden
+            You do not have the proper permissions to set this.
+        HTTPException
+            Setting the vanity invite failed.
+        """
+
+        yield from self._state.http.change_vanity_code(self.id, new_code)
+
     def ack(self):
         """|coro|
 
@@ -1017,3 +1077,60 @@ class Guild(Hashable):
         if state.is_bot:
             raise ClientException('Must not be a bot account to ack messages.')
         return state.http.ack_guild(self.id)
+
+    def audit_logs(self, *, limit=100, before=None, after=None, reverse=None, user=None, action=None):
+        """Return an :class:`AsyncIterator` that enables receiving the guild's audit logs.
+
+        You must have :attr:`Permissions.view_audit_logs` permission to use this.
+
+        Parameters
+        -----------
+        limit: Optional[int]
+            The number of entries to retrieve. If ``None`` retrieve all entries.
+        before: Union[:class:`abc.Snowflake`, datetime]
+            Retrieve entries before this date or entry.
+            If a date is provided it must be a timezone-naive datetime representing UTC time.
+        after: Union[:class:`abc.Snowflake`, datetime]
+            Retrieve entries after this date or entry.
+            If a date is provided it must be a timezone-naive datetime representing UTC time.
+        reverse: bool
+            If set to true, return entries in oldest->newest order. If unspecified,
+            this defaults to ``False`` for most cases. However if passing in a
+            ``after`` parameter then this is set to ``True``. This avoids getting entries
+            out of order in the ``after`` case.
+        user: :class:`abc.Snowflake`
+            The moderator to filter entries from.
+        action: :class:`AuditLogAction`
+            The action to filter with.
+
+        Yields
+        --------
+        :class:`AuditLogEntry`
+            The audit log entry.
+
+        Examples
+        ----------
+
+        Getting the first 100 entries: ::
+
+            async for entry in guild.audit_logs(limit=100):
+                print('{0.user} did {0.action} to {0.target}'.format(entry))
+
+        Getting entries for a specific action: ::
+
+            async for entry in guild.audit_logs(action=discord.AuditLogAction.ban):
+                print('{0.user} banned {0.target}'.format(entry))
+
+        Getting entries made by a specific user: ::
+
+            entries = await guild.audit_logs(limit=None, user=guild.me).flatten()
+            await guild.default_channel.send('I made {} moderation actions.'.format(len(entries)))
+        """
+        if user:
+            user = user.id
+
+        if action:
+            action = action.value
+
+        return AuditLogIterator(self, before=before, after=after, limit=limit,
+                                reverse=reverse, user_id=user, action_type=action)
