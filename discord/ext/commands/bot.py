@@ -188,7 +188,7 @@ class BotBase(GroupMixin):
         yield from super().close()
 
     @asyncio.coroutine
-    def on_command_error(self, exception, context):
+    def on_command_error(self, context, exception):
         """|coro|
 
         The default command error handler provided by the bot.
@@ -740,13 +740,13 @@ class BotBase(GroupMixin):
             try:
                 yield from ctx.command.invoke(ctx)
             except CommandError as e:
-                yield from ctx.command.dispatch_error(e, ctx)
+                yield from ctx.command.dispatch_error(ctx, e)
             else:
                 ctx.command_failed = False
                 self.dispatch('command_completion', ctx)
         elif ctx.invoked_with:
             exc = CommandNotFound('Command "{}" is not found'.format(ctx.invoked_with))
-            self.dispatch('command_error', exc, ctx)
+            self.dispatch('command_error', ctx, exc)
 
     @asyncio.coroutine
     def process_commands(self, message):
