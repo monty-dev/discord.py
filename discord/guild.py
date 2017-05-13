@@ -50,19 +50,21 @@ class Guild(Hashable):
 
     This is referred to as a "server" in the official Discord UI.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+-------------------------------------+
-    | Operation |             Description             |
-    +===========+=====================================+
-    | x == y    | Checks if two guilds are equal.     |
-    +-----------+-------------------------------------+
-    | x != y    | Checks if two guilds are not equal. |
-    +-----------+-------------------------------------+
-    | hash(x)   | Returns the guild's hash.           |
-    +-----------+-------------------------------------+
-    | str(x)    | Returns the guild's name.           |
-    +-----------+-------------------------------------+
+        Checks if two guilds are equal.
+
+    .. describe:: x != y
+
+        Checks if two guilds are not equal.
+
+    .. describe:: hash(x)
+
+        Returns the guild's hash.
+
+    .. describe:: str(x)
+
+        Returns the guild's name.
 
     Attributes
     ----------
@@ -566,7 +568,7 @@ class Guild(Hashable):
 
         Edits the guild.
 
-        You must have the :attr:`Permissions.manage_guild` permission
+        You must have the :attr:`~Permissions.manage_guild` permission
         to edit the guild.
 
         Parameters
@@ -671,7 +673,7 @@ class Guild(Hashable):
         that got banned along with a ``reason`` field specifying
         why the user was banned that could be set to ``None``.
 
-        You must have :attr:`Permissions.ban_members` permission
+        You must have :attr:`~Permissions.ban_members` permission
         to get this information.
 
         Raises
@@ -701,7 +703,7 @@ class Guild(Hashable):
         The inactive members are denoted if they have not logged on in
         ``days`` number of days and they have no roles.
 
-        You must have the :attr:`Permissions.kick_members` permission
+        You must have the :attr:`~Permissions.kick_members` permission
         to use this.
 
         To check how many members you would prune without actually pruning,
@@ -775,7 +777,7 @@ class Guild(Hashable):
 
         Returns a list of all active instant invites from the guild.
 
-        You must have :attr:`Permissions.manage_guild` to get this information.
+        You must have :attr:`~Permissions.manage_guild` to get this information.
 
         Raises
         -------

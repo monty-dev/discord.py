@@ -112,19 +112,23 @@ class Member(discord.abc.Messageable):
 
     This implements a lot of the functionality of :class:`User`.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+-----------------------------------------------+
-    | Operation |                  Description                  |
-    +===========+===============================================+
-    | x == y    | Checks if two members are equal.              |
-    +-----------+-----------------------------------------------+
-    | x != y    | Checks if two members are not equal.          |
-    +-----------+-----------------------------------------------+
-    | hash(x)   | Return the member's hash.                     |
-    +-----------+-----------------------------------------------+
-    | str(x)    | Returns the member's name with discriminator. |
-    +-----------+-----------------------------------------------+
+        Checks if two members are equal.
+        Note that this works with :class:`User` instances too.
+
+    .. describe:: x != y
+
+        Checks if two members are not equal.
+        Note that this works with :class:`User` instances too.
+
+    .. describe:: hash(x)
+
+        Returns the member's hash.
+
+    .. describe:: str(x)
+
+        Returns the member's name with the discriminator.
 
     Attributes
     ----------
@@ -458,7 +462,7 @@ class Member(discord.abc.Messageable):
 
         Moves a member to a new voice channel (they must be connected first).
 
-        You must have the :attr:`Permissions.move_members` permission to
+        You must have the :attr:`~Permissions.move_members` permission to
         use this.
 
         This raises the same exceptions as :meth:`edit`.
@@ -478,7 +482,7 @@ class Member(discord.abc.Messageable):
 
         Gives the member a number of :class:`Role`\s.
 
-        You must have the :attr:`Permissions.manage_roles` permission to
+        You must have the :attr:`~Permissions.manage_roles` permission to
         use this.
 
         Parameters
@@ -505,7 +509,7 @@ class Member(discord.abc.Messageable):
 
         Removes :class:`Role`\s from this member.
 
-        You must have the :attr:`Permissions.manage_roles` permission to
+        You must have the :attr:`~Permissions.manage_roles` permission to
         use this.
 
         Parameters

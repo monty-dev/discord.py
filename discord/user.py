@@ -175,19 +175,21 @@ class BaseUser:
 class ClientUser(BaseUser):
     """Represents your Discord user.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+---------------------------------------------+
-    | Operation |                 Description                 |
-    +===========+=============================================+
-    | x == y    | Checks if two users are equal.              |
-    +-----------+---------------------------------------------+
-    | x != y    | Checks if two users are not equal.          |
-    +-----------+---------------------------------------------+
-    | hash(x)   | Return the user's hash.                     |
-    +-----------+---------------------------------------------+
-    | str(x)    | Returns the user's name with discriminator. |
-    +-----------+---------------------------------------------+
+        Checks if two users are equal.
+
+    .. describe:: x != y
+
+        Checks if two users are not equal.
+
+    .. describe:: hash(x)
+
+        Return the user's hash.
+
+    .. describe:: str(x)
+
+        Returns the user's name with discriminator.
 
     Attributes
     -----------
@@ -197,7 +199,7 @@ class ClientUser(BaseUser):
         The user's unique ID.
     discriminator: str
         The user's discriminator. This is given when the username has conflicts.
-    avatar: str
+    avatar: Optional[str]
         The avatar hash the user has. Could be None.
     bot: bool
         Specifies if the user is a bot account.
@@ -382,19 +384,21 @@ class ClientUser(BaseUser):
 class User(BaseUser, discord.abc.Messageable):
     """Represents a Discord user.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+---------------------------------------------+
-    | Operation |                 Description                 |
-    +===========+=============================================+
-    | x == y    | Checks if two users are equal.              |
-    +-----------+---------------------------------------------+
-    | x != y    | Checks if two users are not equal.          |
-    +-----------+---------------------------------------------+
-    | hash(x)   | Return the user's hash.                     |
-    +-----------+---------------------------------------------+
-    | str(x)    | Returns the user's name with discriminator. |
-    +-----------+---------------------------------------------+
+        Checks if two users are equal.
+
+    .. describe:: x != y
+
+        Checks if two users are not equal.
+
+    .. describe:: hash(x)
+
+        Return the user's hash.
+
+    .. describe:: str(x)
+
+        Returns the user's name with discriminator.
 
     Attributes
     -----------
@@ -404,7 +408,7 @@ class User(BaseUser, discord.abc.Messageable):
         The user's unique ID.
     discriminator: str
         The user's discriminator. This is given when the username has conflicts.
-    avatar: str
+    avatar: Optional[str]
         The avatar hash the user has. Could be None.
     bot: bool
         Specifies if the user is a bot account.

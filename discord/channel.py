@@ -44,19 +44,21 @@ def _single_delete_strategy(messages, *, reason):
 class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
     """Represents a Discord guild text channel.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+---------------------------------------+
-    | Operation |              Description              |
-    +===========+=======================================+
-    | x == y    | Checks if two channels are equal.     |
-    +-----------+---------------------------------------+
-    | x != y    | Checks if two channels are not equal. |
-    +-----------+---------------------------------------+
-    | hash(x)   | Returns the channel's hash.           |
-    +-----------+---------------------------------------+
-    | str(x)    | Returns the channel's name.           |
-    +-----------+---------------------------------------+
+        Checks if two channels are equal.
+
+    .. describe:: x != y
+
+        Checks if two channels are not equal.
+
+    .. describe:: hash(x)
+
+        Returns the channel's hash.
+
+    .. describe:: str(x)
+
+        Returns the channel's name.
 
     Attributes
     -----------
@@ -242,7 +244,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
                 return m.author == client.user
 
             deleted = await channel.purge(limit=100, check=is_me)
-            await channel.send_message('Deleted {} message(s)'.format(len(deleted)))
+            await channel.send('Deleted {} message(s)'.format(len(deleted)))
 
         Returns
         --------
@@ -300,19 +302,21 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
 class VoiceChannel(discord.abc.Connectable, discord.abc.GuildChannel, Hashable):
     """Represents a Discord guild voice channel.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+---------------------------------------+
-    | Operation |              Description              |
-    +===========+=======================================+
-    | x == y    | Checks if two channels are equal.     |
-    +-----------+---------------------------------------+
-    | x != y    | Checks if two channels are not equal. |
-    +-----------+---------------------------------------+
-    | hash(x)   | Returns the channel's hash.           |
-    +-----------+---------------------------------------+
-    | str(x)    | Returns the channel's name.           |
-    +-----------+---------------------------------------+
+        Checks if two channels are equal.
+
+    .. describe:: x != y
+
+        Checks if two channels are not equal.
+
+    .. describe:: hash(x)
+
+        Returns the channel's hash.
+
+    .. describe:: str(x)
+
+        Returns the channel's name.
 
     Attributes
     -----------
@@ -410,25 +414,27 @@ class VoiceChannel(discord.abc.Connectable, discord.abc.GuildChannel, Hashable):
 class DMChannel(discord.abc.Messageable, Hashable):
     """Represents a Discord direct message channel.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+-------------------------------------------------+
-    | Operation |                   Description                   |
-    +===========+=================================================+
-    | x == y    | Checks if two channels are equal.               |
-    +-----------+-------------------------------------------------+
-    | x != y    | Checks if two channels are not equal.           |
-    +-----------+-------------------------------------------------+
-    | hash(x)   | Returns the channel's hash.                     |
-    +-----------+-------------------------------------------------+
-    | str(x)    | Returns a string representation of the channel  |
-    +-----------+-------------------------------------------------+
+        Checks if two channels are equal.
+
+    .. describe:: x != y
+
+        Checks if two channels are not equal.
+
+    .. describe:: hash(x)
+
+        Returns the channel's hash.
+
+    .. describe:: str(x)
+
+        Returns a string representation of the channel
 
     Attributes
     ----------
     recipient: :class:`User`
         The user you are participating with in the direct message channel.
-    me: :class:`User`
+    me: :class:`ClientUser`
         The user presenting yourself.
     id: int
         The direct message channel ID.
@@ -489,25 +495,27 @@ class DMChannel(discord.abc.Messageable, Hashable):
 class GroupChannel(discord.abc.Messageable, Hashable):
     """Represents a Discord group channel.
 
-    Supported Operations:
+    .. describe:: x == y
 
-    +-----------+-------------------------------------------------+
-    | Operation |                   Description                   |
-    +===========+=================================================+
-    | x == y    | Checks if two channels are equal.               |
-    +-----------+-------------------------------------------------+
-    | x != y    | Checks if two channels are not equal.           |
-    +-----------+-------------------------------------------------+
-    | hash(x)   | Returns the channel's hash.                     |
-    +-----------+-------------------------------------------------+
-    | str(x)    | Returns a string representation of the channel  |
-    +-----------+-------------------------------------------------+
+        Checks if two channels are equal.
+
+    .. describe:: x != y
+
+        Checks if two channels are not equal.
+
+    .. describe:: hash(x)
+
+        Returns the channel's hash.
+
+    .. describe:: str(x)
+
+        Returns a string representation of the channel
 
     Attributes
     ----------
     recipients: list of :class:`User`
         The users you are participating with in the group channel.
-    me: :class:`User`
+    me: :class:`ClientUser`
         The user presenting yourself.
     id: int
         The group channel ID.
