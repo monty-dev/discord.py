@@ -634,6 +634,35 @@ when reached instead of setting the return to ``None``. For example:
     else:
         await channel.send('You said {0.content}, {0.author}.'.format(msg))
 
+Upgraded Dependencies
+-----------------------
+
+Following v1.0 of the library, we've updated our requirements to ``aiohttp`` v2.0 or higher.
+
+Since this is a backwards incompatible change, it is recommended that you see the
+`changes <http://aiohttp.readthedocs.io/en/stable/changes.html#rc1-2017-03-15>`_ and the
+`migrating <http://aiohttp.readthedocs.io/en/stable/migration.html>`_ pages for details on the breaking changes in
+``aiohttp``.
+
+Of the most significant for common users is the removal of helper functions such as:
+
+- ``aiohttp.get``
+- ``aiohttp.post``
+- ``aiohttp.delete``
+- ``aiohttp.patch``
+- ``aiohttp.head``
+- ``aiohttp.put``
+- ``aiohttp.request``
+
+It is recommended that you create a session instead: ::
+
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get('url') as resp:
+            # work with resp
+
+Since it is better to not create a session for every request, you should store it in a variable and then call
+``session.close`` on it when it needs to be disposed.
+
 Sharding
 ----------
 
@@ -688,7 +717,7 @@ undergo some design changes as well.
 Context Changes
 ~~~~~~~~~~~~~~~~~
 
-In v1.0, the :class:`~ext.commands.Context` has received a lot of changes with how it's retrieved and used.
+In v1.0, the :class:`.Context` has received a lot of changes with how it's retrieved and used.
 
 The biggest change is that ``pass_context=True`` is now the default behaviour. Ergo:
 
@@ -705,7 +734,7 @@ The biggest change is that ``pass_context=True`` is now the default behaviour. E
         await ctx.send('Hello')
 
 The reason for this is because :class:`~ext.commands.Context` now meets the requirements of :class:`abc.Messageable`. This
-makes it have similar functionality to :class:`TextChannel` or :class:`DMChannel`. Using :meth:`~ext.commands.Context.send`
+makes it have similar functionality to :class:`TextChannel` or :class:`DMChannel`. Using :meth:`~.Context.send`
 will either DM the user in a DM context or send a message in the channel it was in, similar to the old ``bot.say``
 functionality. The old helpers have been removed in favour of the new :class:`abc.Messageable` interface. See
 :ref:`migrating_1_0_removed_helpers` for more information.
@@ -758,27 +787,23 @@ Now inside your commands you will have access to your custom context:
 Removed Helpers
 +++++++++++++++++
 
-.. currentmodule:: discord.ext.commands
-
-With the new :class:`Context` changes, a lot of message sending helpers have been removed.
+With the new :class:`.Context` changes, a lot of message sending helpers have been removed.
 
 For a full list of changes, see below:
 
-+-----------------+----------------------------------------------------------+
-|      Before     |                          After                           |
-+-----------------+----------------------------------------------------------+
-| ``Bot.say``     | :meth:`Context.send`                                     |
-+-----------------+----------------------------------------------------------+
-| ``Bot.upload``  | :meth:`Context.send`                                     |
-+-----------------+----------------------------------------------------------+
-| ``Bot.whisper`` | ``ctx.author.send``                                      |
-+-----------------+----------------------------------------------------------+
-| ``Bot.type``    | :meth:`Context.typing` or :meth:`Context.trigger_typing` |
-+-----------------+----------------------------------------------------------+
-| ``Bot.reply``   | No replacement.                                          |
-+-----------------+----------------------------------------------------------+
-
-.. currentmodule:: discord
++-----------------+------------------------------------------------------------+
+|      Before     |                           After                            |
++-----------------+------------------------------------------------------------+
+| ``Bot.say``     | :meth:`.Context.send`                                      |
++-----------------+------------------------------------------------------------+
+| ``Bot.upload``  | :meth:`.Context.send`                                      |
++-----------------+------------------------------------------------------------+
+| ``Bot.whisper`` | ``ctx.author.send``                                        |
++-----------------+------------------------------------------------------------+
+| ``Bot.type``    | :meth:`.Context.typing` or :meth:`.Context.trigger_typing` |
++-----------------+------------------------------------------------------------+
+| ``Bot.reply``   | No replacement.                                            |
++-----------------+------------------------------------------------------------+
 
 Command Changes
 ~~~~~~~~~~~~~~~~~
