@@ -53,7 +53,7 @@ A list of changes is as follows:
 +-------------------------------+----------------------------------+
 | ``Message.server``            | :attr:`Message.guild`            |
 +-------------------------------+----------------------------------+
-| ``Channel.server``            | :attr:`abc.GuildChannel.guild`   |
+| ``Channel.server``            | :attr:`.GuildChannel.guild`      |
 +-------------------------------+----------------------------------+
 | ``Client.servers``            | :attr:`Client.guilds`            |
 +-------------------------------+----------------------------------+
@@ -167,7 +167,7 @@ A list of these changes is enumerated below.
 +---------------------------------------+------------------------------------------------------------------------------+
 | ``Client.prune_members``              | :meth:`Guild.prune_members`                                                  |
 +---------------------------------------+------------------------------------------------------------------------------+
-| ``Client.purge_from``                 | :meth:`abc.Messageable.purge`                                                |
+| ``Client.purge_from``                 | :meth:`TextChannel.purge`                                                    |
 +---------------------------------------+------------------------------------------------------------------------------+
 | ``Client.remove_reaction``            | :meth:`Message.remove_reaction`                                              |
 +---------------------------------------+------------------------------------------------------------------------------+
@@ -296,7 +296,7 @@ And to check if it's a private channel you would do: ::
 
 Of course, if you're looking for only a specific type you can pass that too, e.g. ::
 
-    isintance(channel, discord.TextChannel)
+    isinstance(channel, discord.TextChannel)
 
 With this type split also came event changes, which are enumerated in :ref:`migrating_1_0_event_changes`.
 
@@ -343,6 +343,10 @@ They will be enumerated here.
 
     - Use :attr:`Message.created_at` instead.
 
+- ``Colour.to_tuple()``
+
+    - Use :meth:`Colour.to_rgb` instead.
+
 **Added**
 
 - :attr:`VoiceChannel.members` for fetching members connected to a voice channel.
@@ -360,6 +364,7 @@ They will be enumerated here.
 - :meth:`Guild.audit_logs` to fetch the guild's audit logs.
 - :attr:`Message.webhook_id` to fetch the message's webhook ID.
 - :meth:`TextChannel.is_nsfw` to check if a text channel is NSFW.
+- :meth:`Colour.from_rgb` to construct a :class:`Colour` from RGB tuple.
 
 .. _migrating_1_0_sending_messages:
 
@@ -818,12 +823,12 @@ The ``commands`` attribute of :class:`~ext.commands.Bot` and :class:`~ext.comman
 dictionary to a set that does not have aliases. To retrieve the previous dictionary behaviour, use ``all_commands`` instead.
 
 Command instances have gained a new property, :attr:`~ext.commands.Command.signature` to get the signature of command along
-with a :attr:`~ext.commands.Command.usage` attribute to override the default signature.
+with a :attr:`~.Command.usage` attribute to override the default signature.
 
 Check Changes
 ~~~~~~~~~~~~~~~
 
-Prior to v1.0, :func:`~ext.command.check`\s could only be synchronous. As of v1.0 checks can now be coroutines.
+Prior to v1.0, :func:`~ext.commands.check`\s could only be synchronous. As of v1.0 checks can now be coroutines.
 
 Along with this change, a couple new checks were added.
 
@@ -854,12 +859,12 @@ After: ::
     on_command_completion(ctx)
     on_command_error(ctx, error)
 
-The extraneous ``command`` parameter in :func:`~ext.commands.on_command` and :func:`~ext.commands.on_command_completion`
+The extraneous ``command`` parameter in :func:`.on_command` and :func:`.on_command_completion`
 have been removed. The :class:`~ext.commands.Command` instance was not kept up-to date so it was incorrect. In order to get
 the up to date :class:`~ext.commands.Command` instance, use the :attr:`.Context.command`
 attribute.
 
-The error handlers, either :attr:`.Command.error` or :func:`~ext.commands.on_command_error`,
+The error handlers, either :meth:`.Command.error` or :func:`.on_command_error`,
 have been re-ordered to use the :class:`~ext.commands.Context` as its first parameter to be consistent with other events
 and commands.
 

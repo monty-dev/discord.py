@@ -30,19 +30,21 @@ class Colour:
 
     There is an alias for this called Color.
 
-    Supported operations:
+    .. describe:: x == y
 
-    +-----------+----------------------------------------+
-    | Operation |              Description               |
-    +===========+========================================+
-    | x == y    | Checks if two colours are equal.       |
-    +-----------+----------------------------------------+
-    | x != y    | Checks if two colours are not equal.   |
-    +-----------+----------------------------------------+
-    | hash(x)   | Return the colour's hash.              |
-    +-----------+----------------------------------------+
-    | str(x)    | Returns the hex format for the colour. |
-    +-----------+----------------------------------------+
+         Checks if two colours are equal.
+
+    .. describe:: x != y
+
+         Checks if two colours are not equal.
+
+    .. describe:: hash(x)
+
+         Return the colour's hash.
+
+    .. describe:: str(x)
+
+         Returns the hex format for the colour.
 
     Attributes
     ------------
@@ -91,9 +93,14 @@ class Colour:
         """Returns the blue component of the colour."""
         return self._get_byte(0)
 
-    def to_tuple(self):
+    def to_rgb(self):
         """Returns an (r, g, b) tuple representing the colour."""
         return (self.r, self.g, self.b)
+
+    @classmethod
+    def from_rgb(cls, r, g, b):
+        """Constructs a :class:`Colour` from an RGB tuple."""
+        return cls((r << 16) + (g << 8) + b)
 
     @classmethod
     def default(cls):
