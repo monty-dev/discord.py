@@ -124,7 +124,7 @@ class BaseUser(_BaseUser):
         return '<@{0.id}>'.format(self)
 
     def permissions_in(self, channel):
-        """An alias for :meth:`Channel.permissions_for`.
+        """An alias for :meth:`abc.GuildChannel.permissions_for`.
 
         Basically equivalent to:
 
@@ -177,21 +177,23 @@ class BaseUser(_BaseUser):
 class ClientUser(BaseUser):
     """Represents your Discord user.
 
-    .. describe:: x == y
+    .. container:: operations
 
-        Checks if two users are equal.
+        .. describe:: x == y
 
-    .. describe:: x != y
+            Checks if two users are equal.
 
-        Checks if two users are not equal.
+        .. describe:: x != y
 
-    .. describe:: hash(x)
+            Checks if two users are not equal.
 
-        Return the user's hash.
+        .. describe:: hash(x)
 
-    .. describe:: str(x)
+            Return the user's hash.
 
-        Returns the user's name with discriminator.
+        .. describe:: str(x)
+
+            Returns the user's name with discriminator.
 
     Attributes
     -----------
@@ -386,21 +388,23 @@ class ClientUser(BaseUser):
 class User(BaseUser, discord.abc.Messageable):
     """Represents a Discord user.
 
-    .. describe:: x == y
+    .. container:: operations
 
-        Checks if two users are equal.
+        .. describe:: x == y
 
-    .. describe:: x != y
+            Checks if two users are equal.
 
-        Checks if two users are not equal.
+        .. describe:: x != y
 
-    .. describe:: hash(x)
+            Checks if two users are not equal.
 
-        Return the user's hash.
+        .. describe:: hash(x)
 
-    .. describe:: str(x)
+            Return the user's hash.
 
-        Returns the user's name with discriminator.
+        .. describe:: str(x)
+
+            Returns the user's name with discriminator.
 
     Attributes
     -----------

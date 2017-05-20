@@ -92,6 +92,10 @@ class Client:
         members from the guilds the bot belongs to. If this is ``False``\, then
         no offline members are received and :meth:`request_offline_members`
         must be used to fetch the offline members of the guild.
+    game: Optional[:class:`Game`]
+        A game to start your presence with upon logging on to Discord.
+    status: Optional[:class:`Status`]
+        A status to start your presence with upon logging on to Discord.
 
     Attributes
     -----------
@@ -452,22 +456,46 @@ class Client:
         yield from self.login(*args, bot=bot)
         yield from self.connect(reconnect=reconnect)
 
-
     def _do_cleanup(self):
-        self.loop.run_until_complete(self.close())
-        pending = asyncio.Task.all_tasks(loop=self.loop)
-        if pending:
-            log.info('Cleaning up after %s tasks', len(pending))
-            gathered = asyncio.gather(*pending, loop=self.loop)
-            try:
-                gathered.cancel()
-                self.loop.run_until_complete(gathered)
+        log.info('Cleaning up event loop.')
+        loop = self.loop
+        if loop.is_closed():
+            return # we're already cleaning up
 
-                # we want to retrieve any exceptions to make sure that
-                # they don't nag us about it being un-retrieved.
-                gathered.exception()
+        task = compat.create_task(self.close(), loop=loop)
+
+        def _silence_gathered(fut):
+            try:
+                fut.result()
             except:
                 pass
+            finally:
+                loop.stop()
+
+        def when_future_is_done(fut):
+            pending = asyncio.Task.all_tasks(loop=loop)
+            if pending:
+                log.info('Cleaning up after %s tasks', len(pending))
+                gathered = asyncio.gather(*pending, loop=loop)
+                gathered.cancel()
+                gathered.add_done_callback(_silence_gathered)
+            else:
+                loop.stop()
+
+        task.add_done_callback(when_future_is_done)
+        if not loop.is_running():
+            loop.run_forever()
+        else:
+            # on Linux, we're still running because we got triggered via
+            # the signal handler rather than the natural KeyboardInterrupt
+            # Since that's the case, we're going to return control after
+            # registering the task for the event loop to handle later
+            return None
+
+        try:
+            return task.result() # suppress unused task warning
+        except:
+            return None
 
     def run(self, *args, **kwargs):
         """A blocking call that abstracts away the `event loop`_
@@ -493,17 +521,32 @@ class Client:
         is blocking. That means that registration of events or anything being
         called after this function call will not execute until it returns.
         """
-        if sys.platform != 'win32':
-            self.loop.add_signal_handler(signal.SIGINT, self._do_cleanup)
-            self.loop.add_signal_handler(signal.SIGTERM, self._do_cleanup)
+        is_windows = sys.platform == 'win32'
+        loop = self.loop
+        if not is_windows:
+            loop.add_signal_handler(signal.SIGINT, self._do_cleanup)
+            loop.add_signal_handler(signal.SIGTERM, self._do_cleanup)
+
+        task = compat.create_task(self.start(*args, **kwargs), loop=loop)
+
+        def stop_loop_on_finish(fut):
+            loop.stop()
+
+        task.add_done_callback(stop_loop_on_finish)
 
         try:
-            self.loop.run_until_complete(self.start(*args, **kwargs))
+            loop.run_forever()
         except KeyboardInterrupt:
             pass
         finally:
-            self._do_cleanup()
-            self.loop.close()
+            task.remove_done_callback(stop_loop_on_finish)
+            if is_windows:
+                self._do_cleanup()
+
+            loop.close()
+            if task.cancelled() or not task.done():
+                return None
+            return task.result()
 
     # properties
 
@@ -538,7 +581,7 @@ class Client:
         return self._connection.get_emoji(id)
 
     def get_all_channels(self):
-        """A generator that retrieves every :class:`Channel` the client can 'access'.
+        """A generator that retrieves every :class:`abc.GuildChannel` the client can 'access'.
 
         This is equivalent to: ::
 
@@ -548,8 +591,8 @@ class Client:
 
         Note
         -----
-        Just because you receive a :class:`Channel` does not mean that
-        you can communicate in said channel. :meth:`Channel.permissions_for` should
+        Just because you receive a :class:`abc.GuildChannel` does not mean that
+        you can communicate in said channel. :meth:`abc.GuildChannel.permissions_for` should
         be used for that.
         """
 

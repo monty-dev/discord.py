@@ -251,12 +251,12 @@ div.highlight {
   background-color: #fff;
 }
 
-div.important, div.note {
+div.important, div.note, div.hint, div.tip {
   background-color: #eee;
   border: 1px solid #ccc;
 }
 
-div.attention, div.caution, div.hint, div.seealso, div.tip {
+div.attention, div.warning, div.caution, div.seealso {
   background-color: #fef9e9;
   border: 1px solid #fbe091;
 }
@@ -273,7 +273,7 @@ a.toc-backref {
   color: #3e4349;
 }
 
-div.danger, div.error, div.warning {
+div.danger, div.error {
   background-color: #ffe4e4;
   border: 1px solid #f66;
 }
@@ -349,6 +349,20 @@ dl.exception > dt {
   background-color: #f5f5f5;
   margin: 25px 0 10px 0;
   padding: 1px 10px;
+}
+
+.container.operations {
+  padding: 10px;
+  border: 1px solid #ddd;
+}
+
+.container.operations::before {
+  content: 'Supported Operations';
+  color: #212224;
+}
+
+.container.operations > dl.describe > dt {
+  background-color: #f8f8f8;
 }
 
 table.docutils {
