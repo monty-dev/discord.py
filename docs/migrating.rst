@@ -195,6 +195,8 @@ A list of these changes is enumerated below.
 +---------------------------------------+------------------------------------------------------------------------------+
 | ``Client.wait_until_login``           | Removed                                                                      |
 +---------------------------------------+------------------------------------------------------------------------------+
+| ``Client.messages``                   | Removed                                                                      |
++---------------------------------------+------------------------------------------------------------------------------+
 | ``Client.wait_until_ready``           | No change                                                                    |
 +---------------------------------------+------------------------------------------------------------------------------+
 
@@ -346,6 +348,10 @@ They will be enumerated here.
 - ``Colour.to_tuple()``
 
     - Use :meth:`Colour.to_rgb` instead.
+
+**Changed**
+
+- :attr:`Member.avatar_url` and :attr:`User.avatar_url` now return the default avatar if a custom one is not set.
 
 **Added**
 
