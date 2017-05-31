@@ -119,7 +119,6 @@ class HTTPClient:
 
         if self.token is not None:
             headers['Authorization'] = 'Bot ' + self.token if self.bot_token else self.token
-
         # some checking if it's a JSON request
         if 'json' in kwargs:
             headers['Content-Type'] = 'application/json'
@@ -210,20 +209,19 @@ class HTTPClient:
                     # clean-up just in case
                     yield from r.release()
 
-    def get(self, *args, **kwargs):
-        return self.request('GET', *args, **kwargs)
-
-    def put(self, *args, **kwargs):
-        return self.request('PUT', *args, **kwargs)
-
-    def patch(self, *args, **kwargs):
-        return self.request('PATCH', *args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        return self.request('DELETE', *args, **kwargs)
-
-    def post(self, *args, **kwargs):
-        return self.request('POST', *args, **kwargs)
+    def get_attachment(self, url):
+        resp = yield from self._session.get(url)
+        try:
+            if resp.status == 200:
+                return (yield from resp.read())
+            elif resp.status == 404:
+                raise NotFound(resp, 'attachment not found')
+            elif resp.status == 403:
+                raise Forbidden(resp, 'cannot retrieve attachment')
+            else:
+                raise HTTPException(resp, 'failed to get attachment')
+        finally:
+            yield from resp.release()
 
     # state management
 
@@ -296,7 +294,7 @@ class HTTPClient:
 
         return self.request(Route('POST', '/users/@me/channels'), json=payload)
 
-    def send_message(self, channel_id, content, *, tts=False, embed=None):
+    def send_message(self, channel_id, content, *, tts=False, embed=None, nonce=None):
         r = Route('POST', '/channels/{channel_id}/messages', channel_id=channel_id)
         payload = {}
 
@@ -309,12 +307,15 @@ class HTTPClient:
         if embed:
             payload['embed'] = embed
 
+        if nonce:
+            payload['nonce'] = nonce
+
         return self.request(r, json=payload)
 
     def send_typing(self, channel_id):
         return self.request(Route('POST', '/channels/{channel_id}/typing', channel_id=channel_id))
 
-    def send_files(self, channel_id, *, files, content=None, tts=False, embed=None):
+    def send_files(self, channel_id, *, files, content=None, tts=False, embed=None, nonce=None):
         r = Route('POST', '/channels/{channel_id}/messages', channel_id=channel_id)
         form = aiohttp.FormData()
 
@@ -323,6 +324,8 @@ class HTTPClient:
             payload['content'] = content
         if embed:
             payload['embed'] = embed
+        if nonce:
+            payload['nonce'] = nonce
 
         form.add_field('payload_json', utils.to_json(payload))
         if len(files) == 1:

@@ -356,9 +356,12 @@ They will be enumerated here.
 **Changed**
 
 - :attr:`Member.avatar_url` and :attr:`User.avatar_url` now return the default avatar if a custom one is not set.
+- :attr:`Message.embeds` is now a list of :class:`Embed` instead of ``dict`` objects.
+- :attr:`Message.attachments` is now a list of :class:`Attachment` instead of ``dict`` object.
 
 **Added**
 
+- :class:`Attachment` to represent a discord attachment.
 - :attr:`VoiceChannel.members` for fetching members connected to a voice channel.
 - :attr:`TextChannel.members` for fetching members that can see the channel.
 - :attr:`Role.members` for fetching members that have the role.
@@ -635,7 +638,7 @@ For example, to wait for a message: ::
     def pred(m):
         return m.author == message.author and m.channel == message.channel
 
-    msg = await client.wait_for('message', check=m)
+    msg = await client.wait_for('message', check=pred)
 
 To facilitate multiple returns, :meth:`Client.wait_for` returns either a single argument, no arguments, or a tuple of
 arguments.
