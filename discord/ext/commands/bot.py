@@ -88,6 +88,9 @@ _mentions_transforms = {
 
 _mention_pattern = re.compile('|'.join(_mentions_transforms.keys()))
 
+def _is_submodule(parent, child):
+    return parent == child or child.startswith(parent + ".")
+
 @asyncio.coroutine
 def _default_help_command(ctx, *commands : str):
     """Shows this message."""
@@ -611,8 +614,7 @@ class BotBase(GroupMixin):
         All registered commands and event listeners that the
         cog has registered will be removed as well.
 
-        If no cog is found then ``None`` is returned, otherwise
-        the cog instance that is being removed is returned.
+        If no cog is found then this method has no effect.
 
         If the cog defines a special member function named ``__unload``
         then it is called when removal has completed. This function
@@ -626,7 +628,7 @@ class BotBase(GroupMixin):
 
         cog = self.cogs.pop(name, None)
         if cog is None:
-            return cog
+            return
 
         members = inspect.getmembers(cog)
         for name, member in members:
@@ -732,12 +734,12 @@ class BotBase(GroupMixin):
 
         # remove the cogs registered from the module
         for cogname, cog in self.cogs.copy().items():
-            if cog.__module__.startswith(lib_name):
+            if _is_submodule(lib_name, cog.__module__):
                 self.remove_cog(cogname)
 
         # first remove all the commands from the module
         for cmd in self.all_commands.copy().values():
-            if cmd.module.startswith(lib_name):
+            if _is_submodule(lib_name, cmd.module):
                 if isinstance(cmd, GroupMixin):
                     cmd.recursively_remove_all_commands()
                 self.remove_command(cmd.name)
@@ -746,7 +748,7 @@ class BotBase(GroupMixin):
         for event_list in self.extra_events.copy().values():
             remove = []
             for index, event in enumerate(event_list):
-                if event.__module__.startswith(lib_name):
+                if _is_submodule(lib_name, event.__module__):
                     remove.append(index)
 
             for index in reversed(remove):
