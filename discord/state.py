@@ -37,7 +37,7 @@ from .calls import GroupCall
 from . import utils, compat
 from .embeds import Embed
 
-from collections import deque, namedtuple
+from collections import deque, namedtuple, OrderedDict
 import copy, enum, math
 import datetime
 import asyncio
@@ -89,7 +89,9 @@ class ConnectionState:
         self._calls = {}
         self._guilds = {}
         self._voice_clients = {}
-        self._private_channels = {}
+
+        # LRU of max size 128
+        self._private_channels = OrderedDict()
         # extra dict to look up private channels by user id
         self._private_channels_by_user = {}
         self._messages = deque(maxlen=self.max_messages)
@@ -189,13 +191,26 @@ class ConnectionState:
         return list(self._private_channels.values())
 
     def _get_private_channel(self, channel_id):
-        return self._private_channels.get(channel_id)
+        try:
+            value = self._private_channels[channel_id]
+        except KeyError:
+            return None
+        else:
+            self._private_channels.move_to_end(channel_id)
+            return value
 
     def _get_private_channel_by_user(self, user_id):
         return self._private_channels_by_user.get(user_id)
 
     def _add_private_channel(self, channel):
-        self._private_channels[channel.id] = channel
+        channel_id = channel.id
+        self._private_channels[channel_id] = channel
+
+        if len(self._private_channels) > 128:
+            _, to_remove = self._private_channels.popitem(last=False)
+            if isinstance(to_remove, DMChannel):
+                self._private_channels_by_user.pop(to_remove.recipient.id, None)
+
         if isinstance(channel, DMChannel):
             self._private_channels_by_user[channel.recipient.id] = channel
 
@@ -469,10 +484,13 @@ class ConnectionState:
     def parse_channel_create(self, data):
         factory, ch_type = _channel_factory(data['type'])
         channel = None
+
         if ch_type in (ChannelType.group, ChannelType.private):
-            channel = factory(me=self.user, data=data, state=self)
-            self._add_private_channel(channel)
-            self.dispatch('private_channel_create', channel)
+            channel_id = int(data['id'])
+            if self._get_private_channel(channel_id) is None:
+                channel = factory(me=self.user, data=data, state=self)
+                self._add_private_channel(channel)
+                self.dispatch('private_channel_create', channel)
         else:
             guild_id = utils._get_as_snowflake(data, 'guild_id')
             guild = self._get_guild(guild_id)
