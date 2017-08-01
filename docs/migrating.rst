@@ -101,7 +101,7 @@ A list of these changes is enumerated below.
 +---------------------------------------+------------------------------------------------------------------------------+
 | ``Client.create_custom_emoji``        | :meth:`Guild.create_custom_emoji`                                            |
 +---------------------------------------+------------------------------------------------------------------------------+
-| ``Client.create_invite``              | :meth:`Guild.create_invite` or :meth:`abc.GuildChannel.create_invite`        |
+| ``Client.create_invite``              | :meth:`abc.GuildChannel.create_invite`                                       |
 +---------------------------------------+------------------------------------------------------------------------------+
 | ``Client.create_role``                | :meth:`Guild.create_role`                                                    |
 +---------------------------------------+------------------------------------------------------------------------------+
@@ -336,6 +336,11 @@ They will be enumerated here.
 - ``Client.accept_invite``
 
     - There is no replacement for this one. This functionality is deprecated API wise.
+
+- ``Guild.default_channel`` / ``Server.default_channel``
+
+    - The concept of a default channel was removed from Discord.
+      See `#329 <https://github.com/hammerandchisel/discord-api-docs/pull/329>`_.
 
 - ``Message.edited_timestamp``
 

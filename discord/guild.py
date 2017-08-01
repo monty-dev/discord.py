@@ -323,11 +323,6 @@ class Guild(Hashable):
         return utils.find(lambda r: r.is_default(), self.roles)
 
     @property
-    def default_channel(self):
-        """Gets the default :class:`TextChannel` for the guild."""
-        return self.get_channel(self.id)
-
-    @property
     def owner(self):
         """:class:`Member`: The member that owns the guild."""
         return self.get_member(self.owner_id)
@@ -847,44 +842,6 @@ class Guild(Hashable):
         return result
 
     @asyncio.coroutine
-    def create_invite(self, *, reason=None, **fields):
-        """|coro|
-
-        Creates an instant invite.
-
-        Parameters
-        ------------
-        max_age : int
-            How long the invite should last. If it's 0 then the invite
-            doesn't expire. Defaults to 0.
-        max_uses : int
-            How many uses the invite could be used for. If it's 0 then there
-            are unlimited uses. Defaults to 0.
-        temporary : bool
-            Denotes that the invite grants temporary membership
-            (i.e. they get kicked after they disconnect). Defaults to False.
-        unique: bool
-            Indicates if a unique invite URL should be created. Defaults to True.
-            If this is set to False then it will return a previously created
-            invite.
-        reason: Optional[str]
-            The reason for creating this invite. Shows up on the audit log.
-
-        Raises
-        -------
-        HTTPException
-            Invite creation failed.
-
-        Returns
-        --------
-        :class:`Invite`
-            The invite that was created.
-        """
-
-        data = yield from self._state.http.create_invite(self.id, reason=reason, **fields)
-        return Invite.from_incomplete(data=data, state=self._state)
-
-    @asyncio.coroutine
     def create_custom_emoji(self, *, name, image, reason=None):
         """|coro|
 
@@ -1100,8 +1057,13 @@ class Guild(Hashable):
 
         # we start with { code: abc }
         payload = yield from self._state.http.get_vanity_code(self.id)
+
+        # get the vanity URL channel since default channels aren't
+        # reliable or a thing anymore
+        data = yield from self._state.http.get_invite(payload['code'])
+
         payload['guild'] = self
-        payload['channel'] = self.default_channel
+        payload['channel'] = self.get_channel(int(data['channel']['id']))
         payload['revoked'] = False
         payload['temporary'] = False
         payload['max_uses'] = 0
@@ -1181,7 +1143,7 @@ class Guild(Hashable):
         Getting entries made by a specific user: ::
 
             entries = await guild.audit_logs(limit=None, user=guild.me).flatten()
-            await guild.default_channel.send('I made {} moderation actions.'.format(len(entries)))
+            await channel.send('I made {} moderation actions.'.format(len(entries)))
         """
         if user:
             user = user.id
