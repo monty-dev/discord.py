@@ -63,10 +63,12 @@ class KeepAliveHandler(threading.Thread):
         self.msg = 'Keeping websocket alive with sequence %s.'
         self._stop_ev = threading.Event()
         self._last_ack = time.time()
+        self._last_send = time.time()
+        self.heartbeat_timeout = ws._max_heartbeat_timeout
 
     def run(self):
         while not self._stop_ev.wait(self.interval):
-            if self._last_ack + 2 * self.interval < time.time():
+            if self._last_ack + self.heartbeat_timeout < time.time():
                 log.warn("Shard ID %s has stopped responding to the gateway. Closing and restarting." % self.shard_id)
                 coro = self.ws.close(1006)
                 f = compat.run_coroutine_threadsafe(coro, loop=self.ws.loop)
@@ -88,6 +90,8 @@ class KeepAliveHandler(threading.Thread):
                 f.result()
             except Exception:
                 self.stop()
+            else:
+                self._last_send = time.time()
 
     def get_payload(self):
         return {
@@ -202,6 +206,7 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
         ws.shard_count = client._connection.shard_count
         ws.session_id = session
         ws.sequence = sequence
+        ws._max_heartbeat_timeout = client._connection.heartbeat_timeout
 
         client._connection._update_references(ws)
 
@@ -408,6 +413,12 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
         for index in reversed(removed):
             del self._dispatch_listeners[index]
 
+    @property
+    def latency(self):
+        """float: Measures latency between a HEARTBEAT and a HEARTBEAT_ACK in seconds."""
+        heartbeat = self._keep_alive
+        return float('inf') if heartbeat is None else heartbeat._last_ack - heartbeat._last_send
+
     def _can_handle_close(self, code):
         return code not in (1000, 4004, 4010, 4011)
 
@@ -581,6 +592,7 @@ class DiscordVoiceWebSocket(websockets.client.WebSocketClientProtocol):
         ws = yield from websockets.connect(gateway, loop=client.loop, klass=cls)
         ws.gateway = gateway
         ws._connection = client
+        ws._max_heartbeat_timeout = 60.0
 
         if resume:
             yield from ws.resume()
