@@ -381,37 +381,42 @@ class clean_content(Converter):
         message = ctx.message
         transformations = {}
 
-        if self.fix_channel_mentions:
-            transformations.update(
-                ('<#%s>' % channel.id, '#' + channel.name)
-                for channel in message.channel_mentions
-            )
+        if self.fix_channel_mentions and ctx.guild:
+            def resolve_channel(id, *, _get=ctx.guild.get_channel):
+                ch = _get(id)
+                return ('<#%s>' % id), ('#' + ch.name if ch else '#deleted-channel')
 
-        if self.use_nicknames:
-            transformations.update(
-                ('<@%s>' % member.id, '@' + member.display_name)
-                for member in message.mentions
-            )
+            transformations.update(resolve_channel(channel) for channel in message.raw_channel_mentions)
 
-            transformations.update(
-                ('<@!%s>' % member.id, '@' + member.display_name)
-                for member in message.mentions
-            )
+        if self.use_nicknames and ctx.guild:
+            def resolve_member(id, *, _get=ctx.guild.get_member):
+                m = _get(id)
+                return '@' + m.display_name if m else '@deleted-user'
         else:
-            transformations.update(
-                ('<@%s>' % member.id, '@' + member.name)
-                for member in message.mentions
-            )
+            def resolve_member(id, *, _get=ctx.bot.get_user):
+                m = _get(id)
+                return '@' + m.name if m else '@deleted-user'
 
-            transformations.update(
-                ('<@!%s>' % member.id, '@' + member.name)
-                for member in message.mentions
-            )
 
         transformations.update(
-            ('<@&%s>' % role.id, '@' + role.name)
-            for role in message.role_mentions
+            ('<@%s>' % member_id, resolve_member(member_id))
+            for member_id in message.raw_mentions
         )
+
+        transformations.update(
+            ('<@!%s>' % member_id, resolve_member(member_id))
+            for member_id in message.raw_mentions
+        )
+
+        if ctx.guild:
+            def resolve_role(id, *, _find=discord.utils.find, _roles=ctx.guild.roles):
+                r = _find(lambda x: x.id == id, _roles)
+                return '@' + r.name if r else '@deleted-role'
+
+            transformations.update(
+                ('<@&%s>' % role_id, resolve_role(role_id))
+                for role_id in message.raw_role_mentions
+            )
 
         def repl(obj):
             return transformations.get(obj.group(0), '')
@@ -431,13 +436,5 @@ class clean_content(Converter):
             pattern = re.compile('|'.join(transformations.keys()))
             result = pattern.sub(replace, result)
 
-        transformations = {
-            '@everyone': '@\u200beveryone',
-            '@here': '@\u200bhere'
-        }
-
-        def repl2(obj):
-            return transformations.get(obj.group(0), '')
-
-        pattern = re.compile('|'.join(transformations.keys()))
-        return pattern.sub(repl2, result)
+        # Completely ensure no mentions escape:
+        return re.sub(r'@(everyone|here|[!&]?[0-9]{17,21})', '@\u200b\\1', result)
