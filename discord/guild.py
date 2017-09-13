@@ -250,11 +250,11 @@ class Guild(Hashable):
             channels = data['channels']
             for c in channels:
                 if c['type'] == ChannelType.text.value:
-                    channel = TextChannel(guild=self, data=c, state=self._state)
-                    self._add_channel(channel)
+                    self._add_channel(TextChannel(guild=self, data=c, state=self._state))
                 elif c['type'] == ChannelType.voice.value:
-                    channel = VoiceChannel(guild=self, data=c, state=self._state)
-                    self._add_channel(channel)
+                    self._add_channel(VoiceChannel(guild=self, data=c, state=self._state))
+                elif c['type'] == ChannelType.category.value:
+                    self._add_channel(CategoryChannel(guild=self, data=c, state=self._state))
 
 
     @property
@@ -308,6 +308,52 @@ class Guild(Hashable):
         r = [ch for ch in self._channels.values() if isinstance(ch, TextChannel)]
         r.sort(key=lambda c: c.position)
         return r
+
+    @property
+    def categories(self):
+        """List[:class:`CategoryChannel`]: A list of categories that belongs to this guild.
+
+        This is sorted by the position and are in UI order from top to bottom.
+        """
+        r = [ch for ch in self._channels.values() if isinstance(ch, CategoryChannel)]
+        r.sort(key=lambda c: c.position)
+        return r
+
+    def by_category(self):
+        """Returns every :class:`CategoryChannel` and their associated channels.
+
+        These channels and categories are sorted in the official Discord UI order.
+
+        If the channels do not have a category, then the first element of the tuple is
+        ``None``.
+
+        Returns
+        --------
+        List[Tuple[Optional[:class:`CategoryChannel`], List[:class:`abc.GuildChannel`]]]:
+            The categories and their associated channels.
+        """
+        grouped = {}
+        for channel in self._channels.values():
+            if isinstance(channel, CategoryChannel):
+                continue
+
+            try:
+                channels = grouped[channel.category_id]
+            except KeyError:
+                channels = grouped[channel.category_id] = []
+
+            channels.append(channel)
+
+        def key(t):
+            k, v = t
+            return (k.position if k else -1, v)
+
+        _get = self._channels.get
+        as_list = [(_get(k), v) for k, v in grouped.items()]
+        as_list.sort(key=key)
+        for _, channels in as_list:
+            channels.sort(key=lambda c: c.position)
+        return as_list
 
     def get_channel(self, channel_id):
         """Returns a :class:`abc.GuildChannel` with the given ID. If not found, returns None."""
@@ -474,7 +520,7 @@ class Guild(Hashable):
 
         return utils.find(pred, members)
 
-    def _create_channel(self, name, overwrites, type, reason):
+    def _create_channel(self, name, overwrites, channel_type, reason):
         if overwrites is None:
             overwrites = {}
         elif not isinstance(overwrites, dict):
@@ -499,7 +545,7 @@ class Guild(Hashable):
 
             perms.append(payload)
 
-        return self._state.http.create_channel(self.id, name, str(type), permission_overwrites=perms, reason=reason)
+        return self._state.http.create_channel(self.id, name, channel_type.value, permission_overwrites=perms, reason=reason)
 
     @asyncio.coroutine
     def create_text_channel(self, name, *, overwrites=None, reason=None):
@@ -566,11 +612,21 @@ class Guild(Hashable):
     def create_voice_channel(self, name, *, overwrites=None, reason=None):
         """|coro|
 
-        Same as :meth:`create_text_channel` except makes a
-        :class:`VoiceChannel` instead.
+        Same as :meth:`create_text_channel` except makes a :class:`VoiceChannel` instead.
         """
         data = yield from self._create_channel(name, overwrites, ChannelType.voice, reason=reason)
         return VoiceChannel(state=self._state, guild=self, data=data)
+
+    @asyncio.coroutine
+    def create_category(self, name, *, overwrites=None, reason=None):
+        """|coro|
+
+        Same as :meth:`create_text_channel` except makes a :class:`CategoryChannel` instead.
+        """
+        data = yield from self._create_channel(name, overwrites, ChannelType.category, reason=reason)
+        return CategoryChannel(state=self._state, guild=self, data=data)
+
+    create_category_channel = create_category
 
     @asyncio.coroutine
     def leave(self):
