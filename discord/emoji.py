@@ -193,7 +193,7 @@ class Emoji(Hashable):
         You must have :attr:`~Permissions.manage_emojis` permission to
         do this.
 
-        Guild local emotes can only be deleted by user bots.
+        Note that bot accounts can only delete custom emojis they own.
 
         Parameters
         -----------
@@ -219,7 +219,7 @@ class Emoji(Hashable):
         You must have :attr:`~Permissions.manage_emojis` permission to
         do this.
 
-        Guild local emotes can only be edited by user bots.
+        Note that bot accounts can only edit custom emojis they own.
 
         Parameters
         -----------
