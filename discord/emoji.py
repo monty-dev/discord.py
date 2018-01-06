@@ -30,8 +30,8 @@ from collections import namedtuple
 from . import utils
 from .mixins import Hashable
 
-class PartialReactionEmoji(namedtuple('PartialReactionEmoji', 'name id')):
-    """Represents a "partial" reaction emoji.
+class PartialEmoji(namedtuple('PartialEmoji', 'animated name id')):
+    """Represents a "partial" emoji.
 
     This model will be given in two scenarios:
 
@@ -58,10 +58,12 @@ class PartialReactionEmoji(namedtuple('PartialReactionEmoji', 'name id')):
 
     Attributes
     -----------
-    name: str
+    name: :class:`str`
         The custom emoji name, if applicable, or the unicode codepoint
         of the non-custom emoji.
-    id: Optional[int]
+    animated: :class:`bool`
+        Whether the emoji is animated or not.
+    id: Optional[:class:`int`]
         The ID of the custom emoji, if applicable.
     """
 
@@ -70,6 +72,8 @@ class PartialReactionEmoji(namedtuple('PartialReactionEmoji', 'name id')):
     def __str__(self):
         if self.id is None:
             return self.name
+        if self.animated:
+            return '<a:%s:%s>' % (self.name, self.id)
         return '<:%s:%s>' % (self.name, self.id)
 
     def is_custom_emoji(self):
@@ -84,6 +88,15 @@ class PartialReactionEmoji(namedtuple('PartialReactionEmoji', 'name id')):
         if self.id is None:
             return self.name
         return ':%s:%s' % (self.name, self.id)
+
+    @property
+    def url(self):
+        """Returns a URL version of the emoji, if it is custom."""
+        if self.is_unicode_emoji():
+            return None
+
+        _format = 'gif' if self.animated else 'png'
+        return "https://cdn.discordapp.com/emojis/{0.id}.{1}".format(self, _format)
 
 class Emoji(Hashable):
     """Represents a custom emoji.
@@ -116,17 +129,17 @@ class Emoji(Hashable):
 
     Attributes
     -----------
-    name: str
+    name: :class:`str`
         The name of the emoji.
-    id: int
+    id: :class:`int`
         The emoji's ID.
-    require_colons: bool
+    require_colons: :class:`bool`
         If colons are required to use this emoji in the client (:PJSalt: vs PJSalt).
-    animated: bool
+    animated: :class:`bool`
         Whether an emoji is animated or not.
-    managed: bool
+    managed: :class:`bool`
         If this emoji is managed by a Twitch integration.
-    guild_id: int
+    guild_id: :class:`int`
         The guild ID the emoji belongs to.
     """
     __slots__ = ('require_colons', 'animated', 'managed', 'id', 'name', '_roles', 'guild_id', '_state')
