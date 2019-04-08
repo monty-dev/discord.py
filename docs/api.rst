@@ -16,20 +16,19 @@ The following section outlines the API of discord.py.
 Version Related Info
 ---------------------
 
-There are two main ways to query version information about the library.
+There are two main ways to query version information about the library. For guarantees, check :ref:`version_guarantees`.
 
 .. data:: version_info
 
-    A named tuple that is similar to `sys.version_info`_.
+    A named tuple that is similar to :obj:`py:sys.version_info`.
 
-    Just like `sys.version_info`_ the valid values for ``releaselevel`` are
+    Just like :obj:`py:sys.version_info` the valid values for ``releaselevel`` are
     'alpha', 'beta', 'candidate' and 'final'.
-
-    .. _sys.version_info: https://docs.python.org/3.5/library/sys.html#sys.version_info
 
 .. data:: __version__
 
-    A string representation of the version. e.g. ``'0.10.0-alpha0'``.
+    A string representation of the version. e.g. ``'1.0.0rc1'``. This is based
+    off of `PEP-440 <https://www.python.org/dev/peps/pep-0440/>`_.
 
 Client
 -------
@@ -440,12 +439,24 @@ to handle it, which defaults to print a traceback and ignoring the exception.
 
     - status
     - game playing
-    - avatar
     - nickname
     - roles
 
     :param before: The :class:`Member` that updated their profile with the old info.
     :param after: The :class:`Member` that updated their profile with the updated info.
+
+.. function:: on_user_update(before, after)
+
+    Called when a :class:`User` updates their profile.
+
+    This is called when one or more of the following things change:
+
+    - avatar
+    - username
+    - discriminator
+
+    :param before: The :class:`User` that updated their profile with the old info.
+    :param after: The :class:`User` that updated their profile with the updated info.
 
 .. function:: on_guild_join(guild)
 
@@ -587,53 +598,6 @@ Utility Functions
 
 .. autofunction:: discord.utils.escape_mentions
 
-
-Application Info
-------------------
-
-.. class:: AppInfo
-
-    A namedtuple representing the bot's application info.
-
-    .. attribute:: id
-
-        The application's ``client_id``.
-    .. attribute:: name
-
-        The application's name.
-    .. attribute:: description
-
-        The application's description
-    .. attribute:: icon
-
-        The application's icon hash if it exists, ``None`` otherwise.
-    .. attribute:: icon_url
-
-        A property that retrieves the application's icon URL if it exists.
-
-        If it doesn't exist an empty string is returned.
-    .. attribute:: owner
-
-        The owner of the application. This is a :class:`User` instance
-        with the owner's information at the time of the call.
-
-    .. attribute:: bot_public
-
-        ``True`` if the bot is considered as public, else ``False``.
-        Determines if the bot can be invited by anyone or if it is locked
-        to the token owner. Correspond to the "Public bot" box in the
-        token settings.
-
-    .. attribute:: bot_require_code_grant
-
-        ``True`` if the bot requires code grant, else ``False``.
-        Correspond to the "Bot requires code grant" box in the token
-        settings.
-
-    .. attribute:: rpc_origins
-
-        Returns an array of RPC origin URL strings, if RPC is enabled.
-        If RPC isn't enabled, returns ``None``.
 
 Profile
 ---------
