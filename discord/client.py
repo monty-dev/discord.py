@@ -62,8 +62,21 @@ def _cancel_tasks(loop, tasks):
     log.info('Cleaning up after %d tasks.', len(tasks))
     gathered = asyncio.gather(*tasks, loop=loop, return_exceptions=True)
     gathered.cancel()
-    gathered.add_done_callback(lambda fut: loop.stop())
 
+    def stop_and_silence(fut):
+        loop.stop()
+        try:
+            fut.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            loop.call_exception_handler({
+                'message': 'Unhandled exception during Client.run shutdown.',
+                'exception': e,
+                'future': fut
+            })
+
+    gathered.add_done_callback(stop_and_silence)
     while not gathered.done():
         loop.run_forever()
 
@@ -550,16 +563,18 @@ class Client:
         is_windows = sys.platform == 'win32'
         loop = self.loop
         if not is_windows:
-            loop.add_signal_handler(signal.SIGINT, self._do_cleanup)
-            loop.add_signal_handler(signal.SIGTERM, self._do_cleanup)
+            loop.add_signal_handler(signal.SIGINT, lambda: loop.stop())
+            loop.add_signal_handler(signal.SIGTERM, lambda: loop.stop())
+
+        future = asyncio.ensure_future(self.start(*args, **kwargs), loop=loop)
+        future.add_done_callback(lambda f: loop.stop())
 
         try:
-            loop.run_until_complete(self.start(*args, **kwargs))
+            loop.run_forever()
         except KeyboardInterrupt:
             log.info('Received signal to terminate bot and event loop.')
         finally:
-            if is_windows:
-                self._do_cleanup()
+            self._do_cleanup()
 
     # properties
 
