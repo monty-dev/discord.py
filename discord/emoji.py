@@ -86,6 +86,9 @@ class PartialEmoji:
             return '<a:%s:%s>' % (self.name, self.id)
         return '<:%s:%s>' % (self.name, self.id)
 
+    def __repr__(self):
+        return '<{0.__class__.__name__} animated={0.animated} name={0.name!r} id={0.id}>'.format(self)
+
     def __eq__(self, other):
         if self.is_unicode_emoji():
             return isinstance(other, PartialEmoji) and self.name == other.name
@@ -166,7 +169,8 @@ class Emoji:
     guild_id: :class:`int`
         The guild ID the emoji belongs to.
     user: Optional[:class:`User`]
-        The user that created the emoji. This can only be retrieved using :meth:`Guild.fetch_emoji`.
+        The user that created the emoji. This can only be retrieved using :meth:`Guild.fetch_emoji` and
+        having the :attr:`~Permissions.manage_emojis` permission.
     """
     __slots__ = ('require_colons', 'animated', 'managed', 'id', 'name', '_roles', 'guild_id',
                  '_state', 'user')
