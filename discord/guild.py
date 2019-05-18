@@ -32,6 +32,7 @@ from .role import Role
 from .member import Member, VoiceState
 from .activity import create_activity
 from .emoji import Emoji
+from .errors import InvalidData
 from .permissions import PermissionOverwrite
 from .colour import Colour
 from .errors import InvalidArgument, ClientException
@@ -47,6 +48,121 @@ from .asset import Asset
 
 BanEntry = namedtuple('BanEntry', 'reason user')
 _GuildLimit = namedtuple('_GuildLimit', 'emoji bitrate filesize')
+
+class _flag_descriptor:
+    def __init__(self, func):
+        self.flag = func(None)
+        self.__doc__ = func.__doc__
+
+    def __get__(self, instance, owner):
+        return instance._has_flag(self.flag)
+
+    def __set__(self, instance, value):
+        instance._set_flag(self.flag, value)
+
+def fill_with_flags(cls):
+    cls.VALID_FLAGS = {
+        name: value.flag
+        for name, value in cls.__dict__.items()
+        if isinstance(value, _flag_descriptor)
+    }
+
+    max_bits = max(cls.VALID_FLAGS.values()).bit_length()
+    cls.ALL_OFF_VALUE = -1 + (2 ** max_bits)
+    return cls
+
+@fill_with_flags
+class SystemChannelFlags:
+    r"""Wraps up a Discord system channel flag value.
+
+    Similar to :class:`Permissions`\, the properties provided are two way.
+    You can set and retrieve individual bits using the properties as if they
+    were regular bools. This allows you to edit the system flags easily.
+
+    To construct an object you can pass keyword arguments denoting the flags
+    to enable or disable.
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two flags are equal.
+        .. describe:: x != y
+
+            Checks if two flags are not equal.
+        .. describe:: hash(x)
+
+               Return the flag's hash.
+        .. describe:: iter(x)
+
+               Returns an iterator of ``(name, value)`` pairs. This allows it
+               to be, for example, constructed as a dict or a list of pairs.
+
+    Attributes
+    -----------
+    value: :class`int`
+        The raw value. This value is a bit array field of a 53-bit integer
+        representing the currently available flags. You should query
+        flags via the properties rather than using this raw value.
+    """
+    __slots__ = ('value',)
+
+    def __init__(self, **kwargs):
+        self.value = self.ALL_OFF_VALUE
+        for key, value in kwargs.items():
+            if key not in self.VALID_FLAGS:
+                raise TypeError('%r is not a valid flag name.' % key)
+            setattr(self, key, value)
+
+    @classmethod
+    def _from_value(cls, value):
+        self = cls.__new__(cls)
+        self.value = value
+        return self
+
+    def __eq__(self, other):
+        return isinstance(other, SystemChannelFlags) and self.value == other.value
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __repr__(self):
+        return '<SystemChannelFlags value=%s>' % self.value
+
+    def __iter__(self):
+        for name, value in self.__class__.__dict__.items():
+            if isinstance(value, _flag_descriptor):
+                yield (name, self._has_flag(value.flag))
+
+    # For some reason the flags in the Discord API are "inverted"
+    # ergo, if they're set then it means "suppress" (off in the GUI toggle)
+    # Since this is counter-intuitive from an API perspective and annoying
+    # these will be inverted automatically
+
+    def _has_flag(self, o):
+        return (self.value & o) != o
+
+    def _set_flag(self, o, toggle):
+        if toggle is True:
+            self.value &= ~o
+        elif toggle is False:
+            self.value |= o
+        else:
+            raise TypeError('Value to set for SystemChannelFlags must be a bool.')
+
+    @_flag_descriptor
+    def join_notifications(self):
+        """:class:`bool`: Returns True if the system channel is used for member join notifications."""
+        return 1
+
+    @_flag_descriptor
+    def premium_subscriptions(self):
+        """:class:`bool`: Returns True if the system channel is used for Nitro boosting notifications."""
+        return 2
+
 
 class Guild(Hashable):
     """Represents a Discord guild.
@@ -75,8 +191,8 @@ class Guild(Hashable):
     ----------
     name: :class:`str`
         The guild name.
-    emojis
-        A :class:`tuple` of :class:`Emoji` that the guild owns.
+    emojis: Tuple[:class:`Emoji`, ...]
+        All emojis that the guild owns.
     region: :class:`VoiceRegion`
         The region the guild belongs on. There is a chance that the region
         will be a :class:`str` if the value is not recognised by the enumerator.
@@ -139,7 +255,7 @@ class Guild(Hashable):
                  'verification_level', 'explicit_content_filter', 'splash',
                  '_voice_states', '_system_channel_id', 'default_notifications',
                  'description', 'max_presences', 'max_members', 'premium_tier',
-                 'premium_subscription_count')
+                 'premium_subscription_count', '_system_channel_flags')
 
     _PREMIUM_GUILD_LIMITS = {
         None: _GuildLimit(emoji=50, bitrate=96e3, filesize=8388608),
@@ -259,6 +375,7 @@ class Guild(Hashable):
         self.max_members = guild.get('max_members')
         self.premium_tier = guild.get('premium_tier', 0)
         self.premium_subscription_count = guild.get('premium_subscription_count', 0)
+        self._system_channel_flags = guild.get('system_channel_flags', 0)
 
         for mdata in guild.get('members', []):
             member = Member(data=mdata, guild=self, state=state)
@@ -406,6 +523,11 @@ class Guild(Hashable):
         return channel_id and self._channels.get(channel_id)
 
     @property
+    def system_channel_flags(self):
+        """:class:`SystemChannelFlags`: Returns the guild's system channel settings."""
+        return SystemChannelFlags._from_value(self._system_channel_flags)
+
+    @property
     def emoji_limit(self):
         """:class:`int`: The maximum number of emoji slots this guild has."""
         more_emoji = 200 if 'MORE_EMOJI' in self.features else 50
@@ -464,7 +586,7 @@ class Guild(Hashable):
         return bool(self.icon and self.icon.startswith('a_'))
 
     def icon_url_as(self, *, format=None, static_format='webp', size=1024):
-        """Returns a :class:`Asset` for the guild's icon.
+        """Returns an :class:`Asset` for the guild's icon.
 
         The format must be one of 'webp', 'jpeg', 'jpg', 'png' or 'gif', and
         'gif' is only valid for animated avatars. The size must be a power of 2
@@ -500,7 +622,7 @@ class Guild(Hashable):
         return self.banner_url_as()
 
     def banner_url_as(self, *, format='webp', size=2048):
-        """Returns a :class:`Asset` for the guild's banner.
+        """Returns an :class:`Asset` for the guild's banner.
 
         The format must be one of 'webp', 'jpeg', or 'png'. The
         size must be a power of 2 between 16 and 4096.
@@ -530,7 +652,7 @@ class Guild(Hashable):
         return self.splash_url_as()
 
     def splash_url_as(self, *, format='webp', size=2048):
-        """Returns a :class:`Asset` for the guild's invite splash.
+        """Returns an :class:`Asset` for the guild's invite splash.
 
         The format must be one of 'webp', 'jpeg', 'jpg', or 'png'. The
         size must be a power of 2 between 16 and 4096.
@@ -576,7 +698,7 @@ class Guild(Hashable):
 
     @property
     def shard_id(self):
-        """Returns the shard ID for this guild if applicable."""
+        """:class:`int`: Returns the shard ID for this guild if applicable."""
         count = self._state.shard_count
         if count is None:
             return None
@@ -584,7 +706,7 @@ class Guild(Hashable):
 
     @property
     def created_at(self):
-        """Returns the guild's creation time in UTC."""
+        """:class:`datetime.datetime`: Returns the guild's creation time in UTC."""
         return utils.snowflake_time(self.id)
 
     def get_member_named(self, name):
@@ -869,6 +991,8 @@ class Guild(Hashable):
             The new vanity code for the guild.
         system_channel: Optional[:class:`TextChannel`]
             The new channel that is used for the system channel. Could be ``None`` for no system channel.
+        system_channel_flags: :class:`SystemChannelFlags`
+            The new system channel settings to use with the new system channel.
         reason: Optional[:class:`str`]
             The reason for editing this guild. Shows up on the audit log.
 
@@ -973,7 +1097,48 @@ class Guild(Hashable):
             raise InvalidArgument('explicit_content_filter field must be of type ContentFilter')
 
         fields['explicit_content_filter'] = explicit_content_filter.value
+
+        system_channel_flags = fields.get('system_channel_flags', self.system_channel_flags)
+        if not isinstance(system_channel_flags, SystemChannelFlags):
+            raise InvalidArgument('system_channel_flags field must be of type SystemChannelFlags')
+
+        fields['system_channel_flags'] = system_channel_flags.value
         await http.edit_guild(self.id, reason=reason, **fields)
+
+    async def fetch_channels(self):
+        """|coro|
+
+        Retrieves all :class:`abc.GuildChannel` that the guild has.
+
+        .. note::
+
+            This method is an API call. For general usage, consider :attr:`channels` instead.
+
+        .. versionadded:: 1.2.0
+
+        Raises
+        -------
+        TypeError
+            An unknown channel type was received from Discord.
+        HTTPException
+            Retrieving the channels failed.
+
+        Returns
+        -------
+        List[:class:`abc.GuildChannel`]
+            All channels in the guild.
+        """
+        data = await self._state.http.get_all_guild_channels(self.id)
+
+        def convert(d):
+            factory, ch_type = _channel_factory(d['type'])
+            if factory is None:
+                raise InvalidData('Unknown channel type {type} for channel ID {id}.'.format_map(data))
+
+            channel = factory(guild=self, state=self._state, data=d)
+            return channel
+
+        return [convert(d) for d in data]
 
     async def fetch_member(self, member_id):
         """|coro|
@@ -1318,10 +1483,10 @@ class Guild(Hashable):
             This is aliased to ``color`` as well.
         hoist: :class:`bool`
             Indicates if the role should be shown separately in the member list.
-            Defaults to False.
+            Defaults to ``False``.
         mentionable: :class:`bool`
             Indicates if the role should be mentionable by others.
-            Defaults to False.
+            Defaults to ``False``.
         reason: Optional[:class:`str`]
             The reason for creating this role. Shows up on the audit log.
 
@@ -1532,15 +1697,15 @@ class Guild(Hashable):
         -----------
         limit: Optional[:class:`int`]
             The number of entries to retrieve. If ``None`` retrieve all entries.
-        before: Union[:class:`abc.Snowflake`, datetime]
+        before: Union[:class:`abc.Snowflake`, :class:`datetime.datetime`]
             Retrieve entries before this date or entry.
             If a date is provided it must be a timezone-naive datetime representing UTC time.
-        after: Union[:class:`abc.Snowflake`, datetime]
+        after: Union[:class:`abc.Snowflake`, :class:`datetime.datetime`]
             Retrieve entries after this date or entry.
             If a date is provided it must be a timezone-naive datetime representing UTC time.
         oldest_first: :class:`bool`
-            If set to true, return entries in oldest->newest order. Defaults to True if
-            ``after`` is specified, otherwise False.
+            If set to ``True``, return entries in oldest->newest order. Defaults to True if
+            ``after`` is specified, otherwise ``False``.
         user: :class:`abc.Snowflake`
             The moderator to filter entries from.
         action: :class:`AuditLogAction`
