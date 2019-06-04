@@ -114,7 +114,7 @@ class BaseUser(_BaseUser):
 
     @property
     def avatar_url(self):
-        """Returns a :class:`Asset`: for the avatar the user has.
+        """Returns a :class:`Asset` for the avatar the user has.
 
         If the user does not have a traditional avatar, an asset for
         the default avatar is returned instead.
@@ -129,14 +129,14 @@ class BaseUser(_BaseUser):
         return bool(self.avatar and self.avatar.startswith('a_'))
 
     def avatar_url_as(self, *, format=None, static_format='webp', size=1024):
-        """Returns a :class:`Asset`: for the avatar the user has.
+        """Returns a :class:`Asset` for the avatar the user has.
 
         If the user does not have a traditional avatar, an asset for
         the default avatar is returned instead.
 
         The format must be one of 'webp', 'jpeg', 'jpg', 'png' or 'gif', and
         'gif' is only valid for animated avatars. The size must be a power of 2
-        between 16 and 1024.
+        between 16 and 4096.
 
         Parameters
         -----------
