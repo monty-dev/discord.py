@@ -234,10 +234,17 @@ class Guild(Hashable):
         A list of features that the guild has. They are currently as follows:
 
         - ``VIP_REGIONS``: Guild has VIP voice regions
-        - ``VANITY_URL``: Guild has a vanity invite URL (e.g. discord.gg/discord-api)
-        - ``INVITE_SPLASH``: Guild's invite page has a special splash.
-        - ``VERIFIED``: Guild is a "verified" server.
+        - ``VANITY_URL``: Guild can have a vanity invite URL (e.g. discord.gg/discord-api)
+        - ``INVITE_SPLASH``: Guild's invite page can have a special splash.
+        - ``VERIFIED``: Guild is a verified server.
+        - ``PARTNERED``: Guild is a partnered server.
         - ``MORE_EMOJI``: Guild is allowed to have more than 50 custom emoji.
+        - ``DISCOVERABLE``: Guild shows up in Server Discovery.
+        - ``COMMERCE``: Guild can sell things using store channels.
+        - ``LURKABLE``: Users can lurk in this guild via Server Discovery.
+        - ``NEWS``: Guild can create news channels.
+        - ``BANNER``: Guild can upload and use a banner (i.e. :meth:`banner_url`).
+        - ``ANIMATED_ICON``: Guild can upload an animated icon.
 
     splash: Optional[:class:`str`]
         The guild's invite splash.
@@ -552,6 +559,11 @@ class Guild(Hashable):
     def get_member(self, user_id):
         """Returns a :class:`Member` with the given ID. If not found, returns None."""
         return self._members.get(user_id)
+
+    @property
+    def premium_subscribers(self):
+        """List[:class:`Member`]: A list of members who have "boosted" this guild."""
+        return [member for member in self.members if member.premium_since is not None]
 
     @property
     def roles(self):
