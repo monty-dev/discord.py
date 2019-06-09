@@ -716,7 +716,8 @@ Enumerations
 The API provides some enumerations for certain types of strings to avoid the API
 from being stringly typed in case the strings change in the future.
 
-All enumerations are subclasses of :class:`enum.Enum`.
+All enumerations are subclasses of an internal class which mimics the behaviour
+of :class:`enum.Enum`.
 
 .. class:: ChannelType
 
@@ -2386,6 +2387,8 @@ The following exceptions are thrown by the library.
 
 .. autoexception:: NotFound
 
+.. autoexception:: InvalidData
+
 .. autoexception:: InvalidArgument
 
 .. autoexception:: GatewayNotFound
@@ -2404,11 +2407,12 @@ Exception Hierarchy
     - :exc:`Exception`
         - :exc:`DiscordException`
             - :exc:`ClientException`
+                - :exc:`InvalidData`
+                - :exc:`InvalidArgument`
+                - :exc:`LoginFailure`
+                - :exc:`ConnectionClosed`
             - :exc:`NoMoreItems`
             - :exc:`GatewayNotFound`
             - :exc:`HTTPException`
                 - :exc:`Forbidden`
                 - :exc:`NotFound`
-            - :exc:`InvalidArgument`
-            - :exc:`LoginFailure`
-            - :exc:`ConnectionClosed`
