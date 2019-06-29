@@ -42,6 +42,12 @@ Client
 .. autoclass:: AppInfo
     :members:
 
+.. autoclass:: Team
+    :members:
+
+.. autoclass:: TeamMember
+    :members:
+
 Voice
 ------
 
@@ -1536,6 +1542,18 @@ of :class:`enum.Enum`.
 
         Represents the Dark theme on Discord.
 
+
+.. class:: TeamMembershipState
+
+    Represents the membership state of a team member retrieved through :func:Bot.application_info.
+
+    .. attribue:: invited
+
+        Represents an invited member.
+
+    .. attribute:: accepted
+
+        Represents a member currently in the team.
 
 Async Iterator
 ----------------
