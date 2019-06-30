@@ -39,19 +39,19 @@ Client
 .. autoclass:: AutoShardedClient
     :members:
 
-.. autoclass:: AppInfo
+.. autoclass:: AppInfo()
     :members:
 
-.. autoclass:: Team
+.. autoclass:: Team()
     :members:
 
-.. autoclass:: TeamMember
+.. autoclass:: TeamMember()
     :members:
 
 Voice
 ------
 
-.. autoclass:: VoiceClient
+.. autoclass:: VoiceClient()
     :members:
 
 .. autoclass:: AudioSource
@@ -1545,9 +1545,9 @@ of :class:`enum.Enum`.
 
 .. class:: TeamMembershipState
 
-    Represents the membership state of a team member retrieved through :func:Bot.application_info.
+    Represents the membership state of a team member retrieved through :func:`Bot.application_info`.
 
-    .. attribue:: invited
+    .. attribute:: invited
 
         Represents an invited member.
 
