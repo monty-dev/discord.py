@@ -165,7 +165,7 @@ class Client:
                 - All member related events will be disabled.
                     - :func:`on_member_update`
                     - :func:`on_member_join`
-                    - :func:`on_member_leave`
+                    - :func:`on_member_remove`
 
                 - Typing events will be disabled (:func:`on_typing_start`).
                 - If ``fetch_offline_members`` is set to ``False`` then the user cache will not exist.
@@ -976,7 +976,7 @@ class Client:
 
         .. note::
 
-            Using this, you will **not** receive :attr:`.Guild.channels`, :class:`.Guild.members`,
+            Using this, you will **not** receive :attr:`.Guild.channels`, :attr:`.Guild.members`,
             :attr:`.Member.activity` and :attr:`.Member.voice` per :class:`.Member`.
 
         .. note::

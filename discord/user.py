@@ -175,7 +175,7 @@ class BaseUser(_BaseUser):
 
     @property
     def default_avatar(self):
-        """class:`DefaultAvatar`: Returns the default avatar for a given user. This is calculated by the user's discriminator."""
+        """:class:`DefaultAvatar`: Returns the default avatar for a given user. This is calculated by the user's discriminator."""
         return try_enum(DefaultAvatar, int(self.discriminator) % len(DefaultAvatar))
 
     @property
@@ -226,7 +226,7 @@ class BaseUser(_BaseUser):
     def created_at(self):
         """:class:`datetime.datetime`: Returns the user's creation time in UTC.
 
-        This is when the user's discord account was created."""
+        This is when the user's Discord account was created."""
         return snowflake_time(self.id)
 
     @property
