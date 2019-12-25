@@ -39,6 +39,8 @@ from .errors import InvalidArgument, ClientException, HTTPException
 from .embeds import Embed
 from .member import Member
 from .flags import MessageFlags
+from .utils import escape_mentions
+
 
 class Attachment:
     """Represents an attachment from Discord.
@@ -547,17 +549,7 @@ class Message:
 
         pattern = re.compile('|'.join(transformations.keys()))
         result = pattern.sub(repl, self.content)
-
-        transformations = {
-            '@everyone': '@\u200beveryone',
-            '@here': '@\u200bhere'
-        }
-
-        def repl2(obj):
-            return transformations.get(obj.group(0), '')
-
-        pattern = re.compile('|'.join(transformations.keys()))
-        return pattern.sub(repl2, result)
+        return escape_mentions(result)
 
     @property
     def created_at(self):
