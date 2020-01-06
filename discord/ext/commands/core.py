@@ -657,13 +657,6 @@ class Command(_BaseCommand):
             if not view.eof:
                 raise TooManyArguments('Too many arguments passed to ' + self.qualified_name)
 
-    async def _verify_checks(self, ctx):
-        if not self.enabled:
-            raise DisabledCommand('{0.name} command is disabled'.format(self))
-
-        if not await self.can_run(ctx):
-            raise CheckFailure('The check functions for command {0.qualified_name} failed.'.format(self))
-
     async def call_before_hooks(self, ctx):
         # now that we're done preparing we can call the pre-command hooks
         # first, call the command local hook:
@@ -713,7 +706,9 @@ class Command(_BaseCommand):
 
     async def prepare(self, ctx):
         ctx.command = self
-        await self._verify_checks(ctx)
+
+        if not await self.can_run(ctx):
+            raise CheckFailure('The check functions for command {0.qualified_name} failed.'.format(self))
 
         if self.cooldown_after_parsing:
             await self._parse_arguments(ctx)
@@ -931,7 +926,11 @@ class Command(_BaseCommand):
         """|coro|
 
         Checks if the command can be executed by checking all the predicates
-        inside the :attr:`.checks` attribute.
+        inside the :attr:`.checks` attribute. This also checks whether the
+        command is disabled.
+
+        .. versionchanged:: 1.3
+            Checks whether the command is disabled or not
 
         Parameters
         -----------
@@ -949,6 +948,9 @@ class Command(_BaseCommand):
         :class:`bool`
             A boolean indicating if the command can be invoked.
         """
+
+        if not self.enabled:
+            raise DisabledCommand('{0.name} command is disabled'.format(self))
 
         original = ctx.command
         ctx.command = self
