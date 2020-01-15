@@ -837,6 +837,9 @@ of :class:`enum.Enum`.
     .. attribute:: watching
 
         A "Watching" activity type.
+    .. attribute:: custom
+
+        A custom activity type.
 
 .. class:: HypeSquadHouse
 
@@ -2480,6 +2483,12 @@ Colour
 .. autoclass:: Colour
     :members:
 
+BaseActivity
+~~~~~~~~~~~~~~
+
+.. autoclass:: BaseActivity
+    :members:
+
 Activity
 ~~~~~~~~~
 
@@ -2496,6 +2505,12 @@ Streaming
 ~~~~~~~~~~~
 
 .. autoclass:: Streaming
+    :members:
+
+CustomActivity
+~~~~~~~~~~~~~~~
+
+.. autoclass:: CustomActivity
     :members:
 
 Permissions

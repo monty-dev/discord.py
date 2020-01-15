@@ -36,7 +36,7 @@ import inspect
 import gc
 
 from .guild import Guild
-from .activity import _ActivityTag
+from .activity import BaseActivity
 from .user import User, ClientUser
 from .emoji import Emoji
 from .partial_emoji import PartialEmoji
@@ -83,8 +83,8 @@ class ConnectionState:
 
         activity = options.get('activity', None)
         if activity:
-            if not isinstance(activity, _ActivityTag):
-                raise TypeError('activity parameter must be one of Game, Streaming, or Activity.')
+            if not isinstance(activity, BaseActivity):
+                raise TypeError('activity parameter must derive from BaseActivity.')
 
             activity = activity.to_dict()
 
@@ -340,11 +340,15 @@ class ConnectionState:
 
             # only real bots wait for GUILD_CREATE streaming
             if self.is_bot:
-                while not launch.is_set():
+                while True:
                     # this snippet of code is basically waiting 2 seconds
                     # until the last GUILD_CREATE was sent
-                    launch.set()
-                    await asyncio.sleep(2)
+                    try:
+                        await asyncio.wait_for(launch.wait(), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        break
+                    else:
+                        launch.clear()
 
             guilds = next(zip(*self._ready_state.guilds), [])
             if self._fetch_offline:
@@ -729,7 +733,7 @@ class ConnectionState:
                 # so we say.
                 try:
                     state = self._ready_state
-                    state.launch.clear()
+                    state.launch.set()
                     state.guilds.append((guild, unavailable))
                 except AttributeError:
                     # the _ready_state attribute is only there during
@@ -1020,31 +1024,29 @@ class AutoShardedConnectionState(ConnectionState):
 
     async def _delay_ready(self):
         launch = self._ready_state.launch
-        while not launch.is_set():
+        while True:
             # this snippet of code is basically waiting 2 seconds
             # until the last GUILD_CREATE was sent
-            launch.set()
-            await asyncio.sleep(2.0 * self.shard_count)
+            try:
+                await asyncio.wait_for(launch.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                break
+            else:
+                launch.clear()
 
-        if self._fetch_offline:
-            guilds = sorted(self._ready_state.guilds, key=lambda g: g[0].shard_id)
+        guilds = sorted(self._ready_state.guilds, key=lambda g: g[0].shard_id)
 
-            for shard_id, sub_guilds_info in itertools.groupby(guilds, key=lambda g: g[0].shard_id):
-                sub_guilds, sub_available = zip(*sub_guilds_info)
+        for shard_id, sub_guilds_info in itertools.groupby(guilds, key=lambda g: g[0].shard_id):
+            sub_guilds, sub_available = zip(*sub_guilds_info)
+            if self._fetch_offline:
                 await self.request_offline_members(sub_guilds, shard_id=shard_id)
 
-                for guild, unavailable in zip(sub_guilds, sub_available):
-                    if unavailable is False:
-                        self.dispatch('guild_available', guild)
-                    else:
-                        self.dispatch('guild_join', guild)
-                self.dispatch('shard_ready', shard_id)
-        else:
-            for guild, unavailable in self._ready_state.guilds:
+            for guild, unavailable in zip(sub_guilds, sub_available):
                 if unavailable is False:
                     self.dispatch('guild_available', guild)
                 else:
                     self.dispatch('guild_join', guild)
+            self.dispatch('shard_ready', shard_id)
 
         # remove the state
         try:
