@@ -50,6 +50,7 @@ from .enums import ChannelType, try_enum, Status, Enum
 from . import utils
 from .embeds import Embed
 from .object import Object
+from .invite import Invite
 
 class ListenerType(Enum):
     chunk = 0
@@ -508,6 +509,23 @@ class ConnectionState:
                 if user:
                     self.dispatch('reaction_remove', reaction, user)
 
+    def parse_message_reaction_remove_emoji(self, data):
+        emoji = data['emoji']
+        emoji_id = utils._get_as_snowflake(emoji, 'id')
+        emoji = PartialEmoji.with_state(self, animated=emoji.get('animated', False), id=emoji_id, name=emoji['name'])
+        raw = RawReactionClearEmojiEvent(data, emoji)
+        self.dispatch('raw_reaction_clear_emoji', raw)
+
+        message = self._get_message(raw.message_id)
+        if message is not None:
+            try:
+                reaction = message._clear_emoji(emoji)
+            except (AttributeError, ValueError): # eventual consistency lol
+                pass
+            else:
+                if reaction:
+                    self.dispatch('reaction_clear_emoji', reaction)
+
     def parse_presence_update(self, data):
         guild_id = utils._get_as_snowflake(data, 'guild_id')
         guild = self._get_guild(guild_id)
@@ -536,6 +554,14 @@ class ConnectionState:
 
     def parse_user_update(self, data):
         self.user._update(data)
+
+    def parse_invite_create(self, data):
+        invite = Invite.from_gateway(state=self, data=data)
+        self.dispatch('invite_create', invite)
+
+    def parse_invite_delete(self, data):
+        invite = Invite.from_gateway(state=self, data=data)
+        self.dispatch('invite_delete', invite)
 
     def parse_channel_delete(self, data):
         guild = self._get_guild(utils._get_as_snowflake(data, 'guild_id'))
