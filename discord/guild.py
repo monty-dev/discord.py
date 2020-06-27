@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import copy
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 
 from . import utils
 from .role import Role
@@ -406,12 +406,16 @@ class Guild(Hashable):
         List[Tuple[Optional[:class:`CategoryChannel`], List[:class:`abc.GuildChannel`]]]:
             The categories and their associated channels.
         """
-        grouped = defaultdict(list)
+        grouped = {}
         for channel in self._channels.values():
             if isinstance(channel, CategoryChannel):
+                grouped[channel.id] = []
                 continue
 
-            grouped[channel.category_id].append(channel)
+            try:
+                grouped[channel.category_id].append(channel)
+            except KeyError:
+                grouped[channel.category_id] = [channel]
 
         def key(t):
             k, v = t
@@ -1379,7 +1383,7 @@ class Guild(Hashable):
             raise InvalidArgument('Expected int for ``days``, received {0.__class__.__name__} instead.'.format(days))
 
         if roles:
-            roles = [role.id for role in roles]
+            roles = [str(role.id) for role in roles]
 
         data = await self._state.http.prune_members(self.id, days, compute_prune_count=compute_prune_count, roles=roles, reason=reason)
         return data['pruned']
