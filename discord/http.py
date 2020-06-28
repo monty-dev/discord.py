@@ -630,6 +630,17 @@ class HTTPClient:
 
         return self.request(Route('PATCH', '/guilds/{guild_id}', guild_id=guild_id), json=payload, reason=reason)
 
+    def get_template(self, code):
+        return self.request(Route('GET', '/guilds/templates/{code}', code=code))
+    
+    def create_from_template(self, code, name, region, icon):
+        payload = {
+            'name': name,
+            'icon': icon,
+            'region': region
+        }
+        return self.request(Route('POST', '/guilds/templates/{code}', code=code), json=payload)
+
     def get_bans(self, guild_id):
         return self.request(Route('GET', '/guilds/{guild_id}/bans', guild_id=guild_id))
 
@@ -700,6 +711,38 @@ class HTTPClient:
         }
         r = Route('PATCH', '/guilds/{guild_id}/emojis/{emoji_id}', guild_id=guild_id, emoji_id=emoji_id)
         return self.request(r, json=payload, reason=reason)
+
+    def get_all_integrations(self, guild_id):
+        r = Route('GET', '/guilds/{guild_id}/integrations', guild_id=guild_id)
+
+        return self.request(r)
+
+    def create_integration(self, guild_id, type, id):
+        payload = {
+            'type': type,
+            'id': id
+        }
+
+        r = Route('POST', '/guilds/{guild_id}/integrations', guild_id=guild_id)
+        return self.request(r, json=payload)
+
+    def edit_integration(self, guild_id, integration_id, **payload):
+        r = Route('PATCH', '/guilds/{guild_id}/integrations/{integration_id}', guild_id=guild_id,
+                  integration_id=integration_id)
+
+        return self.request(r, json=payload)
+
+    def sync_integration(self, guild_id, integration_id):
+        r = Route('POST', '/guilds/{guild_id}/integrations/{integration_id}/sync', guild_id=guild_id,
+                  integration_id=integration_id)
+
+        return self.request(r)
+
+    def delete_integration(self, guild_id, integration_id):
+        r = Route('DELETE', '/guilds/{guild_id}/integrations/{integration_id}', guild_id=guild_id,
+                  integration_id=integration_id)
+
+        return self.request(r)
 
     def get_audit_logs(self, guild_id, limit=100, before=None, after=None, user_id=None, action_type=None):
         params = {'limit': limit}
