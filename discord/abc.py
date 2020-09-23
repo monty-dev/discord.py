@@ -25,6 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import abc
+import sys
 import copy
 import asyncio
 
@@ -36,7 +37,7 @@ from .permissions import PermissionOverwrite, Permissions
 from .role import Role
 from .invite import Invite
 from .file import File
-from .voice_client import VoiceClient
+from .voice_client import VoiceClient, VoiceProtocol
 from . import utils
 
 class _Undefined:
@@ -169,7 +170,7 @@ class _Overwrites:
         self.id = kwargs.pop('id')
         self.allow = kwargs.pop('allow', 0)
         self.deny = kwargs.pop('deny', 0)
-        self.type = kwargs.pop('type')
+        self.type = sys.intern(kwargs.pop('type'))
 
     def _asdict(self):
         return {
@@ -698,6 +699,11 @@ class GuildChannel:
             You do not have the proper permissions to create this channel.
         ~discord.HTTPException
             Creating the channel failed.
+
+        Returns
+        --------
+        :class:`.abc.GuildChannel`
+            The channel that was created.
         """
         raise NotImplementedError
 
@@ -1048,7 +1054,6 @@ class Messageable(metaclass=abc.ABCMeta):
         """
         return HistoryIterator(self, limit=limit, before=before, after=after, around=around, oldest_first=oldest_first)
 
-
 class Connectable(metaclass=abc.ABCMeta):
     """An ABC that details the common operations on a channel that can
     connect to a voice server.
@@ -1067,7 +1072,7 @@ class Connectable(metaclass=abc.ABCMeta):
     def _get_voice_state_pair(self):
         raise NotImplementedError
 
-    async def connect(self, *, timeout=60.0, reconnect=True):
+    async def connect(self, *, timeout=60.0, reconnect=True, cls=VoiceClient):
         """|coro|
 
         Connects to voice and creates a :class:`VoiceClient` to establish
@@ -1081,6 +1086,9 @@ class Connectable(metaclass=abc.ABCMeta):
             Whether the bot should automatically attempt
             a reconnect if a part of the handshake fails
             or the gateway goes down.
+        cls: Type[:class:`VoiceProtocol`]
+            A type that subclasses :class:`~discord.VoiceProtocol` to connect with.
+            Defaults to :class:`~discord.VoiceClient`.
 
         Raises
         -------
@@ -1093,20 +1101,25 @@ class Connectable(metaclass=abc.ABCMeta):
 
         Returns
         --------
-        :class:`~discord.VoiceClient`
+        :class:`~discord.VoiceProtocol`
             A voice client that is fully connected to the voice server.
         """
+
+        if not issubclass(cls, VoiceProtocol):
+            raise TypeError('Type must meet VoiceProtocol abstract base class.')
+
         key_id, _ = self._get_voice_client_key()
         state = self._state
 
         if state._get_voice_client(key_id):
             raise ClientException('Already connected to a voice channel.')
 
-        voice = VoiceClient(state=state, timeout=timeout, channel=self)
+        client = state._get_client()
+        voice = cls(client, self)
         state._add_voice_client(key_id, voice)
 
         try:
-            await voice.connect(reconnect=reconnect)
+            await voice.connect(timeout=timeout, reconnect=reconnect)
         except asyncio.TimeoutError:
             try:
                 await voice.disconnect(force=True)

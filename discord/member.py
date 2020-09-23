@@ -25,6 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import itertools
+import sys
 from operator import attrgetter
 
 import discord.abc
@@ -221,10 +222,10 @@ class Member(discord.abc.Messageable, _BaseUser):
         clone = cls(data=data, guild=guild, state=state)
         to_return = cls(data=data, guild=guild, state=state)
         to_return._client_status = {
-            key: value
+            sys.intern(key): sys.intern(value)
             for key, value in data.get('client_status', {}).items()
         }
-        to_return._client_status[None] = data['status']
+        to_return._client_status[None] = sys.intern(data['status'])
         return to_return, clone
 
     @classmethod
@@ -266,27 +267,38 @@ class Member(discord.abc.Messageable, _BaseUser):
     def _presence_update(self, data, user):
         self.activities = tuple(map(create_activity, data.get('activities', [])))
         self._client_status = {
-            key: value
+            sys.intern(key): sys.intern(value)
             for key, value in data.get('client_status', {}).items()
         }
-        self._client_status[None] = data['status']
+        self._client_status[None] = sys.intern(data['status'])
 
         if len(user) > 1:
-            u = self._user
-            original = (u.name, u.avatar, u.discriminator)
-            # These keys seem to always be available
-            modified = (user['username'], user['avatar'], user['discriminator'])
-            if original != modified:
-                to_return = User._copy(self._user)
-                u.name, u.avatar, u.discriminator = modified
-                # Signal to dispatch on_user_update
-                return to_return, u
+            return self._update_inner_user(user)
         return False
+
+    def _update_inner_user(self, user):
+        u = self._user
+        original = (u.name, u.avatar, u.discriminator)
+        # These keys seem to always be available
+        modified = (user['username'], user['avatar'], user['discriminator'])
+        if original != modified:
+            to_return = User._copy(self._user)
+            u.name, u.avatar, u.discriminator = modified
+            # Signal to dispatch on_user_update
+            return to_return, u
 
     @property
     def status(self):
         """:class:`Status`: The member's overall status. If the value is unknown, then it will be a :class:`str` instead."""
         return try_enum(Status, self._client_status[None])
+
+    @property
+    def raw_status(self):
+        """:class:`str`: The member's overall status as a string value.
+
+        .. versionadded:: 1.5
+        """
+        return self._client_status[None]
 
     @status.setter
     def status(self, value):
@@ -309,7 +321,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         return try_enum(Status, self._client_status.get('web', 'offline'))
 
     def is_on_mobile(self):
-        """A helper function that determines if a member is active on a mobile device."""
+        """:class:`bool`: A helper function that determines if a member is active on a mobile device."""
         return 'mobile' in self._client_status
 
     @property
@@ -395,6 +407,11 @@ class Member(discord.abc.Messageable, _BaseUser):
         -----------
         message: :class:`Message`
             The message to check if you're mentioned in.
+
+        Returns
+        -------
+        :class:`bool`
+            Indicates if the member is mentioned in the message.
         """
         if message.guild is None or message.guild.id != self.guild.id:
             return False

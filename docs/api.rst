@@ -54,6 +54,9 @@ Voice
 .. autoclass:: VoiceClient()
     :members:
 
+.. autoclass:: VoiceProtocol
+    :members:
+
 .. autoclass:: AudioSource
     :members:
 
@@ -2736,6 +2739,11 @@ Widget
 .. autoclass:: Widget()
     :members:
 
+MessageReference
+~~~~~~~~~~~~~~~~~
+.. autoclass:: MessageReference()
+    :members:
+
 RawMessageDeleteEvent
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -2806,6 +2814,18 @@ AllowedMentions
 ~~~~~~~~~~~~~~~~~
 
 .. autoclass:: AllowedMentions
+    :members:
+
+Intents
+~~~~~~~~~~
+
+.. autoclass:: Intents
+    :members:
+
+MemberCacheFlags
+~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: MemberCacheFlags
     :members:
 
 File
@@ -2917,6 +2937,8 @@ The following exceptions are thrown by the library.
 
 .. autoexception:: ConnectionClosed
 
+.. autoexception:: PrivilegedIntentsRequired
+
 .. autoexception:: discord.opus.OpusError
 
 .. autoexception:: discord.opus.OpusNotLoaded
@@ -2933,6 +2955,7 @@ Exception Hierarchy
                 - :exc:`InvalidArgument`
                 - :exc:`LoginFailure`
                 - :exc:`ConnectionClosed`
+                - :exc:`PrivilegedIntentsRequired`
             - :exc:`NoMoreItems`
             - :exc:`GatewayNotFound`
             - :exc:`HTTPException`

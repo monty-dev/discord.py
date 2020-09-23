@@ -140,6 +140,18 @@ class Client:
         Integer starting at ``0`` and less than :attr:`.shard_count`.
     shard_count: Optional[:class:`int`]
         The total number of shards.
+    intents: :class:`Intents`
+        The intents that you want to enable for the session. This is a way of
+        disabling and enabling certain gateway events from triggering and being sent.
+        If not given, defaults to a regularly constructed :class:`Intents` class.
+
+        .. versionadded:: 1.5
+    member_cache_flags: :class:`MemberCacheFlags`
+        Allows for finer control over how the library caches members.
+        If not given, defaults to cache as much as possible with the
+        currently selected intents.
+
+        .. versionadded:: 1.5
     fetch_offline_members: :class:`bool`
         Indicates if :func:`.on_ready` should be delayed to fetch all offline
         members from the guilds the client belongs to. If this is ``False``\, then
@@ -238,6 +250,7 @@ class Client:
         self._closed = False
         self._ready = asyncio.Event()
         self._connection._get_websocket = self._get_websocket
+        self._connection._get_client = lambda: self
 
         if VoiceClient.warn_nacl:
             VoiceClient.warn_nacl = False
@@ -299,11 +312,14 @@ class Client:
 
     @property
     def voice_clients(self):
-        """List[:class:`.VoiceClient`]: Represents a list of voice connections."""
+        """List[:class:`.VoiceProtocol`]: Represents a list of voice connections.
+
+        These are usually :class:`.VoiceClient` instances.
+        """
         return self._connection.voice_clients
 
     def is_ready(self):
-        """Specifies if the client's internal cache is ready for use."""
+        """:class:`bool`: Specifies if the client's internal cache is ready for use."""
         return self._ready.is_set()
 
     async def _run_event(self, coro, event_name, *args, **kwargs):
@@ -374,6 +390,7 @@ class Client:
         print('Ignoring exception in {}'.format(event_method), file=sys.stderr)
         traceback.print_exc()
 
+    @utils.deprecated('Guild.chunk')
     async def request_offline_members(self, *guilds):
         r"""|coro|
 
@@ -387,6 +404,10 @@ class Client:
         in the guild is larger than 250. You can check if a guild is large
         if :attr:`.Guild.large` is ``True``.
 
+        .. warning::
+
+            This method is deprecated. Use :meth:`Guild.chunk` instead.
+
         Parameters
         -----------
         \*guilds: :class:`.Guild`
@@ -395,12 +416,13 @@ class Client:
         Raises
         -------
         :exc:`.InvalidArgument`
-            If any guild is unavailable or not large in the collection.
+            If any guild is unavailable in the collection.
         """
-        if any(not g.large or g.unavailable for g in guilds):
-            raise InvalidArgument('An unavailable or non-large guild was passed.')
+        if any(g.unavailable for g in guilds):
+            raise InvalidArgument('An unavailable guild was passed.')
 
-        await self._connection.request_offline_members(guilds)
+        for guild in guilds:
+            await self._connection.chunk_guild(guild)
 
     # hooks
 
@@ -554,6 +576,8 @@ class Client:
                 # sometimes, discord sends us 1000 for unknown reasons so we should reconnect
                 # regardless and rely on is_closed instead
                 if isinstance(exc, ConnectionClosed):
+                    if exc.code == 4014:
+                        raise PrivilegedIntentsRequired(exc.shard_id) from None
                     if exc.code != 1000:
                         await self.close()
                         raise
@@ -683,7 +707,7 @@ class Client:
     # properties
 
     def is_closed(self):
-        """Indicates if the websocket connection is closed."""
+        """:class:`bool`: Indicates if the websocket connection is closed."""
         return self._closed
 
     @property
@@ -800,6 +824,11 @@ class Client:
             Just because you receive a :class:`.abc.GuildChannel` does not mean that
             you can communicate in said channel. :meth:`.abc.GuildChannel.permissions_for` should
             be used for that.
+
+        Yields
+        ------
+        :class:`.abc.GuildChannel`
+            A channel the client can 'access'.
         """
 
         for guild in self.guilds:
@@ -814,6 +843,11 @@ class Client:
             for guild in client.guilds:
                 for member in guild.members:
                     yield member
+
+        Yields
+        ------
+        :class:`.Member`
+            A member the client can see.
         """
         for guild in self.guilds:
             for member in guild.members:

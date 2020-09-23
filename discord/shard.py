@@ -34,7 +34,15 @@ from .state import AutoShardedConnectionState
 from .client import Client
 from .backoff import ExponentialBackoff
 from .gateway import *
-from .errors import ClientException, InvalidArgument, HTTPException, GatewayNotFound, ConnectionClosed
+from .errors import (
+    ClientException,
+    InvalidArgument,
+    HTTPException,
+    GatewayNotFound,
+    ConnectionClosed,
+    PrivilegedIntentsRequired,
+)
+
 from . import utils
 from .enums import Status
 
@@ -125,6 +133,9 @@ class Shard:
             return
 
         if isinstance(e, ConnectionClosed):
+            if e.code == 4014:
+                self._queue_put(EventItem(EventType.terminate, self, PrivilegedIntentsRequired(self.id)))
+                return
             if e.code != 1000:
                 self._queue_put(EventItem(EventType.close, self, e))
                 return
@@ -292,6 +303,7 @@ class AutoShardedClient(Client):
         # the key is the shard_id
         self.__shards = {}
         self._connection._get_websocket = self._get_websocket
+        self._connection._get_client = lambda: self
         self.__queue = asyncio.PriorityQueue()
 
     def _get_websocket(self, guild_id=None, *, shard_id=None):
@@ -333,6 +345,7 @@ class AutoShardedClient(Client):
         """Mapping[int, :class:`ShardInfo`]: Returns a mapping of shard IDs to their respective info object."""
         return { shard_id: ShardInfo(parent, self.shard_count) for shard_id, parent in self.__shards.items() }
 
+    @utils.deprecated('Guild.chunk')
     async def request_offline_members(self, *guilds):
         r"""|coro|
 
@@ -346,6 +359,10 @@ class AutoShardedClient(Client):
         in the guild is larger than 250. You can check if a guild is large
         if :attr:`Guild.large` is ``True``.
 
+        .. warning::
+
+            This method is deprecated. Use :meth:`Guild.chunk` instead.
+
         Parameters
         -----------
         \*guilds: :class:`Guild`
@@ -354,15 +371,15 @@ class AutoShardedClient(Client):
         Raises
         -------
         InvalidArgument
-            If any guild is unavailable or not large in the collection.
+            If any guild is unavailable in the collection.
         """
-        if any(not g.large or g.unavailable for g in guilds):
+        if any(g.unavailable for g in guilds):
             raise InvalidArgument('An unavailable or non-large guild was passed.')
 
         _guilds = sorted(guilds, key=lambda g: g.shard_id)
         for shard_id, sub_guilds in itertools.groupby(_guilds, key=lambda g: g.shard_id):
-            sub_guilds = list(sub_guilds)
-            await self._connection.request_offline_members(sub_guilds, shard_id=shard_id)
+            for guild in sub_guilds:
+                await self._connection.chunk_guild(guild)
 
     async def launch_shard(self, gateway, shard_id, *, initial=False):
         try:
@@ -402,8 +419,11 @@ class AutoShardedClient(Client):
             item = await self.__queue.get()
             if item.type == EventType.close:
                 await self.close()
-                if isinstance(item.error, ConnectionClosed) and item.error.code != 1000:
-                    raise item.error
+                if isinstance(item.error, ConnectionClosed):
+                    if item.error.code != 1000:
+                        raise item.error
+                    if item.error.code == 4014:
+                        raise PrivilegedIntentsRequired(item.shard.id) from None
                 return
             elif item.type in (EventType.identify, EventType.resume):
                 await item.shard.reidentify(item.error)
