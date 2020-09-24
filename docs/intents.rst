@@ -21,7 +21,9 @@ For example, if you want a bot that functions without spammy events like presenc
 .. code-block:: python3
 
     import discord
-    intents = Intents(typing=False, presences=False)
+    intents = discord.Intents.default()
+    intents.typing = False
+    intents.presences = False
 
 Note that this doesn't enable :attr:`Intents.members` since it's a privileged intent.
 
@@ -60,16 +62,25 @@ A privileged intent is one that requires you to go to the developer portal and m
 
     Enabling privileged intents when your bot is in over 100 guilds requires going through `bot verification <https://support.discord.com/hc/en-us/articles/360040720412>`_. If your bot is already verified and you would like to enable a privileged intent you must go through `discord support <https://dis.gd/contact>`_ and talk to them about it.
 
+.. note::
+
+    Even if you enable intents through the developer portal, you still have to enable the intents
+    through code as well.
+
 Do I need privileged intents?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This is a quick checklist to see if you need specific privileged intents.
+
+.. _need_presence_intent:
 
 Presence Intent
 +++++++++++++++++
 
 - Whether you use :attr:`Member.status` at all to track member statuses.
 - Whether you use :attr:`Member.activity` or :attr:`Member.activities` to check member's activities.
+
+.. _need_members_intent:
 
 Member Intent
 +++++++++++++++
@@ -79,6 +90,8 @@ Member Intent
 - Whether you want to track user updates such as usernames, avatars, discriminators, etc.
 - Whether you want to request the guild member list through :meth:`Guild.chunk` or :meth:`Guild.fetch_members`.
 - Whether you want high accuracy member cache under :attr:`Guild.members`.
+
+.. _intents_member_cache:
 
 Member Cache
 -------------
@@ -96,3 +109,83 @@ It should be noted that certain things do not need a member cache since Discord 
 - The reaction removal events do not have the member information. This is a Discord limitation.
 
 Other events that take a :class:`Member` will require the use of the member cache. If absolute accuracy over the member cache is desirable, then it is advisable to have the :attr:`Intents.members` intent enabled.
+
+.. _retrieving_members:
+
+Retrieving Members
+--------------------
+
+If cache is disabled or you disable chunking guilds at startup, we might still need a way to load members. The library offers a few ways to do this:
+
+- :meth:`Guild.query_members`
+    - Used to query members by a prefix matching nickname or username.
+    - This can also be used to query members by their user ID.
+    - This uses the gateway and not the HTTP.
+- :meth:`Guild.chunk`
+    - This can be used to fetch the entire member list through the gateway.
+- :meth:`Guild.fetch_member`
+    - Used to fetch a member by ID through the HTTP API.
+- :meth:`Guild.fetch_members`
+    - used to fetch a large number of members through the HTTP API.
+
+It should be noted that the gateway has a strict rate limit of 120 requests per 60 seconds.
+
+Troubleshooting
+------------------
+
+Some common issues relating to the mandatory intent change.
+
+Where'd my members go?
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Due to an :ref:`API change <intents_member_cache>` Discord is now forcing developers who want member caching to explicitly opt-in to it. This is a Discord mandated change and there is no way to bypass it. In order to get members back you have to explicitly enable the :ref:`members privileged intent <privileged_intents>` and change the :attr:`Intents.members` attribute to true.
+
+For example:
+
+.. code-block:: python3
+
+    import discord
+    intents = discord.Intents()
+    intents.members = True
+
+    # Somewhere else:
+    # client = discord.Client(intents=intents)
+    # or
+    # from discord.ext import commands
+    # bot = commands.Bot(intents=intents)
+
+Why does ``on_ready`` take so long to fire?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As part of the API change regarding intents, Discord also changed how members are loaded in the beginning. Originally the library could request 75 guilds at once and only request members from guilds that have the :attr:`Guild.large` attribute set to ``True``. With the new intent changes, Discord mandates that we can only send 1 guild per request. This causes a 75x slowdown which is further compounded by the fact that *all* guilds, not just large guilds are being requested.
+
+There are a few solutions to fix this.
+
+The first solution is to request the privileged presences intent along with the privileged members intent and enable both of them. This allows the initial member list to contain online members just like the old gateway. Note that we're still limited to 1 guild per request but the number of guilds we request is significantly reduced.
+
+The second solution is to disable member chunking by setting ``chunk_guilds_at_startup`` to ``False`` when constructing a client. Then, when chunking for a guild is necessary you can use the various techniques to :ref:`retrieve members <retrieving_members>`.
+
+To illustrate the slowdown caused the API change, take a bot who is in 840 guilds and 95 of these guilds are "large" (over 250 members).
+
+Under the original system this would result in 2 requests to fetch the member list (75 guilds, 20 guilds) roughly taking 60 seconds. With :attr:`Intents.members` but not :attr:`Intents.presences` this requires 840 requests, with a rate limit of 120 requests per 60 seconds means that due to waiting for the rate limit it totals to around 7 minutes of waiting for the rate limit to fetch all the members. With both :attr:`Intents.members` and :attr:`Intents.presences` we mostly get the old behaviour so we're only required to request for the 95 guilds that are large, this is slightly less than our rate limit so it's close to the original timing to fetch the member list.
+
+Unfortunately due to this change being required from Discord there is nothing that the library can do to mitigate this.
+
+I don't like this, can I go back?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For now, the old gateway will still work so downgrading to discord.py v1.4 is still possible and will continue to be supported until Discord officially kills the v6 gateway, which is imminent. However it is paramount that for the future of your bot that you upgrade your code to the new way things are done.
+
+To downgrade you can do the following:
+
+.. code-block:: python3
+
+    python3 -m pip install -U "discord.py>=1.4,<1.5"
+
+On Windows use ``py -3`` instead of ``python3``.
+
+.. warning::
+
+    There is no date in which the old gateway will stop working so it is recommended to update your code instead.
+
+If you truly dislike the direction Discord is going with their API, you can contact them via `support <https://dis.gd/contact>`_

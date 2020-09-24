@@ -50,6 +50,9 @@ class flag_value:
     def __repr__(self):
         return '<flag_value flag={.flag!r}>'.format(self)
 
+class alias_flag_value(flag_value):
+    pass
+
 def fill_with_flags(*, inverted=False):
     def decorator(cls):
         cls.VALID_FLAGS = {
@@ -98,6 +101,9 @@ class BaseFlags:
 
     def __iter__(self):
         for name, value in self.__class__.__dict__.items():
+            if isinstance(value, alias_flag_value):
+                continue
+
             if isinstance(value, flag_value):
                 yield (name, self._has_flag(value.flag))
 
@@ -248,6 +254,14 @@ class PublicUserFlags(BaseFlags):
         .. describe:: x != y
 
             Checks if two PublicUserFlags are not equal.
+        .. describe:: hash(x)
+
+            Return the flag's hash.
+        .. describe:: iter(x)
+
+            Returns an iterator of ``(name, value)`` pairs. This allows it
+            to be, for example, constructed as a dict or a list of pairs.
+            Note that aliases are not shown.
 
     .. versionadded:: 1.4
 
@@ -323,7 +337,15 @@ class PublicUserFlags(BaseFlags):
 
     @flag_value
     def verified_bot_developer(self):
-        """:class:`bool`: Returns ``True`` if the user is a Verified Bot Developer."""
+        """:class:`bool`: Returns ``True`` if the user is an Early Verified Bot Developer."""
+        return UserFlags.verified_bot_developer.value
+
+    @alias_flag_value
+    def early_verified_bot_developer(self):
+        """:class:`bool`: An alias for :attr:`verified_bot_developer`.
+
+        .. versionadded:: 1.5
+        """
         return UserFlags.verified_bot_developer.value
 
     def all(self):
@@ -345,9 +367,6 @@ class Intents(BaseFlags):
     This is used to disable certain gateway features that are unnecessary to
     run your bot. To make use of this, it is passed to the ``intents`` keyword
     argument of :class:`Client`.
-
-    A default instance of this class has everything enabled except :attr:`presences`
-    and :attr:`members`.
 
     .. versionadded:: 1.5
 
@@ -377,12 +396,7 @@ class Intents(BaseFlags):
     __slots__ = ()
 
     def __init__(self, **kwargs):
-        # Change the default value to everything being enabled
-        # except presences and members
-        bits = max(self.VALID_FLAGS.values()).bit_length()
-        self.value = (1 << bits) - 1
-        self.presences = False
-        self.members = False
+        self.value = self.DEFAULT_VALUE
         for key, value in kwargs.items():
             if key not in self.VALID_FLAGS:
                 raise TypeError('%r is not a valid flag name.' % key)
@@ -402,6 +416,16 @@ class Intents(BaseFlags):
         """A factory method that creates a :class:`Intents` with everything disabled."""
         self = cls.__new__(cls)
         self.value = self.DEFAULT_VALUE
+        return self
+
+    @classmethod
+    def default(cls):
+        """A factory method that creates a :class:`Intents` with everything enabled
+        except :attr:`presences` and :attr:`members`.
+        """
+        self = cls.all()
+        self.presences = False
+        self.members = False
         return self
 
     @flag_value
@@ -443,11 +467,11 @@ class Intents(BaseFlags):
 
         This also corresponds to the following attributes and classes in terms of cache:
 
-        - :attr:`Client.get_all_members`
+        - :meth:`Client.get_all_members`
         - :meth:`Guild.chunk`
         - :meth:`Guild.fetch_members`
-        - :meth:`Guild.members`
         - :meth:`Guild.get_member`
+        - :attr:`Guild.members`
         - :attr:`Member.roles`
         - :attr:`Member.nick`
         - :attr:`Member.premium_since`
@@ -579,10 +603,10 @@ class Intents(BaseFlags):
         This corresponds to the following events:
 
         - :func:`on_message` (both guilds and DMs)
-        - :func:`on_message_update` (both guilds and DMs)
+        - :func:`on_message_edit` (both guilds and DMs)
         - :func:`on_message_delete` (both guilds and DMs)
         - :func:`on_raw_message_delete` (both guilds and DMs)
-        - :func:`on_raw_message_update` (both guilds and DMs)
+        - :func:`on_raw_message_edit` (both guilds and DMs)
         - :func:`on_private_channel_create`
 
         This also corresponds to the following attributes and classes in terms of cache:
@@ -607,10 +631,10 @@ class Intents(BaseFlags):
         This corresponds to the following events:
 
         - :func:`on_message` (only for guilds)
-        - :func:`on_message_update` (only for guilds)
+        - :func:`on_message_edit` (only for guilds)
         - :func:`on_message_delete` (only for guilds)
         - :func:`on_raw_message_delete` (only for guilds)
-        - :func:`on_raw_message_update` (only for guilds)
+        - :func:`on_raw_message_edit` (only for guilds)
 
         This also corresponds to the following attributes and classes in terms of cache:
 
@@ -634,10 +658,10 @@ class Intents(BaseFlags):
         This corresponds to the following events:
 
         - :func:`on_message` (only for DMs)
-        - :func:`on_message_update` (only for DMs)
+        - :func:`on_message_edit` (only for DMs)
         - :func:`on_message_delete` (only for DMs)
         - :func:`on_raw_message_delete` (only for DMs)
-        - :func:`on_raw_message_update` (only for DMs)
+        - :func:`on_raw_message_edit` (only for DMs)
         - :func:`on_private_channel_create`
 
         This also corresponds to the following attributes and classes in terms of cache:
@@ -763,8 +787,8 @@ class MemberCacheFlags(BaseFlags):
     """Controls the library's cache policy when it comes to members.
 
     This allows for finer grained control over what members are cached.
-    For more information, check :attr:`Client.member_cache_flags`. Note
-    that the bot's own member is always cached.
+    Note that the bot's own member is always cached. This class is passed
+    to the ``member_cache_flags`` parameter in :class:`Client`.
 
     Due to a quirk in how Discord works, in order to ensure proper cleanup
     of cache resources it is recommended to have :attr:`Intents.members`
