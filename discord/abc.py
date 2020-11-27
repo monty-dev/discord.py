@@ -802,7 +802,8 @@ class Messageable(metaclass=abc.ABCMeta):
 
     async def send(self, content=None, *, tts=False, embed=None, file=None,
                                           files=None, delete_after=None, nonce=None,
-                                          allowed_mentions=None):
+                                          allowed_mentions=None, reference=None,
+                                          mention_author=None):
         """|coro|
 
         Sends a message to the destination with the content given.
@@ -848,6 +849,19 @@ class Messageable(metaclass=abc.ABCMeta):
 
             .. versionadded:: 1.4
 
+        reference: Union[:class:`~discord.Message`, :class:`~discord.MessageReference`]
+            A reference to the :class:`~discord.Message` to which you are replying, this can be created using
+            :meth:`~discord.Message.to_reference` or passed directly as a :class:`~discord.Message`. You can control
+            whether this mentions the author of the referenced message using the :attr:`~discord.AllowedMentions.replied_user`
+            attribute of ``allowed_mentions`` or by setting ``mention_author``.
+
+            .. versionadded:: 1.6
+
+        mention_author: Optional[:class:`bool`]
+            If set, overrides the :attr:`~discord.AllowedMentions.replied_user` attribute of ``allowed_mentions``.
+
+            .. versionadded:: 1.6
+
         Raises
         --------
         ~discord.HTTPException
@@ -855,8 +869,10 @@ class Messageable(metaclass=abc.ABCMeta):
         ~discord.Forbidden
             You do not have the proper permissions to send the message.
         ~discord.InvalidArgument
-            The ``files`` list is not of the appropriate size or
-            you specified both ``file`` and ``files``.
+            The ``files`` list is not of the appropriate size,
+            you specified both ``file`` and ``files``,
+            or the ``reference`` object is not a :class:`~discord.Message`
+            or :class:`~discord.MessageReference`.
 
         Returns
         ---------
@@ -878,6 +894,16 @@ class Messageable(metaclass=abc.ABCMeta):
         else:
             allowed_mentions = state.allowed_mentions and state.allowed_mentions.to_dict()
 
+        if mention_author is not None:
+            allowed_mentions = allowed_mentions or {}
+            allowed_mentions['replied_user'] = bool(mention_author)
+
+        if reference is not None:
+            try:
+                reference = reference.to_message_reference_dict()
+            except AttributeError:
+                raise InvalidArgument('reference parameter must be Message or MessageReference') from None
+
         if file is not None and files is not None:
             raise InvalidArgument('cannot pass both file and files parameter to send()')
 
@@ -887,7 +913,8 @@ class Messageable(metaclass=abc.ABCMeta):
 
             try:
                 data = await state.http.send_files(channel.id, files=[file], allowed_mentions=allowed_mentions,
-                                                   content=content, tts=tts, embed=embed, nonce=nonce)
+                                                   content=content, tts=tts, embed=embed, nonce=nonce,
+                                                   message_reference=reference)
             finally:
                 file.close()
 
@@ -899,13 +926,15 @@ class Messageable(metaclass=abc.ABCMeta):
 
             try:
                 data = await state.http.send_files(channel.id, files=files, content=content, tts=tts,
-                                                   embed=embed, nonce=nonce, allowed_mentions=allowed_mentions)
+                                                   embed=embed, nonce=nonce, allowed_mentions=allowed_mentions,
+                                                   message_reference=reference)
             finally:
                 for f in files:
                     f.close()
         else:
             data = await state.http.send_message(channel.id, content, tts=tts, embed=embed,
-                                                                      nonce=nonce, allowed_mentions=allowed_mentions)
+                                                                      nonce=nonce, allowed_mentions=allowed_mentions,
+                                                                      message_reference=reference)
 
         ret = state.create_message(channel=channel, data=data)
         if delete_after is not None:

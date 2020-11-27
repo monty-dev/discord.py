@@ -2648,6 +2648,13 @@ Message
 .. autoclass:: Message()
     :members:
 
+DeletedReferencedMessage
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: DeletedReferencedMessage()
+    :members:
+
+
 Reaction
 ~~~~~~~~~
 
@@ -2844,11 +2851,6 @@ Sticker
 .. autoclass:: Sticker()
     :members:
 
-MessageReference
-~~~~~~~~~~~~~~~~~
-.. autoclass:: MessageReference()
-    :members:
-
 RawMessageDeleteEvent
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -2919,6 +2921,12 @@ AllowedMentions
 ~~~~~~~~~~~~~~~~~
 
 .. autoclass:: AllowedMentions
+    :members:
+
+MessageReference
+~~~~~~~~~~~~~~~~~
+
+.. autoclass:: MessageReference
     :members:
 
 Intents
