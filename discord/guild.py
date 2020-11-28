@@ -30,14 +30,13 @@ from collections import namedtuple
 from . import utils
 from .role import Role
 from .member import Member, VoiceState
-from .activity import create_activity
 from .emoji import Emoji
 from .errors import InvalidData
 from .permissions import PermissionOverwrite
 from .colour import Colour
 from .errors import InvalidArgument, ClientException
 from .channel import *
-from .enums import VoiceRegion, Status, ChannelType, try_enum, VerificationLevel, ContentFilter, NotificationLevel
+from .enums import VoiceRegion, ChannelType, try_enum, VerificationLevel, ContentFilter, NotificationLevel
 from .mixins import Hashable
 from .user import User
 from .invite import Invite
@@ -1216,10 +1215,10 @@ class Guild(Hashable):
         except KeyError:
             pass
         else:
-            if rules_channel is None:
-                fields['public_updates_channel_id'] = rules_channel
+            if public_updates_channel is None:
+                fields['public_updates_channel_id'] = public_updates_channel
             else:
-                fields['public_updates_channel_id'] = rules_channel.id
+                fields['public_updates_channel_id'] = public_updates_channel.id
         await http.edit_guild(self.id, reason=reason, **fields)
 
     async def fetch_channels(self):
