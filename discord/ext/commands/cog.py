@@ -3,7 +3,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2015-2020 Rapptz
+Copyright (c) 2015-present Rapptz
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -295,6 +295,13 @@ class Cog(metaclass=CogMeta):
             # thus the assignments need to be on the actual function
             return func
         return decorator
+
+    def has_error_handler(self):
+        """:class:`bool`: Checks whether the cog has an error handler.
+
+        .. versionadded:: 1.7
+        """
+        return hasattr(self.cog_command_error.__func__, '__cog_special_method__')
 
     @_cog_special_method
     def cog_unload(self):
