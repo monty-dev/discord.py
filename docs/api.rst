@@ -894,6 +894,8 @@ to handle it, which defaults to print a traceback and ignoring the exception.
     Called when a :class:`Relationship` is added or removed from the
     :class:`ClientUser`.
 
+    .. deprecated:: 1.7
+
     :param relationship: The relationship that was added or removed.
     :type relationship: :class:`Relationship`
 
@@ -901,6 +903,8 @@ to handle it, which defaults to print a traceback and ignoring the exception.
 
     Called when a :class:`Relationship` is updated, e.g. when you
     block a friend or a friendship is accepted.
+
+    .. deprecated:: 1.7
 
     :param before: The previous relationship status.
     :type before: :class:`Relationship`
@@ -936,6 +940,8 @@ Profile
 .. class:: Profile
 
     A namedtuple representing a user's Discord public profile.
+
+    .. deprecated:: 1.7
 
     .. attribute:: user
 
@@ -1119,6 +1125,35 @@ of :class:`enum.Enum`.
         The system message denoting that an announcement channel has been followed.
 
         .. versionadded:: 1.3
+    .. attribute:: guild_stream
+
+        The system message denoting that a member is streaming in the guild.
+
+        .. versionadded:: 1.7
+    .. attribute:: guild_discovery_disqualified
+
+        The system message denoting that the guild is no longer eligible for Server
+        Discovery.
+
+        .. versionadded:: 1.7
+    .. attribute:: guild_discovery_requalified
+
+        The system message denoting that the guild has become eligible again for Server
+        Discovery.
+
+        .. versionadded:: 1.7
+    .. attribute:: guild_discovery_grace_period_initial_warning
+    
+        The system message denoting that the guild has failed to meet the Server
+        Discovery requirements for one week.
+
+        .. versionadded:: 1.7
+    .. attribute:: guild_discovery_grace_period_final_warning
+
+        The system message denoting that the guild has failed to meet the Server
+        Discovery requirements for 3 weeks in a row.
+    
+        .. versionadded:: 1.7
 
 .. class:: ActivityType
 
@@ -1892,6 +1927,8 @@ of :class:`enum.Enum`.
 
     Specifies the type of :class:`Relationship`.
 
+    .. deprecated:: 1.7
+
     .. note::
 
         This only applies to users, *not* bots.
@@ -1918,6 +1955,8 @@ of :class:`enum.Enum`.
     Represents the options found in ``Settings > Privacy & Safety > Safe Direct Messaging``
     in the Discord client.
 
+    .. deprecated:: 1.7
+
     .. note::
 
         This only applies to users, *not* bots.
@@ -1939,6 +1978,8 @@ of :class:`enum.Enum`.
 
     Represents the options found in ``Settings > Privacy & Safety > Who Can Add You As A Friend``
     in the Discord client.
+
+    .. deprecated:: 1.7
 
     .. note::
 
@@ -1969,6 +2010,8 @@ of :class:`enum.Enum`.
 
     Represents the user's Discord Nitro subscription type.
 
+    .. deprecated:: 1.7
+
     .. note::
 
         This only applies to users, *not* bots.
@@ -1985,6 +2028,8 @@ of :class:`enum.Enum`.
 .. class:: Theme
 
     Represents the theme synced across all Discord clients.
+
+    .. deprecated:: 1.7
 
     .. note::
 
