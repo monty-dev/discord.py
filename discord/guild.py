@@ -844,6 +844,13 @@ class Guild(Hashable):
         except KeyError:
             pass
 
+        try:
+            rtc_region = options.pop('rtc_region')
+        except KeyError:
+            pass
+        else:
+            options['rtc_region'] = None if rtc_region is None else str(rtc_region)
+
         parent_id = category.id if category else None
         return self._state.http.create_channel(self.id, channel_type.value, name=name, parent_id=parent_id,
                                                permission_overwrites=perms, **options)
@@ -1261,9 +1268,7 @@ class Guild(Hashable):
         return [convert(d) for d in data]
 
     def fetch_members(self, *, limit=1000, after=None):
-        """|coro|
-
-        Retrieves an :class:`.AsyncIterator` that enables receiving the guild's members. In order to use this,
+        """Retrieves an :class:`.AsyncIterator` that enables receiving the guild's members. In order to use this,
         :meth:`Intents.members` must be enabled.
 
         .. note::
