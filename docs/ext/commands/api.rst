@@ -176,7 +176,8 @@ Paginator
 Enums
 ------
 
-.. class:: discord.ext.commands.BucketType
+.. class:: BucketType
+    :module: discord.ext.commands
 
     Specifies a type of bucket for, e.g. a cooldown.
 
@@ -291,6 +292,9 @@ Converters
     :members:
 
 .. autoclass:: discord.ext.commands.StoreChannelConverter
+    :members:
+
+.. autoclass:: discord.ext.commands.StageChannelConverter
     :members:
 
 .. autoclass:: discord.ext.commands.CategoryChannelConverter
