@@ -1309,7 +1309,7 @@ class Guild(Hashable):
         def convert(d):
             factory, ch_type = _channel_factory(d['type'])
             if factory is None:
-                raise InvalidData('Unknown channel type {type} for channel ID {id}.'.format_map(data))
+                raise InvalidData('Unknown channel type {type} for channel ID {id}.'.format_map(d))
 
             channel = factory(guild=self, state=self._state, data=d)
             return channel
@@ -2223,7 +2223,8 @@ class Guild(Hashable):
         if not self._state._intents.members:
             raise ClientException('Intents.members must be enabled to use this.')
 
-        return await self._state.chunk_guild(self, cache=cache)
+        if not self._state.is_guild_evicted(self):
+            return await self._state.chunk_guild(self, cache=cache)
 
     async def query_members(self, query=None, *, limit=5, user_ids=None, presences=False, cache=True):
         """|coro|
