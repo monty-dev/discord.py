@@ -26,7 +26,7 @@ DEALINGS IN THE SOFTWARE.
 
 import logging
 import asyncio
-import json
+import orjson
 import time
 import re
 from urllib.parse import quote as _uriquote
@@ -223,7 +223,7 @@ class AsyncWebhookAdapter(WebhookAdapter):
                 # Coerce empty strings to return None for hygiene purposes
                 response = (await r.text(encoding='utf-8')) or None
                 if r.headers['Content-Type'] == 'application/json':
-                    response = json.loads(response)
+                    response = orjson.loads(response)
 
                 # check if we have rate limit header information
                 remaining = r.headers.get('X-Ratelimit-Remaining')
@@ -325,7 +325,7 @@ class RequestsWebhookAdapter(WebhookAdapter):
 
             log.debug('Webhook ID %s with %s %s has returned status code %s', _id, verb, base_url, r.status)
             if r.headers['Content-Type'] == 'application/json':
-                response = json.loads(response)
+                response = orjson.loads(response)
 
             # check if we have rate limit header information
             remaining = r.headers.get('X-Ratelimit-Remaining')

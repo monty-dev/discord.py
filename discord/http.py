@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import asyncio
-import json
+import orjson
 import logging
 import sys
 from urllib.parse import quote as _uriquote
@@ -43,7 +43,7 @@ async def json_or_text(response):
     text = await response.text(encoding='utf-8')
     try:
         if response.headers['content-type'] == 'application/json':
-            return json.loads(text)
+            return orjson.loads(text)
     except KeyError:
         # Thanks Cloudflare
         pass

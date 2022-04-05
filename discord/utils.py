@@ -34,7 +34,7 @@ import datetime
 import functools
 from inspect import isawaitable as _isawaitable, signature as _signature
 from operator import attrgetter
-import json
+import orjson
 import re
 import warnings
 
@@ -325,7 +325,7 @@ def _bytes_to_base64_data(data):
     return fmt.format(mime=mime, data=b64)
 
 def to_json(obj):
-    return json.dumps(obj, separators=(',', ':'), ensure_ascii=True)
+    return orjson.dumps(obj).decode('UTF-8')
 
 def _parse_ratelimit_header(request, *, use_clock=False):
     reset_after = request.headers.get('X-Ratelimit-Reset-After')

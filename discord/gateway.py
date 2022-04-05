@@ -27,7 +27,7 @@ DEALINGS IN THE SOFTWARE.
 import asyncio
 from collections import namedtuple, deque
 import concurrent.futures
-import json
+import orjson
 import logging
 import struct
 import sys
@@ -368,8 +368,8 @@ class DiscordWebSocket:
                 'token': self.token,
                 'properties': {
                     '$os': sys.platform,
-                    '$browser': 'discord.py',
-                    '$device': 'discord.py',
+                    '$browser': 'discord iOS',
+                    '$device': 'discord iOS',
                     '$referrer': '',
                     '$referring_domain': ''
                 },
@@ -427,7 +427,7 @@ class DiscordWebSocket:
             msg = self._zlib.decompress(self._buffer)
             msg = msg.decode('utf-8')
             self._buffer = bytearray()
-        msg = json.loads(msg)
+        msg = orjson.loads(msg)
 
         log.debug('For Shard ID %s: WebSocket Event: %s', self.shard_id, msg)
         self._dispatch('socket_response', msg)
@@ -886,7 +886,7 @@ class DiscordVoiceWebSocket:
         # This exception is handled up the chain
         msg = await asyncio.wait_for(self.ws.receive(), timeout=30.0)
         if msg.type is aiohttp.WSMsgType.TEXT:
-            await self.received_message(json.loads(msg.data))
+            await self.received_message(orjson.loads(msg.data))
         elif msg.type is aiohttp.WSMsgType.ERROR:
             log.debug('Received %s', msg)
             raise ConnectionClosed(self.ws, shard_id=None) from msg.data
