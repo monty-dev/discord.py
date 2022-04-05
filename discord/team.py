@@ -25,14 +25,15 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from . import utils
-from .user import BaseUser
 from .asset import Asset
 from .enums import TeamMembershipState, try_enum
+from .user import BaseUser
 
 __all__ = (
-    'Team',
-    'TeamMember',
+    "Team",
+    "TeamMember",
 )
+
 
 class Team:
     """Represents an application team for a bot provided by Discord.
@@ -52,19 +53,20 @@ class Team:
 
         .. versionadded:: 1.3
     """
-    __slots__ = ('_state', 'id', 'name', 'icon', 'owner_id', 'members')
+
+    __slots__ = ("_state", "id", "name", "icon", "owner_id", "members")
 
     def __init__(self, state, data):
         self._state = state
 
-        self.id = utils._get_as_snowflake(data, 'id')
-        self.name = data['name']
-        self.icon = data['icon']
-        self.owner_id = utils._get_as_snowflake(data, 'owner_user_id')
-        self.members = [TeamMember(self, self._state, member) for member in data['members']]
+        self.id = utils._get_as_snowflake(data, "id")
+        self.name = data["name"]
+        self.icon = data["icon"]
+        self.owner_id = utils._get_as_snowflake(data, "owner_user_id")
+        self.members = [TeamMember(self, self._state, member) for member in data["members"]]
 
     def __repr__(self):
-        return '<{0.__class__.__name__} id={0.id} name={0.name}>'.format(self)
+        return "<{0.__class__.__name__} id={0.id} name={0.name}>".format(self)
 
     @property
     def icon_url(self):
@@ -75,7 +77,7 @@ class Team:
         """
         return self.icon_url_as()
 
-    def icon_url_as(self, *, format='webp', size=1024):
+    def icon_url_as(self, *, format="webp", size=1024):
         """Returns an :class:`Asset` for the icon the team has.
 
         The format must be one of 'webp', 'jpeg', 'jpg' or 'png'.
@@ -100,12 +102,13 @@ class Team:
         :class:`Asset`
             The resulting CDN asset.
         """
-        return Asset._from_icon(self._state, self, 'team', format=format, size=size)
+        return Asset._from_icon(self._state, self, "team", format=format, size=size)
 
     @property
     def owner(self):
         """Optional[:class:`TeamMember`]: The team's owner."""
         return utils.get(self.members, id=self.owner_id)
+
 
 class TeamMember(BaseUser):
     """Represents a team member in a team.
@@ -147,14 +150,14 @@ class TeamMember(BaseUser):
     membership_state: :class:`TeamMembershipState`
         The membership state of the member (e.g. invited or accepted)
     """
-    __slots__ = BaseUser.__slots__ + ('team', 'membership_state', 'permissions')
+
+    __slots__ = BaseUser.__slots__ + ("team", "membership_state", "permissions")
 
     def __init__(self, team, state, data):
         self.team = team
-        self.membership_state = try_enum(TeamMembershipState, data['membership_state'])
-        self.permissions = data['permissions']
-        super().__init__(state=state, data=data['user'])
+        self.membership_state = try_enum(TeamMembershipState, data["membership_state"])
+        self.permissions = data["permissions"]
+        super().__init__(state=state, data=data["user"])
 
     def __repr__(self):
-        return '<{0.__class__.__name__} id={0.id} name={0.name!r} ' \
-               'discriminator={0.discriminator!r} membership_state={0.membership_state!r}>'.format(self)
+        return "<{0.__class__.__name__} id={0.id} name={0.name!r} " "discriminator={0.discriminator!r} membership_state={0.membership_state!r}>".format(self)

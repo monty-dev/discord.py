@@ -24,31 +24,34 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-import time
 import asyncio
+import time
 
 import discord.abc
-from .permissions import Permissions
-from .enums import ChannelType, try_enum, VoiceRegion
-from .mixins import Hashable
+
 from . import utils
 from .asset import Asset
-from .errors import ClientException, NoMoreItems, InvalidArgument
+from .enums import ChannelType, try_enum, VoiceRegion
+from .errors import ClientException, InvalidArgument, NoMoreItems
+from .mixins import Hashable
+from .permissions import Permissions
 
 __all__ = (
-    'TextChannel',
-    'VoiceChannel',
-    'StageChannel',
-    'DMChannel',
-    'CategoryChannel',
-    'StoreChannel',
-    'GroupChannel',
-    '_channel_factory',
+    "TextChannel",
+    "VoiceChannel",
+    "StageChannel",
+    "DMChannel",
+    "CategoryChannel",
+    "StoreChannel",
+    "GroupChannel",
+    "_channel_factory",
 )
+
 
 async def _single_delete_strategy(messages):
     for m in messages:
         await m.delete()
+
 
 class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
     """Represents a Discord guild text channel.
@@ -96,38 +99,29 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         :attr:`~Permissions.manage_messages` bypass slowmode.
     """
 
-    __slots__ = ('name', 'id', 'guild', 'topic', '_state', 'nsfw',
-                 'category_id', 'position', 'slowmode_delay', '_overwrites',
-                 '_type', 'last_message_id')
+    __slots__ = ("name", "id", "guild", "topic", "_state", "nsfw", "category_id", "position", "slowmode_delay", "_overwrites", "_type", "last_message_id")
 
     def __init__(self, *, state, guild, data):
         self._state = state
-        self.id = int(data['id'])
-        self._type = data['type']
+        self.id = int(data["id"])
+        self._type = data["type"]
         self._update(guild, data)
 
     def __repr__(self):
-        attrs = [
-            ('id', self.id),
-            ('name', self.name),
-            ('position', self.position),
-            ('nsfw', self.nsfw),
-            ('news', self.is_news()),
-            ('category_id', self.category_id)
-        ]
-        return '<%s %s>' % (self.__class__.__name__, ' '.join('%s=%r' % t for t in attrs))
+        attrs = [("id", self.id), ("name", self.name), ("position", self.position), ("nsfw", self.nsfw), ("news", self.is_news()), ("category_id", self.category_id)]
+        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
 
     def _update(self, guild, data):
         self.guild = guild
-        self.name = data['name']
-        self.category_id = utils._get_as_snowflake(data, 'parent_id')
-        self.topic = data.get('topic')
-        self.position = data['position']
-        self.nsfw = data.get('nsfw', False)
+        self.name = data["name"]
+        self.category_id = utils._get_as_snowflake(data, "parent_id")
+        self.topic = data.get("topic")
+        self.position = data["position"]
+        self.nsfw = data.get("nsfw", False)
         # Does this need coercion into `int`? No idea yet.
-        self.slowmode_delay = data.get('rate_limit_per_user', 0)
-        self._type = data.get('type', self._type)
-        self.last_message_id = utils._get_as_snowflake(data, 'last_message_id')
+        self.slowmode_delay = data.get("rate_limit_per_user", 0)
+        self._type = data.get("type", self._type)
+        self.last_message_id = utils._get_as_snowflake(data, "last_message_id")
         self._fill_overwrites(data)
 
     async def _get_channel(self):
@@ -242,11 +236,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
     async def clone(self, *, name=None, reason=None):
-        return await self._clone_impl({
-            'topic': self.topic,
-            'nsfw': self.nsfw,
-            'rate_limit_per_user': self.slowmode_delay
-        }, name=name, reason=reason)
+        return await self._clone_impl({"topic": self.topic, "nsfw": self.nsfw, "rate_limit_per_user": self.slowmode_delay}, name=name, reason=reason)
 
     async def delete_messages(self, messages):
         """|coro|
@@ -287,7 +277,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             messages = list(messages)
 
         if len(messages) == 0:
-            return # do nothing
+            return  # do nothing
 
         if len(messages) == 1:
             message_id = messages[0].id
@@ -295,7 +285,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             return
 
         if len(messages) > 100:
-            raise ClientException('Can only bulk delete messages up to 100 messages')
+            raise ClientException("Can only bulk delete messages up to 100 messages")
 
         message_ids = [m.id for m in messages]
         await self._state.http.delete_messages(self.id, message_ids)
@@ -428,6 +418,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         """
 
         from .webhook import Webhook
+
         data = await self._state.http.channel_webhooks(self.id)
         return [Webhook.from_state(d, state=self._state) for d in data]
 
@@ -465,6 +456,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         """
 
         from .webhook import Webhook
+
         if avatar is not None:
             avatar = utils._bytes_to_base64_data(avatar)
 
@@ -507,12 +499,13 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         """
 
         if not self.is_news():
-            raise ClientException('The channel must be a news channel.')
+            raise ClientException("The channel must be a news channel.")
 
         if not isinstance(destination, TextChannel):
-            raise InvalidArgument('Expected TextChannel received {0.__name__}'.format(type(destination)))
+            raise InvalidArgument("Expected TextChannel received {0.__name__}".format(type(destination)))
 
         from .webhook import Webhook
+
         data = await self._state.http.follow_webhook(self.id, webhook_channel_id=destination.id, reason=reason)
         return Webhook._as_follower(data, channel=destination, user=self._state.user)
 
@@ -536,34 +529,34 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         """
 
         from .message import PartialMessage
+
         return PartialMessage(channel=self, id=message_id)
 
+
 class VocalGuildChannel(discord.abc.Connectable, discord.abc.GuildChannel, Hashable):
-    __slots__ = ('name', 'id', 'guild', 'bitrate', 'user_limit',
-                 '_state', 'position', '_overwrites', 'category_id',
-                 'rtc_region')
+    __slots__ = ("name", "id", "guild", "bitrate", "user_limit", "_state", "position", "_overwrites", "category_id", "rtc_region")
 
     def __init__(self, *, state, guild, data):
         self._state = state
-        self.id = int(data['id'])
+        self.id = int(data["id"])
         self._update(guild, data)
 
     def _get_voice_client_key(self):
-        return self.guild.id, 'guild_id'
+        return self.guild.id, "guild_id"
 
     def _get_voice_state_pair(self):
         return self.guild.id, self.id
 
     def _update(self, guild, data):
         self.guild = guild
-        self.name = data['name']
-        self.rtc_region = data.get('rtc_region')
+        self.name = data["name"]
+        self.rtc_region = data.get("rtc_region")
         if self.rtc_region:
             self.rtc_region = try_enum(VoiceRegion, self.rtc_region)
-        self.category_id = utils._get_as_snowflake(data, 'parent_id')
-        self.position = data['position']
-        self.bitrate = data.get('bitrate')
-        self.user_limit = data.get('user_limit')
+        self.category_id = utils._get_as_snowflake(data, "parent_id")
+        self.position = data["position"]
+        self.bitrate = data.get("bitrate")
+        self.user_limit = data.get("user_limit")
         self._fill_overwrites(data)
 
     @property
@@ -610,6 +603,7 @@ class VocalGuildChannel(discord.abc.Connectable, discord.abc.GuildChannel, Hasha
             denied.update(manage_channels=True, manage_roles=True)
             base.value &= ~denied.value
         return base
+
 
 class VoiceChannel(VocalGuildChannel):
     """Represents a Discord guild voice channel.
@@ -659,16 +653,8 @@ class VoiceChannel(VocalGuildChannel):
     __slots__ = ()
 
     def __repr__(self):
-        attrs = [
-            ('id', self.id),
-            ('name', self.name),
-            ('rtc_region', self.rtc_region),
-            ('position', self.position),
-            ('bitrate', self.bitrate),
-            ('user_limit', self.user_limit),
-            ('category_id', self.category_id)
-        ]
-        return '<%s %s>' % (self.__class__.__name__, ' '.join('%s=%r' % t for t in attrs))
+        attrs = [("id", self.id), ("name", self.name), ("rtc_region", self.rtc_region), ("position", self.position), ("bitrate", self.bitrate), ("user_limit", self.user_limit), ("category_id", self.category_id)]
+        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
 
     @property
     def type(self):
@@ -677,10 +663,7 @@ class VoiceChannel(VocalGuildChannel):
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
     async def clone(self, *, name=None, reason=None):
-        return await self._clone_impl({
-            'bitrate': self.bitrate,
-            'user_limit': self.user_limit
-        }, name=name, reason=reason)
+        return await self._clone_impl({"bitrate": self.bitrate, "user_limit": self.user_limit}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
         """|coro|
@@ -732,6 +715,7 @@ class VoiceChannel(VocalGuildChannel):
 
         await self._edit(options, reason=reason)
 
+
 class StageChannel(VocalGuildChannel):
     """Represents a Discord guild stage channel.
 
@@ -778,24 +762,25 @@ class StageChannel(VocalGuildChannel):
         The region for the stage channel's voice communication.
         A value of ``None`` indicates automatic voice region detection.
     """
-    __slots__ = ('topic',)
+
+    __slots__ = ("topic",)
 
     def __repr__(self):
         attrs = [
-            ('id', self.id),
-            ('name', self.name),
-            ('topic', self.topic),
-            ('rtc_region', self.rtc_region),
-            ('position', self.position),
-            ('bitrate', self.bitrate),
-            ('user_limit', self.user_limit),
-            ('category_id', self.category_id)
+            ("id", self.id),
+            ("name", self.name),
+            ("topic", self.topic),
+            ("rtc_region", self.rtc_region),
+            ("position", self.position),
+            ("bitrate", self.bitrate),
+            ("user_limit", self.user_limit),
+            ("category_id", self.category_id),
         ]
-        return '<%s %s>' % (self.__class__.__name__, ' '.join('%s=%r' % t for t in attrs))
+        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
 
     def _update(self, guild, data):
         super()._update(guild, data)
-        self.topic = data.get('topic')
+        self.topic = data.get("topic")
 
     @property
     def requesting_to_speak(self):
@@ -809,9 +794,13 @@ class StageChannel(VocalGuildChannel):
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
     async def clone(self, *, name=None, reason=None):
-        return await self._clone_impl({
-            'topic': self.topic,
-        }, name=name, reason=reason)
+        return await self._clone_impl(
+            {
+                "topic": self.topic,
+            },
+            name=name,
+            reason=reason,
+        )
 
     async def edit(self, *, reason=None, **options):
         """|coro|
@@ -856,6 +845,7 @@ class StageChannel(VocalGuildChannel):
 
         await self._edit(options, reason=reason)
 
+
 class CategoryChannel(discord.abc.GuildChannel, Hashable):
     """Represents a Discord channel category.
 
@@ -892,22 +882,22 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         top category is position 0.
     """
 
-    __slots__ = ('name', 'id', 'guild', 'nsfw', '_state', 'position', '_overwrites', 'category_id')
+    __slots__ = ("name", "id", "guild", "nsfw", "_state", "position", "_overwrites", "category_id")
 
     def __init__(self, *, state, guild, data):
         self._state = state
-        self.id = int(data['id'])
+        self.id = int(data["id"])
         self._update(guild, data)
 
     def __repr__(self):
-        return '<CategoryChannel id={0.id} name={0.name!r} position={0.position} nsfw={0.nsfw}>'.format(self)
+        return "<CategoryChannel id={0.id} name={0.name!r} position={0.position} nsfw={0.nsfw}>".format(self)
 
     def _update(self, guild, data):
         self.guild = guild
-        self.name = data['name']
-        self.category_id = utils._get_as_snowflake(data, 'parent_id')
-        self.nsfw = data.get('nsfw', False)
-        self.position = data['position']
+        self.name = data["name"]
+        self.category_id = utils._get_as_snowflake(data, "parent_id")
+        self.nsfw = data.get("nsfw", False)
+        self.position = data["position"]
         self._fill_overwrites(data)
 
     @property
@@ -925,9 +915,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
     async def clone(self, *, name=None, reason=None):
-        return await self._clone_impl({
-            'nsfw': self.nsfw
-        }, name=name, reason=reason)
+        return await self._clone_impl({"nsfw": self.nsfw}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
         """|coro|
@@ -968,7 +956,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
 
     @utils.copy_doc(discord.abc.GuildChannel.move)
     async def move(self, **kwargs):
-        kwargs.pop('category', None)
+        kwargs.pop("category", None)
         await super().move(**kwargs)
 
     @property
@@ -977,6 +965,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
 
         These are sorted by the official Discord UI, which places voice channels below the text channels.
         """
+
         def comparator(channel):
             return (not isinstance(channel, TextChannel), channel.position)
 
@@ -987,18 +976,14 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
     @property
     def text_channels(self):
         """List[:class:`TextChannel`]: Returns the text channels that are under this category."""
-        ret = [c for c in self.guild.channels
-            if c.category_id == self.id
-            and isinstance(c, TextChannel)]
+        ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, TextChannel)]
         ret.sort(key=lambda c: (c.position, c.id))
         return ret
 
     @property
     def voice_channels(self):
         """List[:class:`VoiceChannel`]: Returns the voice channels that are under this category."""
-        ret = [c for c in self.guild.channels
-            if c.category_id == self.id
-            and isinstance(c, VoiceChannel)]
+        ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, VoiceChannel)]
         ret.sort(key=lambda c: (c.position, c.id))
         return ret
 
@@ -1008,9 +993,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
 
         .. versionadded:: 1.7
         """
-        ret = [c for c in self.guild.channels
-            if c.category_id == self.id
-            and isinstance(c, StageChannel)]
+        ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, StageChannel)]
         ret.sort(key=lambda c: (c.position, c.id))
         return ret
 
@@ -1052,6 +1035,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         """
         return await self.guild.create_stage_channel(name, overwrites=overwrites, category=self, reason=reason, **options)
 
+
 class StoreChannel(discord.abc.GuildChannel, Hashable):
     """Represents a Discord guild store channel.
 
@@ -1087,23 +1071,32 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
         The position in the channel list. This is a number that starts at 0. e.g. the
         top channel is position 0.
     """
-    __slots__ = ('name', 'id', 'guild', '_state', 'nsfw',
-                 'category_id', 'position', '_overwrites',)
+
+    __slots__ = (
+        "name",
+        "id",
+        "guild",
+        "_state",
+        "nsfw",
+        "category_id",
+        "position",
+        "_overwrites",
+    )
 
     def __init__(self, *, state, guild, data):
         self._state = state
-        self.id = int(data['id'])
+        self.id = int(data["id"])
         self._update(guild, data)
 
     def __repr__(self):
-        return '<StoreChannel id={0.id} name={0.name!r} position={0.position} nsfw={0.nsfw}>'.format(self)
+        return "<StoreChannel id={0.id} name={0.name!r} position={0.position} nsfw={0.nsfw}>".format(self)
 
     def _update(self, guild, data):
         self.guild = guild
-        self.name = data['name']
-        self.category_id = utils._get_as_snowflake(data, 'parent_id')
-        self.position = data['position']
-        self.nsfw = data.get('nsfw', False)
+        self.name = data["name"]
+        self.category_id = utils._get_as_snowflake(data, "parent_id")
+        self.position = data["position"]
+        self.nsfw = data.get("nsfw", False)
         self._fill_overwrites(data)
 
     @property
@@ -1130,9 +1123,7 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
     async def clone(self, *, name=None, reason=None):
-        return await self._clone_impl({
-            'nsfw': self.nsfw
-        }, name=name, reason=reason)
+        return await self._clone_impl({"nsfw": self.nsfw}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
         """|coro|
@@ -1176,6 +1167,7 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
         """
         await self._edit(options, reason=reason)
 
+
 class DMChannel(discord.abc.Messageable, Hashable):
     """Represents a Discord direct message channel.
 
@@ -1207,22 +1199,22 @@ class DMChannel(discord.abc.Messageable, Hashable):
         The direct message channel ID.
     """
 
-    __slots__ = ('id', 'recipient', 'me', '_state')
+    __slots__ = ("id", "recipient", "me", "_state")
 
     def __init__(self, *, me, state, data):
         self._state = state
-        self.recipient = state.store_user(data['recipients'][0])
+        self.recipient = state.store_user(data["recipients"][0])
         self.me = me
-        self.id = int(data['id'])
+        self.id = int(data["id"])
 
     async def _get_channel(self):
         return self
 
     def __str__(self):
-        return 'Direct Message with %s' % self.recipient
+        return "Direct Message with %s" % self.recipient
 
     def __repr__(self):
-        return '<DMChannel id={0.id} recipient={0.recipient!r}>'.format(self)
+        return "<DMChannel id={0.id} recipient={0.recipient!r}>".format(self)
 
     @property
     def type(self):
@@ -1284,7 +1276,9 @@ class DMChannel(discord.abc.Messageable, Hashable):
         """
 
         from .message import PartialMessage
+
         return PartialMessage(channel=self, id=message_id)
+
 
 class GroupChannel(discord.abc.Messageable, Hashable):
     """Represents a Discord group channel.
@@ -1323,21 +1317,21 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         The group channel's name if provided.
     """
 
-    __slots__ = ('id', 'recipients', 'owner', 'icon', 'name', 'me', '_state')
+    __slots__ = ("id", "recipients", "owner", "icon", "name", "me", "_state")
 
     def __init__(self, *, me, state, data):
         self._state = state
-        self.id = int(data['id'])
+        self.id = int(data["id"])
         self.me = me
         self._update_group(data)
 
     def _update_group(self, data):
-        owner_id = utils._get_as_snowflake(data, 'owner_id')
-        self.icon = data.get('icon')
-        self.name = data.get('name')
+        owner_id = utils._get_as_snowflake(data, "owner_id")
+        self.icon = data.get("icon")
+        self.name = data.get("name")
 
         try:
-            self.recipients = [self._state.store_user(u) for u in data['recipients']]
+            self.recipients = [self._state.store_user(u) for u in data["recipients"]]
         except KeyError:
             pass
 
@@ -1354,12 +1348,12 @@ class GroupChannel(discord.abc.Messageable, Hashable):
             return self.name
 
         if len(self.recipients) == 0:
-            return 'Unnamed'
+            return "Unnamed"
 
-        return ', '.join(map(lambda x: x.name, self.recipients))
+        return ", ".join(map(lambda x: x.name, self.recipients))
 
     def __repr__(self):
-        return '<GroupChannel id={0.id} name={0.name!r}>'.format(self)
+        return "<GroupChannel id={0.id} name={0.name!r}>".format(self)
 
     @property
     def type(self):
@@ -1375,7 +1369,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         """
         return self.icon_url_as()
 
-    def icon_url_as(self, *, format='webp', size=1024):
+    def icon_url_as(self, *, format="webp", size=1024):
         """Returns an :class:`Asset` for the icon the channel has.
 
         The format must be one of 'webp', 'jpeg', 'jpg' or 'png'.
@@ -1400,7 +1394,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         :class:`Asset`
             The resulting CDN asset.
         """
-        return Asset._from_icon(self._state, self, 'channel', format=format, size=size)
+        return Asset._from_icon(self._state, self, "channel", format=format, size=size)
 
     @property
     def created_at(self):
@@ -1522,12 +1516,12 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         """
 
         try:
-            icon_bytes = fields['icon']
+            icon_bytes = fields["icon"]
         except KeyError:
             pass
         else:
             if icon_bytes is not None:
-                fields['icon'] = utils._bytes_to_base64_data(icon_bytes)
+                fields["icon"] = utils._bytes_to_base64_data(icon_bytes)
 
         data = await self._state.http.edit_group(self.id, **fields)
         self._update_group(data)
@@ -1546,6 +1540,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         """
 
         await self._state.http.leave_group(self.id)
+
 
 def _channel_factory(channel_type):
     value = try_enum(ChannelType, channel_type)

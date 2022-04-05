@@ -27,6 +27,7 @@ DEALINGS IN THE SOFTWARE.
 from . import utils
 from .mixins import Hashable
 
+
 class Object(Hashable):
     """Represents a generic Discord object.
 
@@ -65,12 +66,12 @@ class Object(Hashable):
         try:
             id = int(id)
         except ValueError:
-            raise TypeError('id parameter must be convertable to int not {0.__class__!r}'.format(id)) from None
+            raise TypeError("id parameter must be convertable to int not {0.__class__!r}".format(id)) from None
         else:
             self.id = id
 
     def __repr__(self):
-        return '<Object id=%r>' % self.id
+        return "<Object id=%r>" % self.id
 
     @property
     def created_at(self):

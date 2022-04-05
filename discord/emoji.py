@@ -24,10 +24,11 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from .asset import Asset
 from . import utils
+from .asset import Asset
 from .partial_emoji import _EmojiTag
 from .user import User
+
 
 class Emoji(_EmojiTag):
     """Represents a custom emoji.
@@ -78,8 +79,8 @@ class Emoji(_EmojiTag):
         The user that created the emoji. This can only be retrieved using :meth:`Guild.fetch_emoji` and
         having the :attr:`~Permissions.manage_emojis` permission.
     """
-    __slots__ = ('require_colons', 'animated', 'managed', 'id', 'name', '_roles', 'guild_id',
-                 '_state', 'user', 'available')
+
+    __slots__ = ("require_colons", "animated", "managed", "id", "name", "_roles", "guild_id", "_state", "user", "available")
 
     def __init__(self, *, guild, state, data):
         self.guild_id = guild.id
@@ -87,19 +88,19 @@ class Emoji(_EmojiTag):
         self._from_data(data)
 
     def _from_data(self, emoji):
-        self.require_colons = emoji['require_colons']
-        self.managed = emoji['managed']
-        self.id = int(emoji['id'])
-        self.name = emoji['name']
-        self.animated = emoji.get('animated', False)
-        self.available = emoji.get('available', True)
-        self._roles = utils.SnowflakeList(map(int, emoji.get('roles', [])))
-        user = emoji.get('user')
+        self.require_colons = emoji["require_colons"]
+        self.managed = emoji["managed"]
+        self.id = int(emoji["id"])
+        self.name = emoji["name"]
+        self.animated = emoji.get("animated", False)
+        self.available = emoji.get("available", True)
+        self._roles = utils.SnowflakeList(map(int, emoji.get("roles", [])))
+        user = emoji.get("user")
         self.user = User(state=self._state, data=user) if user else None
 
     def _iterator(self):
         for attr in self.__slots__:
-            if attr[0] != '_':
+            if attr[0] != "_":
                 value = getattr(self, attr, None)
                 if value is not None:
                     yield (attr, value)
@@ -109,11 +110,11 @@ class Emoji(_EmojiTag):
 
     def __str__(self):
         if self.animated:
-            return '<a:{0.name}:{0.id}>'.format(self)
+            return "<a:{0.name}:{0.id}>".format(self)
         return "<:{0.name}:{0.id}>".format(self)
 
     def __repr__(self):
-        return '<Emoji id={0.id} name={0.name!r} animated={0.animated} managed={0.managed}>'.format(self)
+        return "<Emoji id={0.id} name={0.name!r} animated={0.animated} managed={0.managed}>".format(self)
 
     def __eq__(self, other):
         return isinstance(other, _EmojiTag) and self.id == other.id
@@ -155,7 +156,6 @@ class Emoji(_EmojiTag):
         """:class:`Guild`: The guild this emoji belongs to."""
         return self._state._get_guild(self.guild_id)
 
-
     def url_as(self, *, format=None, static_format="png"):
         """Returns an :class:`Asset` for the emoji's url.
 
@@ -186,7 +186,6 @@ class Emoji(_EmojiTag):
             The resulting CDN asset.
         """
         return Asset._from_emoji(self._state, self, format=format, static_format=static_format)
-
 
     def is_usable(self):
         """:class:`bool`: Whether the bot can use this emoji.

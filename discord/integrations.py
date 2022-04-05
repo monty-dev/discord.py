@@ -25,10 +25,12 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import datetime
-from .utils import _get_as_snowflake, get, parse_time
-from .user import User
+
+from .enums import ExpireBehaviour, try_enum
 from .errors import InvalidArgument
-from .enums import try_enum, ExpireBehaviour
+from .user import User
+from .utils import _get_as_snowflake, get, parse_time
+
 
 class IntegrationAccount:
     """Represents an integration account.
@@ -43,14 +45,15 @@ class IntegrationAccount:
         The account name.
     """
 
-    __slots__ = ('id', 'name')
+    __slots__ = ("id", "name")
 
     def __init__(self, **kwargs):
-        self.id = kwargs.pop('id')
-        self.name = kwargs.pop('name')
+        self.id = kwargs.pop("id")
+        self.name = kwargs.pop("name")
 
     def __repr__(self):
-        return '<IntegrationAccount id={0.id} name={0.name!r}>'.format(self)
+        return "<IntegrationAccount id={0.id} name={0.name!r}>".format(self)
+
 
 class Integration:
     """Represents a guild integration.
@@ -87,10 +90,7 @@ class Integration:
         When the integration was last synced.
     """
 
-    __slots__ = ('id', '_state', 'guild', 'name', 'enabled', 'type',
-                 'syncing', 'role', 'expire_behaviour', 'expire_behavior',
-                 'expire_grace_period', 'synced_at', 'user', 'account',
-                 'enable_emoticons', '_role_id')
+    __slots__ = ("id", "_state", "guild", "name", "enabled", "type", "syncing", "role", "expire_behaviour", "expire_behavior", "expire_grace_period", "synced_at", "user", "account", "enable_emoticons", "_role_id")
 
     def __init__(self, *, data, guild):
         self.guild = guild
@@ -98,24 +98,24 @@ class Integration:
         self._from_data(data)
 
     def __repr__(self):
-        return '<Integration id={0.id} name={0.name!r} type={0.type!r}>'.format(self)
+        return "<Integration id={0.id} name={0.name!r} type={0.type!r}>".format(self)
 
     def _from_data(self, integ):
-        self.id = _get_as_snowflake(integ, 'id')
-        self.name = integ['name']
-        self.type = integ['type']
-        self.enabled = integ['enabled']
-        self.syncing = integ['syncing']
-        self._role_id = _get_as_snowflake(integ, 'role_id')
+        self.id = _get_as_snowflake(integ, "id")
+        self.name = integ["name"]
+        self.type = integ["type"]
+        self.enabled = integ["enabled"]
+        self.syncing = integ["syncing"]
+        self._role_id = _get_as_snowflake(integ, "role_id")
         self.role = get(self.guild.roles, id=self._role_id)
-        self.enable_emoticons = integ.get('enable_emoticons')
-        self.expire_behaviour = try_enum(ExpireBehaviour, integ['expire_behavior'])
+        self.enable_emoticons = integ.get("enable_emoticons")
+        self.expire_behaviour = try_enum(ExpireBehaviour, integ["expire_behavior"])
         self.expire_behavior = self.expire_behaviour
-        self.expire_grace_period = integ['expire_grace_period']
-        self.synced_at = parse_time(integ['synced_at'])
+        self.expire_grace_period = integ["expire_grace_period"]
+        self.synced_at = parse_time(integ["synced_at"])
 
-        self.user = User(state=self._state, data=integ['user'])
-        self.account = IntegrationAccount(**integ['account'])
+        self.user = User(state=self._state, data=integ["user"])
+        self.account = IntegrationAccount(**integ["account"])
 
     async def edit(self, **fields):
         """|coro|
@@ -144,24 +144,24 @@ class Integration:
             ``expire_behaviour`` did not receive a :class:`ExpireBehaviour`.
         """
         try:
-            expire_behaviour = fields['expire_behaviour']
+            expire_behaviour = fields["expire_behaviour"]
         except KeyError:
-            expire_behaviour = fields.get('expire_behavior', self.expire_behaviour)
+            expire_behaviour = fields.get("expire_behavior", self.expire_behaviour)
 
         if not isinstance(expire_behaviour, ExpireBehaviour):
-            raise InvalidArgument('expire_behaviour field must be of type ExpireBehaviour')
+            raise InvalidArgument("expire_behaviour field must be of type ExpireBehaviour")
 
-        expire_grace_period = fields.get('expire_grace_period', self.expire_grace_period)
+        expire_grace_period = fields.get("expire_grace_period", self.expire_grace_period)
 
         payload = {
-            'expire_behavior': expire_behaviour.value,
-            'expire_grace_period': expire_grace_period,
+            "expire_behavior": expire_behaviour.value,
+            "expire_grace_period": expire_grace_period,
         }
 
-        enable_emoticons = fields.get('enable_emoticons')
+        enable_emoticons = fields.get("enable_emoticons")
 
         if enable_emoticons is not None:
-            payload['enable_emoticons'] = enable_emoticons
+            payload["enable_emoticons"] = enable_emoticons
 
         await self._state.http.edit_integration(self.guild.id, self.id, **payload)
 

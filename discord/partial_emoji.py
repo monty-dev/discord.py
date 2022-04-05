@@ -24,12 +24,13 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from .asset import Asset
 from . import utils
+from .asset import Asset
 
 
 class _EmojiTag:
     __slots__ = ()
+
 
 class PartialEmoji(_EmojiTag):
     """Represents a "partial" emoji.
@@ -69,7 +70,7 @@ class PartialEmoji(_EmojiTag):
         The ID of the custom emoji, if applicable.
     """
 
-    __slots__ = ('animated', 'name', 'id', '_state')
+    __slots__ = ("animated", "name", "id", "_state")
 
     def __init__(self, *, name, animated=False, id=None):
         self.animated = animated
@@ -80,17 +81,17 @@ class PartialEmoji(_EmojiTag):
     @classmethod
     def from_dict(cls, data):
         return cls(
-            animated=data.get('animated', False),
-            id=utils._get_as_snowflake(data, 'id'),
-            name=data.get('name'),
+            animated=data.get("animated", False),
+            id=utils._get_as_snowflake(data, "id"),
+            name=data.get("name"),
         )
 
     def to_dict(self):
-        o = { 'name': self.name }
+        o = {"name": self.name}
         if self.id:
-            o['id'] = self.id
+            o["id"] = self.id
         if self.animated:
-            o['animated'] = self.animated
+            o["animated"] = self.animated
         return o
 
     @classmethod
@@ -103,11 +104,11 @@ class PartialEmoji(_EmojiTag):
         if self.id is None:
             return self.name
         if self.animated:
-            return '<a:%s:%s>' % (self.name, self.id)
-        return '<:%s:%s>' % (self.name, self.id)
+            return "<a:%s:%s>" % (self.name, self.id)
+        return "<:%s:%s>" % (self.name, self.id)
 
     def __repr__(self):
-        return '<{0.__class__.__name__} animated={0.animated} name={0.name!r} id={0.id}>'.format(self)
+        return "<{0.__class__.__name__} animated={0.animated} name={0.name!r} id={0.id}>".format(self)
 
     def __eq__(self, other):
         if self.is_unicode_emoji():
@@ -134,7 +135,7 @@ class PartialEmoji(_EmojiTag):
     def _as_reaction(self):
         if self.id is None:
             return self.name
-        return '%s:%s' % (self.name, self.id)
+        return "%s:%s" % (self.name, self.id)
 
     @property
     def created_at(self):

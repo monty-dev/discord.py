@@ -8,7 +8,7 @@ from discord.ext import commands
 intents = discord.Intents.default()
 intents.members = True
 
-bot = commands.Bot('!', intents=intents)
+bot = commands.Bot("!", intents=intents)
 
 
 @bot.command()
@@ -29,14 +29,16 @@ async def userinfo(ctx: commands.Context, user: discord.User):
     user_id = user.id
     username = user.name
     avatar = user.avatar_url
-    await ctx.send('User found: {} -- {}\n{}'.format(user_id, username, avatar))
+    await ctx.send("User found: {} -- {}\n{}".format(user_id, username, avatar))
+
 
 @userinfo.error
 async def userinfo_error(ctx: commands.Context, error: commands.CommandError):
     # if the conversion above fails for any reason, it will raise `commands.BadArgument`
     # so we handle this in this error handler:
     if isinstance(error, commands.BadArgument):
-        return await ctx.send('Couldn\'t find that user.')
+        return await ctx.send("Couldn't find that user.")
+
 
 # Custom Converter here
 class ChannelOrMemberConverter(commands.Converter):
@@ -73,15 +75,15 @@ class ChannelOrMemberConverter(commands.Converter):
         raise commands.BadArgument('No Member or TextChannel could be converted from "{}"'.format(argument))
 
 
-
 @bot.command()
 async def notify(ctx: commands.Context, target: ChannelOrMemberConverter):
     # This command signature utilises the custom converter written above
     # What will happen during command invocation is that the `target` above will be passed to
-    # the `argument` parameter of the `ChannelOrMemberConverter.convert` method and 
+    # the `argument` parameter of the `ChannelOrMemberConverter.convert` method and
     # the conversion will go through the process defined there.
 
-    await target.send('Hello, {}!'.format(target.name))
+    await target.send("Hello, {}!".format(target.name))
+
 
 @bot.command()
 async def ignore(ctx: commands.Context, target: typing.Union[discord.Member, discord.TextChannel]):
@@ -95,9 +97,10 @@ async def ignore(ctx: commands.Context, target: typing.Union[discord.Member, dis
 
     # To check the resulting type, `isinstance` is used
     if isinstance(target, discord.Member):
-        await ctx.send('Member found: {}, adding them to the ignore list.'.format(target.mention))
-    elif isinstance(target, discord.TextChannel): # this could be an `else` but for completeness' sake.
-        await ctx.send('Channel found: {}, adding it to the ignore list.'.format(target.mention))
+        await ctx.send("Member found: {}, adding them to the ignore list.".format(target.mention))
+    elif isinstance(target, discord.TextChannel):  # this could be an `else` but for completeness' sake.
+        await ctx.send("Channel found: {}, adding it to the ignore list.".format(target.mention))
+
 
 # Built-in type converters.
 @bot.command()
@@ -110,4 +113,5 @@ async def multiply(ctx: commands.Context, number: int, maybe: bool):
         return await ctx.send(number * 2)
     await ctx.send(number * 5)
 
-bot.run('token')
+
+bot.run("token")

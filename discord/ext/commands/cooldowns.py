@@ -24,29 +24,31 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from discord.enums import Enum
-import time
 import asyncio
+import time
 from collections import deque
+
+from discord.enums import Enum
 
 from ...abc import PrivateChannel
 from .errors import MaxConcurrencyReached
 
 __all__ = (
-    'BucketType',
-    'Cooldown',
-    'CooldownMapping',
-    'MaxConcurrency',
+    "BucketType",
+    "Cooldown",
+    "CooldownMapping",
+    "MaxConcurrency",
 )
 
+
 class BucketType(Enum):
-    default  = 0
-    user     = 1
-    guild    = 2
-    channel  = 3
-    member   = 4
+    default = 0
+    user = 1
+    guild = 2
+    channel = 3
+    member = 4
     category = 5
-    role     = 6
+    role = 6
 
     def get_key(self, msg):
         if self is BucketType.user:
@@ -71,7 +73,7 @@ class BucketType(Enum):
 
 
 class Cooldown:
-    __slots__ = ('rate', 'per', 'type', '_window', '_tokens', '_last')
+    __slots__ = ("rate", "per", "type", "_window", "_tokens", "_last")
 
     def __init__(self, rate, per, type):
         self.rate = int(rate)
@@ -82,7 +84,7 @@ class Cooldown:
         self._last = 0.0
 
         if not callable(self.type):
-            raise TypeError('Cooldown type must be a BucketType or callable')
+            raise TypeError("Cooldown type must be a BucketType or callable")
 
     def get_tokens(self, current=None):
         if not current:
@@ -133,7 +135,8 @@ class Cooldown:
         return Cooldown(self.rate, self.per, self.type)
 
     def __repr__(self):
-        return '<Cooldown rate: {0.rate} per: {0.per} window: {0._window} tokens: {0._tokens}>'.format(self)
+        return "<Cooldown rate: {0.rate} per: {0.per} window: {0._window} tokens: {0._tokens}>".format(self)
+
 
 class CooldownMapping:
     def __init__(self, original):
@@ -183,6 +186,7 @@ class CooldownMapping:
         bucket = self.get_bucket(message, current)
         return bucket.update_rate_limit(current)
 
+
 class _Semaphore:
     """This class is a version of a semaphore.
 
@@ -196,7 +200,7 @@ class _Semaphore:
     overkill for what is basically a counter.
     """
 
-    __slots__ = ('value', 'loop', '_waiters')
+    __slots__ = ("value", "loop", "_waiters")
 
     def __init__(self, number):
         self.value = number
@@ -204,7 +208,7 @@ class _Semaphore:
         self._waiters = deque()
 
     def __repr__(self):
-        return '<_Semaphore value={0.value} waiters={1}>'.format(self, len(self._waiters))
+        return "<_Semaphore value={0.value} waiters={1}>".format(self, len(self._waiters))
 
     def locked(self):
         return self.value == 0
@@ -242,8 +246,9 @@ class _Semaphore:
         self.value += 1
         self.wake_up()
 
+
 class MaxConcurrency:
-    __slots__ = ('number', 'per', 'wait', '_mapping')
+    __slots__ = ("number", "per", "wait", "_mapping")
 
     def __init__(self, number, *, per, wait):
         self._mapping = {}
@@ -252,16 +257,16 @@ class MaxConcurrency:
         self.wait = wait
 
         if number <= 0:
-            raise ValueError('max_concurrency \'number\' cannot be less than 1')
+            raise ValueError("max_concurrency 'number' cannot be less than 1")
 
         if not isinstance(per, BucketType):
-            raise TypeError('max_concurrency \'per\' must be of type BucketType not %r' % type(per))
+            raise TypeError("max_concurrency 'per' must be of type BucketType not %r" % type(per))
 
     def copy(self):
         return self.__class__(self.number, per=self.per, wait=self.wait)
 
     def __repr__(self):
-        return '<MaxConcurrency per={0.per!r} number={0.number} wait={0.wait}>'.format(self)
+        return "<MaxConcurrency per={0.per!r} number={0.number} wait={0.wait}>".format(self)
 
     def get_key(self, message):
         return self.per.get_key(message)

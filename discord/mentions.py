@@ -24,9 +24,10 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+
 class _FakeBool:
     def __repr__(self):
-        return 'True'
+        return "True"
 
     def __eq__(self, other):
         return other is True
@@ -34,7 +35,9 @@ class _FakeBool:
     def __bool__(self):
         return True
 
+
 default = _FakeBool()
+
 
 class AllowedMentions:
     """A class that represents what mentions are allowed in a message.
@@ -66,7 +69,7 @@ class AllowedMentions:
         .. versionadded:: 1.6
     """
 
-    __slots__ = ('everyone', 'users', 'roles', 'replied_user')
+    __slots__ = ("everyone", "users", "roles", "replied_user")
 
     def __init__(self, *, everyone=default, users=default, roles=default, replied_user=default):
         self.everyone = everyone
@@ -95,22 +98,22 @@ class AllowedMentions:
         data = {}
 
         if self.everyone:
-            parse.append('everyone')
+            parse.append("everyone")
 
         if self.users == True:
-            parse.append('users')
+            parse.append("users")
         elif self.users != False:
-            data['users'] = [x.id for x in self.users]
+            data["users"] = [x.id for x in self.users]
 
         if self.roles == True:
-            parse.append('roles')
+            parse.append("roles")
         elif self.roles != False:
-            data['roles'] = [x.id for x in self.roles]
+            data["roles"] = [x.id for x in self.roles]
 
         if self.replied_user:
-            data['replied_user'] = True
+            data["replied_user"] = True
 
-        data['parse'] = parse
+        data["parse"] = parse
         return data
 
     def merge(self, other):
@@ -124,4 +127,4 @@ class AllowedMentions:
         return AllowedMentions(everyone=everyone, roles=roles, users=users, replied_user=replied_user)
 
     def __repr__(self):
-        return '{0.__class__.__qualname__}(everyone={0.everyone}, users={0.users}, roles={0.roles}, replied_user={0.replied_user})'.format(self)
+        return "{0.__class__.__qualname__}(everyone={0.everyone}, users={0.users}, roles={0.roles}, replied_user={0.replied_user})".format(self)

@@ -40,24 +40,26 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import asyncio
-import socket
 import logging
+import socket
 import struct
 import threading
 
 from . import opus, utils
 from .backoff import ExponentialBackoff
-from .gateway import *
 from .errors import ClientException, ConnectionClosed
+from .gateway import *
 from .player import AudioPlayer, AudioSource
 
 try:
     import nacl.secret
+
     has_nacl = True
 except ImportError:
     has_nacl = False
 
 log = logging.getLogger(__name__)
+
 
 class VoiceProtocol:
     """A class that represents the Discord voice protocol.
@@ -168,6 +170,7 @@ class VoiceProtocol:
         key_id, _ = self.channel._get_voice_client_key()
         self.client._connection._remove_voice_client(key_id)
 
+
 class VoiceClient(VoiceProtocol):
     """Represents a Discord voice connection.
 
@@ -194,6 +197,7 @@ class VoiceClient(VoiceProtocol):
     loop: :class:`asyncio.AbstractEventLoop`
         The event loop that the voice client is running on.
     """
+
     def __init__(self, client, channel):
         if not has_nacl:
             raise RuntimeError("PyNaCl library needed in order to use voice")
@@ -224,15 +228,15 @@ class VoiceClient(VoiceProtocol):
 
     warn_nacl = not has_nacl
     supported_modes = (
-        'xsalsa20_poly1305_lite',
-        'xsalsa20_poly1305_suffix',
-        'xsalsa20_poly1305',
+        "xsalsa20_poly1305_lite",
+        "xsalsa20_poly1305_suffix",
+        "xsalsa20_poly1305",
     )
 
     @property
     def guild(self):
         """Optional[:class:`Guild`]: The guild we're connected to, if applicable."""
-        return getattr(self.channel, 'guild', None)
+        return getattr(self.channel, "guild", None)
 
     @property
     def user(self):
@@ -249,8 +253,8 @@ class VoiceClient(VoiceProtocol):
     # connection related
 
     async def on_voice_state_update(self, data):
-        self.session_id = data['session_id']
-        channel_id = data['channel_id']
+        self.session_id = data["session_id"]
+        channel_id = data["channel_id"]
 
         if not self._handshaking or self._potentially_reconnecting:
             # If we're done handshaking then we just need to update ourselves
@@ -267,20 +271,19 @@ class VoiceClient(VoiceProtocol):
 
     async def on_voice_server_update(self, data):
         if self._voice_server_complete.is_set():
-            log.info('Ignoring extraneous voice server update.')
+            log.info("Ignoring extraneous voice server update.")
             return
 
-        self.token = data.get('token')
-        self.server_id = int(data['guild_id'])
-        endpoint = data.get('endpoint')
+        self.token = data.get("token")
+        self.server_id = int(data["guild_id"])
+        endpoint = data.get("endpoint")
 
         if endpoint is None or self.token is None:
-            log.warning('Awaiting endpoint... This requires waiting. ' \
-                        'If timeout occurred considering raising the timeout and reconnecting.')
+            log.warning("Awaiting endpoint... This requires waiting. " "If timeout occurred considering raising the timeout and reconnecting.")
             return
 
-        self.endpoint, _, _ = endpoint.rpartition(':')
-        if self.endpoint.startswith('wss://'):
+        self.endpoint, _, _ = endpoint.rpartition(":")
+        if self.endpoint.startswith("wss://"):
             # Just in case, strip it off since we're going to add it later
             self.endpoint = self.endpoint[6:]
 
@@ -301,18 +304,18 @@ class VoiceClient(VoiceProtocol):
         await self.channel.guild.change_voice_state(channel=self.channel)
 
     async def voice_disconnect(self):
-        log.info('The voice handshake is being terminated for Channel ID %s (Guild ID %s)', self.channel.id, self.guild.id)
+        log.info("The voice handshake is being terminated for Channel ID %s (Guild ID %s)", self.channel.id, self.guild.id)
         await self.channel.guild.change_voice_state(channel=None)
 
     def prepare_handshake(self):
         self._voice_state_complete.clear()
         self._voice_server_complete.clear()
         self._handshaking = True
-        log.info('Starting voice handshake... (connection attempt %d)', self._connections + 1)
+        log.info("Starting voice handshake... (connection attempt %d)", self._connections + 1)
         self._connections += 1
 
     def finish_handshake(self):
-        log.info('Voice handshake complete. Endpoint found %s', self.endpoint)
+        log.info("Voice handshake complete. Endpoint found %s", self.endpoint)
         self._handshaking = False
         self._voice_server_complete.clear()
         self._voice_state_complete.clear()
@@ -326,7 +329,7 @@ class VoiceClient(VoiceProtocol):
         return ws
 
     async def connect(self, *, reconnect, timeout):
-        log.info('Connecting to voice...')
+        log.info("Connecting to voice...")
         self.timeout = timeout
 
         for i in range(5):
@@ -354,7 +357,7 @@ class VoiceClient(VoiceProtocol):
                 break
             except (ConnectionClosed, asyncio.TimeoutError):
                 if reconnect:
-                    log.exception('Failed to connect to voice... Retrying...')
+                    log.exception("Failed to connect to voice... Retrying...")
                     await asyncio.sleep(1 + i * 2.0)
                     await self.voice_disconnect()
                     continue
@@ -419,14 +422,14 @@ class VoiceClient(VoiceProtocol):
                     # 4014 - voice channel has been deleted.
                     # 4015 - voice server has crashed
                     if exc.code in (1000, 4015):
-                        log.info('Disconnecting from voice normally, close code %d.', exc.code)
+                        log.info("Disconnecting from voice normally, close code %d.", exc.code)
                         await self.disconnect()
                         break
                     if exc.code == 4014:
-                        log.info('Disconnected from voice by force... potentially reconnecting.')
+                        log.info("Disconnected from voice by force... potentially reconnecting.")
                         successful = await self.potential_reconnect()
                         if not successful:
-                            log.info('Reconnect was unsuccessful, disconnecting from voice normally...')
+                            log.info("Reconnect was unsuccessful, disconnecting from voice normally...")
                             await self.disconnect()
                             break
                         else:
@@ -437,7 +440,7 @@ class VoiceClient(VoiceProtocol):
                     raise
 
                 retry = backoff.delay()
-                log.exception('Disconnected from voice... Reconnecting in %.2fs.', retry)
+                log.exception("Disconnected from voice... Reconnecting in %.2fs.", retry)
                 self._connected.clear()
                 await asyncio.sleep(retry)
                 await self.voice_disconnect()
@@ -445,7 +448,7 @@ class VoiceClient(VoiceProtocol):
                     await self.connect(reconnect=True, timeout=self.timeout)
                 except asyncio.TimeoutError:
                     # at this point we've retried 5 times... let's continue the loop.
-                    log.warning('Could not connect to voice... Retrying...')
+                    log.warning("Could not connect to voice... Retrying...")
                     continue
 
     async def disconnect(self, *, force=False):
@@ -493,11 +496,11 @@ class VoiceClient(VoiceProtocol):
         # Formulate rtp header
         header[0] = 0x80
         header[1] = 0x78
-        struct.pack_into('>H', header, 2, self.sequence)
-        struct.pack_into('>I', header, 4, self.timestamp)
-        struct.pack_into('>I', header, 8, self.ssrc)
+        struct.pack_into(">H", header, 2, self.sequence)
+        struct.pack_into(">I", header, 4, self.timestamp)
+        struct.pack_into(">I", header, 8, self.ssrc)
 
-        encrypt_packet = getattr(self, '_encrypt_' + self.mode)
+        encrypt_packet = getattr(self, "_encrypt_" + self.mode)
         return encrypt_packet(header, data)
 
     def _encrypt_xsalsa20_poly1305(self, header, data):
@@ -517,8 +520,8 @@ class VoiceClient(VoiceProtocol):
         box = nacl.secret.SecretBox(bytes(self.secret_key))
         nonce = bytearray(24)
 
-        nonce[:4] = struct.pack('>I', self._lite_nonce)
-        self.checked_add('_lite_nonce', 1, 4294967295)
+        nonce[:4] = struct.pack(">I", self._lite_nonce)
+        self.checked_add("_lite_nonce", 1, 4294967295)
 
         return header + box.encrypt(bytes(data), bytes(nonce)).ciphertext + nonce[:4]
 
@@ -552,13 +555,13 @@ class VoiceClient(VoiceProtocol):
         """
 
         if not self.is_connected():
-            raise ClientException('Not connected to voice.')
+            raise ClientException("Not connected to voice.")
 
         if self.is_playing():
-            raise ClientException('Already playing audio.')
+            raise ClientException("Already playing audio.")
 
         if not isinstance(source, AudioSource):
-            raise TypeError('source must an AudioSource not {0.__class__.__name__}'.format(source))
+            raise TypeError("source must an AudioSource not {0.__class__.__name__}".format(source))
 
         if not self.encoder and not source.is_opus():
             self.encoder = opus.Encoder()
@@ -601,10 +604,10 @@ class VoiceClient(VoiceProtocol):
     @source.setter
     def source(self, value):
         if not isinstance(value, AudioSource):
-            raise TypeError('expected AudioSource not {0.__class__.__name__}.'.format(value))
+            raise TypeError("expected AudioSource not {0.__class__.__name__}.".format(value))
 
         if self._player is None:
-            raise ValueError('Not playing anything.')
+            raise ValueError("Not playing anything.")
 
         self._player._set_source(value)
 
@@ -628,7 +631,7 @@ class VoiceClient(VoiceProtocol):
             Encoding the data failed.
         """
 
-        self.checked_add('sequence', 1, 65535)
+        self.checked_add("sequence", 1, 65535)
         if encode:
             encoded_data = self.encoder.encode(data, self.encoder.SAMPLES_PER_FRAME)
         else:
@@ -637,6 +640,6 @@ class VoiceClient(VoiceProtocol):
         try:
             self.socket.sendto(packet, (self.endpoint_ip, self.voice_port))
         except BlockingIOError:
-            log.warning('A packet has been dropped (seq: %s, timestamp: %s)', self.sequence, self.timestamp)
+            log.warning("A packet has been dropped (seq: %s, timestamp: %s)", self.sequence, self.timestamp)
 
-        self.checked_add('timestamp', opus.Encoder.SAMPLES_PER_FRAME, 4294967295)
+        self.checked_add("timestamp", opus.Encoder.SAMPLES_PER_FRAME, 4294967295)

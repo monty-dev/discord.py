@@ -24,19 +24,19 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from .utils import parse_time, _get_as_snowflake, _bytes_to_base64_data
 from .enums import VoiceRegion
 from .guild import Guild
+from .utils import _bytes_to_base64_data, _get_as_snowflake, parse_time
 
-__all__ = (
-    'Template',
-)
+__all__ = ("Template",)
+
 
 class _FriendlyHttpAttributeErrorHelper:
     __slots__ = ()
 
     def __getattr__(self, attr):
-        raise AttributeError('PartialTemplateState does not support http methods.')
+        raise AttributeError("PartialTemplateState does not support http methods.")
+
 
 class _PartialTemplateState:
     def __init__(self, *, state):
@@ -76,7 +76,8 @@ class _PartialTemplateState:
         return []
 
     def __getattr__(self, attr):
-        raise AttributeError('PartialTemplateState does not support {0!r}.'.format(attr))
+        raise AttributeError("PartialTemplateState does not support {0!r}.".format(attr))
+
 
 class Template:
     """Represents a Discord template.
@@ -108,31 +109,30 @@ class Template:
         self._store(data)
 
     def _store(self, data):
-        self.code = data['code']
-        self.uses = data['usage_count']
-        self.name =  data['name']
-        self.description = data['description']
-        creator_data = data.get('creator')
+        self.code = data["code"]
+        self.uses = data["usage_count"]
+        self.name = data["name"]
+        self.description = data["description"]
+        creator_data = data.get("creator")
         self.creator = None if creator_data is None else self._state.store_user(creator_data)
 
-        self.created_at = parse_time(data.get('created_at'))
-        self.updated_at = parse_time(data.get('updated_at'))
+        self.created_at = parse_time(data.get("created_at"))
+        self.updated_at = parse_time(data.get("updated_at"))
 
-        id = _get_as_snowflake(data, 'source_guild_id')
+        id = _get_as_snowflake(data, "source_guild_id")
 
         guild = self._state._get_guild(id)
 
         if guild is None:
-            source_serialised = data['serialized_source_guild']
-            source_serialised['id'] = id
+            source_serialised = data["serialized_source_guild"]
+            source_serialised["id"] = id
             state = _PartialTemplateState(state=self._state)
             guild = Guild(data=source_serialised, state=state)
-        
+
         self.source_guild = guild
 
     def __repr__(self):
-        return '<Template code={0.code!r} uses={0.uses} name={0.name!r}' \
-               ' creator={0.creator!r} source_guild={0.source_guild!r}>'.format(self)
+        return "<Template code={0.code!r} uses={0.uses} name={0.name!r}" " creator={0.creator!r} source_guild={0.source_guild!r}>".format(self)
 
     async def create_guild(self, name, region=None, icon=None):
         """|coro|

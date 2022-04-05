@@ -24,10 +24,11 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from .mixins import Hashable
 from .asset import Asset
-from .utils import snowflake_time
 from .enums import StickerType, try_enum
+from .mixins import Hashable
+from .utils import snowflake_time
+
 
 class Sticker(Hashable):
     """Represents a sticker.
@@ -67,26 +68,27 @@ class Sticker(Hashable):
     preview_image: Optional[:class:`str`]
         The sticker's preview asset hash.
     """
-    __slots__ = ('_state', 'id', 'name', 'description', 'pack_id', 'format', 'image', 'tags', 'preview_image')
+
+    __slots__ = ("_state", "id", "name", "description", "pack_id", "format", "image", "tags", "preview_image")
 
     def __init__(self, *, state, data):
         self._state = state
-        self.id = int(data['id'])
-        self.name = data['name']
-        self.description = data['description']
-        self.pack_id = int(data.get('pack_id', 0))
-        self.format = try_enum(StickerType, data['format_type'])
-        self.image = data['asset']
+        self.id = int(data["id"])
+        self.name = data["name"]
+        self.description = data["description"]
+        self.pack_id = int(data.get("pack_id", 0))
+        self.format = try_enum(StickerType, data["format_type"])
+        self.image = data["asset"]
 
         try:
-            self.tags = [tag.strip() for tag in data['tags'].split(',')]
+            self.tags = [tag.strip() for tag in data["tags"].split(",")]
         except KeyError:
             self.tags = []
 
-        self.preview_image = data.get('preview_asset')
+        self.preview_image = data.get("preview_asset")
 
     def __repr__(self):
-        return '<{0.__class__.__name__} id={0.id} name={0.name!r}>'.format(self)
+        return "<{0.__class__.__name__} id={0.id} name={0.name!r}>".format(self)
 
     def __str__(self):
         return self.name
