@@ -560,7 +560,7 @@ class Message(Hashable):
         self.tts = data['tts']
         self.content = data['content']
         self.nonce = data.get('nonce')
-        self.stickers = [Sticker(data=data, state=state) for data in data.get('stickers', [])]
+        self.stickers = [Sticker(data=data, state=state) for data in data.get('sticker_items', [])]
 
         try:
             ref = data['message_reference']
