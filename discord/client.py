@@ -31,7 +31,6 @@ import sys
 import traceback
 
 import aiohttp
-
 from .user import User, Profile
 from .invite import Invite
 from .template import Template
@@ -55,7 +54,7 @@ from .iterators import GuildIterator
 from .appinfo import AppInfo
 
 log = logging.getLogger(__name__)
-
+from loguru import logger 
 def _cancel_tasks(loop):
     try:
         task_retriever = asyncio.Task.all_tasks
@@ -403,8 +402,9 @@ class Client:
         overridden to have a different implementation.
         Check :func:`~discord.on_error` for more details.
         """
-        print('Ignoring exception in {}'.format(event_method), file=sys.stderr)
-        traceback.print_exc()
+        
+        log.exception('Ignoring exception in {}' , event_method)
+       
 
     @utils.deprecated('Guild.chunk')
     async def request_offline_members(self, *guilds):

@@ -33,7 +33,7 @@ import traceback
 import types
 
 import discord
-
+from loguru import logger
 from .core import GroupMixin
 from .view import StringView
 from .context import Context
@@ -169,8 +169,8 @@ class BotBase(GroupMixin):
         if cog and Cog._get_overridden_method(cog.cog_command_error) is not None:
             return
 
-        print('Ignoring exception in command {}:'.format(context.command), file=sys.stderr)
-        traceback.print_exception(type(exception), exception, exception.__traceback__, file=sys.stderr)
+        logger.opt(exception=exception).exception('Ignoring exception in command {}:', context.command)
+   
 
     # global check registration
 

@@ -425,7 +425,7 @@ class DiscordWebSocket:
             if len(msg) < 4 or msg[-4:] != b'\x00\x00\xff\xff':
                 return
             msg = self._zlib.decompress(self._buffer)
-            msg = msg.decode('utf-8')
+         
             self._buffer = bytearray()
         msg = orjson.loads(msg)
 
@@ -727,7 +727,6 @@ class DiscordVoiceWebSocket:
         self.secret_key = None
 
     async def send_as_json(self, data):
-        log.debug('Sending voice websocket frame: %s.', data)
         await self.ws.send_str(utils.to_json(data))
 
     send_heartbeat = send_as_json
@@ -813,7 +812,6 @@ class DiscordVoiceWebSocket:
         await self.send_as_json(payload)
 
     async def received_message(self, msg):
-        log.debug('Voice websocket frame received: %s', msg)
         op = msg['op']
         data = msg.get('d')
 
