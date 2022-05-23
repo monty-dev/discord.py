@@ -209,7 +209,7 @@ class Member(discord.abc.Messageable, _BaseUser):
     """
 
     __slots__ = ('_roles', 'joined_at', 'premium_since', '_client_status',
-                 'activities', 'guild', 'pending', 'nick', '_user', '_state')
+                 'activities', 'guild', 'pending', 'nick', '_user', '_state','timeout','communication_disabled_until')
 
     def __init__(self, *, data, guild, state):
         self._state = state
@@ -224,6 +224,8 @@ class Member(discord.abc.Messageable, _BaseUser):
         self.activities = tuple(map(create_activity, data.get('activities', [])))
         self.nick = data.get('nick', None)
         self.pending = data.get('pending', False)
+        self.communication_disabled_until = utils.parse_time(data.get('communication_disabled_until'))
+        self.timeout = self.communication_disabled_until
 
     def __str__(self):
         return str(self._user)
@@ -289,6 +291,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         self.pending = member.pending
         self.activities = member.activities
         self._state = member._state
+        self.communication_disabled_until = member.communication_disabled_until
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -316,6 +319,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             pass
 
         self.premium_since = utils.parse_time(data.get('premium_since'))
+        self.communication_disabled_until = utils.parse_time(data.get("communication_disabled_until"))
         self._update_roles(data)
 
     def _presence_update(self, data, user):
