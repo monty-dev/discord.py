@@ -32,11 +32,10 @@ from urllib.parse import quote as _uriquote
 import weakref
 
 import aiohttp
-
+from xxhash import xxh3_64_hexdigest
 from .errors import HTTPException, Forbidden, NotFound, LoginFailure, DiscordServerError, GatewayNotFound
 from .gateway import DiscordClientWebSocketResponse
 from . import __version__, utils
-
 log = logging.getLogger(__name__)
 
 async def json_or_text(response):
@@ -105,6 +104,7 @@ class HTTPClient:
         self._global_over.set()
         self.token = None
         self.bot_token = False
+        self.token_hash = None
         self.proxy = proxy
         self.proxy_auth = proxy_auth
         self.use_clock = not unsync_clock
@@ -132,9 +132,22 @@ class HTTPClient:
         return await self.__session.ws_connect(url, **kwargs)
 
     async def request(self, route, *, files=None, form=None, **kwargs):
+        from melanie import get_redis
+
         bucket = route.bucket
         method = route.method
         url = route.url
+        redis = get_redis()
+        if not self.token_hash:
+            self.token_hash = xxh3_64_hexdigest(f"{self.token}{self.bot_token}")
+        async with redis.pipeline() as pipe:
+            pipe.set("dpy_requests", ".", {self.token_hash: {}}, nx=True)
+            pipe.set('dpy_requests', f'{self.token_hash}.{method}_{bucket}', 0, nx=True )
+            pipe.numincrby('dpy_requests', f'{self.token_hash}.{method}_{bucket}', 1)
+            await pipe.execute()
+            
+            
+
 
         lock = self._locks.get(bucket)
         if lock is None:
