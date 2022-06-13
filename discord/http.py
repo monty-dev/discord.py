@@ -144,7 +144,7 @@ class HTTPClient:
             
             fullpath =  f'{self.token_hash}.{method}_{bucket}'.replace('@', '').replace('/', '_').replace(':', '_').replace(' ', '_')
             pipe.set("dpy_requests", ".",{},  nx=True)
-            pipe.set('dpy_requests',f'{self.token_hash}',{}  )
+            pipe.set('dpy_requests',f'{self.token_hash}',{} ,nx=True )
             pipe.set('dpy_requests',fullpath, 0, nx=True )
             pipe.numincrby('dpy_requests',fullpath, 1)
             await pipe.execute()
