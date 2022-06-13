@@ -141,9 +141,11 @@ class HTTPClient:
         if not self.token_hash:
             self.token_hash = xxh3_64_hexdigest(f"{self.token}{self.bot_token}")
         async with redis.pipeline() as pipe:
+            
+            fullpath =  f'{self.token_hash}.{method}_{bucket}'.replace('@', '')
             pipe.set("dpy_requests", ".", {self.token_hash: {}}, nx=True)
-            pipe.set('dpy_requests', f'{self.token_hash}.{method}_{bucket}', 0, nx=True )
-            pipe.numincrby('dpy_requests', f'{self.token_hash}.{method}_{bucket}', 1)
+            pipe.set('dpy_requests',fullpath, 0, nx=True )
+            pipe.numincrby('dpy_requests',fullpath, 1)
             await pipe.execute()
             
             
