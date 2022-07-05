@@ -24,8 +24,10 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-import datetime
 
+import datetime
+import asyncio
+import contextlib
 from . import utils
 from .colour import Colour
 
@@ -250,7 +252,49 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_footer', {}))git a
+        return EmbedProxy(getattr(self, '_footer', {}))
+    
+    
+    
+    async def set_embed_colors(self):
+        from melanie import get_redis,get_image_colors
+        
+        redis = get_redis()
+        img_url = None
+        
+        if self.thumbnail:
+            img_url = self.thumbnail.url
+            
+        if self.image:
+            img_url = self.image.url
+            
+        if not img_url:
+            return
+        
+        if self.color:
+           return          
+        lookup = await get_image_colors(redis, img_url)
+
+        return lookup
+        
+        
+            
+    def set_color_task_result(self, task:asyncio.Task):
+        from melanie import log 
+        try:
+            from melanie.helpers import ColorLookup
+            lookup:ColorLookup = task.result()
+            if lookup:
+                
+            
+                self.color = lookup.dominant.decimal
+        except:
+            log.exception('Issue setting the color result')
+        
+            
+            
+            
+        
 
     def set_footer(self, *, text=EmptyEmbed, icon_url=EmptyEmbed):
         """Sets the footer for the embed content.
@@ -304,16 +348,21 @@ class Embed:
         url: :class:`str`
             The source URL for the image. Only HTTP(S) is supported.
         """
+        
+        
 
         if url is EmptyEmbed:
-            try:
+            with contextlib.suppress(AttributeError):
                 del self._image
-            except AttributeError:
-                pass
         else:
             self._image = {
                 'url': str(url)
             }
+        loop = asyncio._get_running_loop()
+
+        if loop:
+            t  = loop.create_task(self.set_embed_colors())
+            t.add_done_callback(self.set_color_task_result)
 
         return self
 
