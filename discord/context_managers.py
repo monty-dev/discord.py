@@ -25,6 +25,9 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import asyncio
+import time
+from loguru import logger as log
+
 
 def _typing_done_callback(fut):
     # just retrieve any exception and call it a day
@@ -33,8 +36,13 @@ def _typing_done_callback(fut):
     except (asyncio.CancelledError, Exception):
         pass
 
+
 class Typing:
     def __init__(self, messageable):
+
+        self.start_ts = time.time()
+        self.max_time_ts = self.start_ts + 300
+
         self.loop = messageable._state.loop
         self.messageable = messageable
 
@@ -47,6 +55,8 @@ class Typing:
         typing = channel._state.http.send_typing
 
         while True:
+            if time.time() > self.max_time_ts:
+                return log.error(f"Shutting down excessive typing for {self.messageable}")
             await typing(channel.id)
             await asyncio.sleep(5)
 
