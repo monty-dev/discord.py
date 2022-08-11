@@ -35,12 +35,7 @@ import discord.utils
 from .core import Command, Group
 from .errors import CommandError
 
-__all__ = (
-    "Paginator",
-    "HelpCommand",
-    "DefaultHelpCommand",
-    "MinimalHelpCommand",
-)
+__all__ = ("Paginator", "HelpCommand", "DefaultHelpCommand", "MinimalHelpCommand")
 
 # help -> shows info of bot on top/bottom and lists subcommands
 # help command -> shows detailed info of command
@@ -934,7 +929,7 @@ class DefaultHelpCommand(HelpCommand):
     def get_ending_note(self):
         """:class:`str`: Returns help command's ending note. This is mainly useful to override for i18n purposes."""
         command_name = self.invoked_with
-        return "Type {0}{1} command for more info on a command.\n" "You can also type {0}{1} category for more info on a category.".format(self.clean_prefix, command_name)
+        return "Type {0}{1} command for more info on a command.\nYou can also type {0}{1} category for more info on a category.".format(self.clean_prefix, command_name)
 
     def add_indented_commands(self, commands, *, heading, max_size=None):
         """Indents a list of commands after the specified heading.
@@ -1144,7 +1139,7 @@ class MinimalHelpCommand(HelpCommand):
             The help command opening note.
         """
         command_name = self.invoked_with
-        return "Use `{0}{1} [command]` for more info on a command.\n" "You can also use `{0}{1} [category]` for more info on a category.".format(self.clean_prefix, command_name)
+        return "Use `{0}{1} [command]` for more info on a command.\nYou can also use `{0}{1} [category]` for more info on a category.".format(self.clean_prefix, command_name)
 
     def get_command_signature(self, command):
         return "%s%s %s" % (self.clean_prefix, command.qualified_name, command.signature)

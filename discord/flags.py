@@ -26,13 +26,7 @@ DEALINGS IN THE SOFTWARE.
 
 from .enums import UserFlags
 
-__all__ = (
-    "SystemChannelFlags",
-    "MessageFlags",
-    "PublicUserFlags",
-    "Intents",
-    "MemberCacheFlags",
-)
+__all__ = ("SystemChannelFlags", "MessageFlags", "PublicUserFlags", "Intents", "MemberCacheFlags")
 
 
 class flag_value:
@@ -931,7 +925,7 @@ class MemberCacheFlags(BaseFlags):
             raise ValueError("MemberCacheFlags.joined requires Intents.members")
 
         if not self.joined and self.voice and self.online:
-            msg = "Setting both MemberCacheFlags.voice and MemberCacheFlags.online requires MemberCacheFlags.joined " "to properly evict members from the cache."
+            msg = "Setting both MemberCacheFlags.voice and MemberCacheFlags.online requires MemberCacheFlags.joined to properly evict members from the cache."
             raise ValueError(msg)
 
     @property

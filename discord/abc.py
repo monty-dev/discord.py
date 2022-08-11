@@ -183,12 +183,7 @@ class _Overwrites:
         self.type = sys.intern(kwargs.pop("type"))
 
     def _asdict(self):
-        return {
-            "id": self.id,
-            "allow": str(self.allow),
-            "deny": str(self.deny),
-            "type": self.type,
-        }
+        return {"id": self.id, "allow": str(self.allow), "deny": str(self.deny), "type": self.type}
 
 
 class GuildChannel:

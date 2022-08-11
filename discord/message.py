@@ -45,13 +45,7 @@ from .reaction import Reaction
 from .sticker import Sticker
 from .utils import escape_mentions
 
-__all__ = (
-    "Attachment",
-    "Message",
-    "PartialMessage",
-    "MessageReference",
-    "DeletedReferencedMessage",
-)
+__all__ = ("Attachment", "Message", "PartialMessage", "MessageReference", "DeletedReferencedMessage")
 
 
 def convert_emoji_reaction(emoji):
@@ -584,7 +578,7 @@ class Message(Hashable):
         self.tts = data["tts"]
         self.content = data["content"]
         self.nonce = data.get("nonce")
-        self.stickers = [Sticker(data=data, state=state) for data in data.get("stickers", [])]
+        self.stickers = [Sticker(data=data, state=state) for data in data.get("sticker_items", [])]
 
         try:
             ref = data["message_reference"]
@@ -1392,10 +1386,7 @@ class Message(Hashable):
         return MessageReference.from_message(self, fail_if_not_exists=fail_if_not_exists)
 
     def to_message_reference_dict(self):
-        data = {
-            "message_id": self.id,
-            "channel_id": self.channel.id,
-        }
+        data = {"message_id": self.id, "channel_id": self.channel.id}
 
         if self.guild is not None:
             data["guild_id"] = self.guild.id
@@ -1448,20 +1439,7 @@ class PartialMessage(Hashable):
 
     __slots__ = ("channel", "id", "_cs_guild", "_state")
 
-    _exported_names = (
-        "jump_url",
-        "delete",
-        "publish",
-        "pin",
-        "unpin",
-        "add_reaction",
-        "remove_reaction",
-        "clear_reaction",
-        "clear_reactions",
-        "reply",
-        "to_reference",
-        "to_message_reference_dict",
-    )
+    _exported_names = ("jump_url", "delete", "publish", "pin", "unpin", "add_reaction", "remove_reaction", "clear_reaction", "clear_reactions", "reply", "to_reference", "to_message_reference_dict")
 
     def __init__(self, *, channel, id):
         if channel.type not in (ChannelType.text, ChannelType.news, ChannelType.private):

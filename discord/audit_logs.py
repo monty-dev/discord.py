@@ -267,9 +267,7 @@ class AuditLogEntry(Hashable):
                 self.extra = type("_AuditLogProxy", (), elems)()
             elif self.action is enums.AuditLogAction.member_disconnect:
                 # The member disconnect action has a dict with some information
-                elems = {
-                    "count": int(self.extra["count"]),
-                }
+                elems = {"count": int(self.extra["count"])}
                 self.extra = type("_AuditLogProxy", (), elems)()
             elif self.action.name.endswith("pin"):
                 # the pin actions have a dict with some information
@@ -365,15 +363,7 @@ class AuditLogEntry(Hashable):
         # so figure out which change has the full invite data
         changeset = self.before if self.action is enums.AuditLogAction.invite_delete else self.after
 
-        fake_payload = {
-            "max_age": changeset.max_age,
-            "max_uses": changeset.max_uses,
-            "code": changeset.code,
-            "temporary": changeset.temporary,
-            "channel": changeset.channel,
-            "uses": changeset.uses,
-            "guild": self.guild,
-        }
+        fake_payload = {"max_age": changeset.max_age, "max_uses": changeset.max_uses, "code": changeset.code, "temporary": changeset.temporary, "channel": changeset.channel, "uses": changeset.uses, "guild": self.guild}
 
         obj = Invite(state=self._state, data=fake_payload)
         try:

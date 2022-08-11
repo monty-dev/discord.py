@@ -50,11 +50,7 @@ class RoleTags:
         The integration ID that manages the role.
     """
 
-    __slots__ = (
-        "bot_id",
-        "integration_id",
-        "_premium_subscriber",
-    )
+    __slots__ = ("bot_id", "integration_id", "_premium_subscriber")
 
     def __init__(self, data):
         self.bot_id = _get_as_snowflake(data, "bot_id")
@@ -78,7 +74,7 @@ class RoleTags:
         return self.integration_id is not None
 
     def __repr__(self):
-        return "<RoleTags bot_id={0.bot_id} integration_id={0.integration_id} " "premium_subscriber={1}>".format(self, self.is_premium_subscriber())
+        return "<RoleTags bot_id={0.bot_id} integration_id={0.integration_id} premium_subscriber={1}>".format(self, self.is_premium_subscriber())
 
 
 class Role(Hashable):

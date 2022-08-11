@@ -90,14 +90,7 @@ class Shard:
         self._reconnect = client._reconnect
         self._backoff = ExponentialBackoff()
         self._task = None
-        self._handled_exceptions = (
-            OSError,
-            HTTPException,
-            GatewayNotFound,
-            ConnectionClosed,
-            aiohttp.ClientError,
-            asyncio.TimeoutError,
-        )
+        self._handled_exceptions = (OSError, HTTPException, GatewayNotFound, ConnectionClosed, aiohttp.ClientError, asyncio.TimeoutError)
 
     @property
     def id(self):

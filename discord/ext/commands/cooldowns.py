@@ -33,12 +33,7 @@ from discord.enums import Enum
 from ...abc import PrivateChannel
 from .errors import MaxConcurrencyReached
 
-__all__ = (
-    "BucketType",
-    "Cooldown",
-    "CooldownMapping",
-    "MaxConcurrency",
-)
+__all__ = ("BucketType", "Cooldown", "CooldownMapping", "MaxConcurrency")
 
 
 class BucketType(Enum):

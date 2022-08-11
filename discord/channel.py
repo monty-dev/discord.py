@@ -36,16 +36,7 @@ from .errors import ClientException, InvalidArgument, NoMoreItems
 from .mixins import Hashable
 from .permissions import Permissions
 
-__all__ = (
-    "TextChannel",
-    "VoiceChannel",
-    "StageChannel",
-    "DMChannel",
-    "CategoryChannel",
-    "StoreChannel",
-    "GroupChannel",
-    "_channel_factory",
-)
+__all__ = ("TextChannel", "VoiceChannel", "StageChannel", "DMChannel", "CategoryChannel", "StoreChannel", "GroupChannel", "_channel_factory")
 
 
 async def _single_delete_strategy(messages):
@@ -794,13 +785,7 @@ class StageChannel(VocalGuildChannel):
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
     async def clone(self, *, name=None, reason=None):
-        return await self._clone_impl(
-            {
-                "topic": self.topic,
-            },
-            name=name,
-            reason=reason,
-        )
+        return await self._clone_impl({"topic": self.topic}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
         """|coro|
@@ -1072,16 +1057,7 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
         top channel is position 0.
     """
 
-    __slots__ = (
-        "name",
-        "id",
-        "guild",
-        "_state",
-        "nsfw",
-        "category_id",
-        "position",
-        "_overwrites",
-    )
+    __slots__ = ("name", "id", "guild", "_state", "nsfw", "category_id", "position", "_overwrites")
 
     def __init__(self, *, state, guild, data):
         self._state = state

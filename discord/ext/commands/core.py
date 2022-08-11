@@ -1803,7 +1803,7 @@ def has_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % (", ".join(invalid)))
+        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
 
     def predicate(ctx):
         ch = ctx.channel
@@ -1829,7 +1829,7 @@ def bot_has_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % (", ".join(invalid)))
+        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
 
     def predicate(ctx):
         guild = ctx.guild
@@ -1858,7 +1858,7 @@ def has_guild_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % (", ".join(invalid)))
+        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
 
     def predicate(ctx):
         if not ctx.guild:
@@ -1884,7 +1884,7 @@ def bot_has_guild_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % (", ".join(invalid)))
+        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
 
     def predicate(ctx):
         if not ctx.guild:

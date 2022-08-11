@@ -136,13 +136,7 @@ class BaseUser(_BaseUser):
         return self
 
     def _to_minimal_user_json(self):
-        return {
-            "username": self.name,
-            "id": self.id,
-            "avatar": self.avatar,
-            "discriminator": self.discriminator,
-            "bot": self.bot,
-        }
+        return {"username": self.name, "id": self.id, "avatar": self.avatar, "discriminator": self.discriminator, "bot": self.bot}
 
     @property
     def public_flags(self):
@@ -354,7 +348,7 @@ class ClientUser(BaseUser):
         self._relationships = {}
 
     def __repr__(self):
-        return "<ClientUser id={0.id} name={0.name!r} discriminator={0.discriminator!r}" " bot={0.bot} verified={0.verified} mfa_enabled={0.mfa_enabled}>".format(self)
+        return "<ClientUser id={0.id} name={0.name!r} discriminator={0.discriminator!r} bot={0.bot} verified={0.verified} mfa_enabled={0.mfa_enabled}>".format(self)
 
     def _update(self, data):
         super()._update(data)

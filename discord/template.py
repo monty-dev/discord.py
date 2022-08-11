@@ -132,7 +132,7 @@ class Template:
         self.source_guild = guild
 
     def __repr__(self):
-        return "<Template code={0.code!r} uses={0.uses} name={0.name!r}" " creator={0.creator!r} source_guild={0.source_guild!r}>".format(self)
+        return "<Template code={0.code!r} uses={0.uses} name={0.name!r} creator={0.creator!r} source_guild={0.source_guild!r}>".format(self)
 
     async def create_guild(self, name, region=None, icon=None):
         """|coro|

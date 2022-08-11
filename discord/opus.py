@@ -75,19 +75,9 @@ CTL_SET_SIGNAL = 4024
 CTL_SET_GAIN = 4034
 CTL_LAST_PACKET_DURATION = 4039
 
-band_ctl = {
-    "narrow": 1101,
-    "medium": 1102,
-    "wide": 1103,
-    "superwide": 1104,
-    "full": 1105,
-}
+band_ctl = {"narrow": 1101, "medium": 1102, "wide": 1103, "superwide": 1104, "full": 1105}
 
-signal_ctl = {
-    "auto": -1000,
-    "voice": 3001,
-    "music": 3002,
-}
+signal_ctl = {"auto": -1000, "voice": 3001, "music": 3002}
 
 
 def _err_lt(result, func, args):

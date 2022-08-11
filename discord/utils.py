@@ -30,10 +30,12 @@ import collections.abc
 import datetime
 import functools
 import re
+import time
 import unicodedata
 import warnings
 from base64 import b64encode
 from bisect import bisect_left
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from inspect import isawaitable as _isawaitable
 from inspect import signature as _signature
 from operator import attrgetter
@@ -349,13 +351,38 @@ def to_json(obj):
     return orjson.dumps(obj).decode("UTF-8")
 
 
+class nullcontext(AbstractContextManager, AbstractAsyncContextManager):
+    """Context manager that does no additional processing.
+
+    Used as a stand-in for a normal context manager, when a particular
+    block of code is only sometimes used with a normal context manager:
+
+    cm = optional_cm if condition else nullcontext()
+    with cm:
+        # Perform operation, using optional_cm if condition is True
+    """
+
+    def __init__(self, enter_result=None):
+        self.enter_result = enter_result
+
+    def __enter__(self):
+        return self.enter_result
+
+    def __exit__(self, *excinfo):
+        pass
+
+    async def __aenter__(self):
+        return self.enter_result
+
+    async def __aexit__(self, *excinfo):
+        pass
+
+
 def _parse_ratelimit_header(request, *, use_clock=False):
     reset_after = request.headers.get("X-Ratelimit-Reset-After")
     if use_clock or not reset_after:
-        utc = datetime.timezone.utc
-        now = datetime.datetime.now(utc)
-        reset = datetime.datetime.fromtimestamp(float(request.headers["X-Ratelimit-Reset"]), utc)
-        return (reset - now).total_seconds()
+        reset = datetime.datetime.fromtimestamp(float(request.headers["X-Ratelimit-Reset"]), datetime.timezone.utc)
+        return reset.timestamp() - time.time()
     else:
         return float(reset_after)
 

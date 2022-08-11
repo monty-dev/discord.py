@@ -32,14 +32,7 @@ from .enums import ActivityType, try_enum
 from .partial_emoji import PartialEmoji
 from .utils import _get_as_snowflake
 
-__all__ = (
-    "BaseActivity",
-    "Activity",
-    "Streaming",
-    "Game",
-    "Spotify",
-    "CustomActivity",
-)
+__all__ = ("BaseActivity", "Activity", "Streaming", "Game", "Spotify", "CustomActivity")
 
 """If curious, this is the current schema for an activity.
 
@@ -196,15 +189,7 @@ class Activity(BaseActivity):
             self.emoji = None
 
     def __repr__(self):
-        attrs = (
-            "type",
-            "name",
-            "url",
-            "details",
-            "application_id",
-            "session_id",
-            "emoji",
-        )
+        attrs = ("type", "name", "url", "details", "application_id", "session_id", "emoji")
         mapped = " ".join("%s=%r" % (attr, getattr(self, attr)) for attr in attrs)
         return "<Activity %s>" % mapped
 
@@ -555,7 +540,7 @@ class Spotify:
 
     def to_dict(self):
         return {
-            "flags": 48,  # SYNC | PLAY
+            "flags": 48,
             "name": "Spotify",
             "assets": self._assets,
             "party": self._party,
@@ -564,7 +549,7 @@ class Spotify:
             "timestamps": self._timestamps,
             "details": self._details,
             "state": self._state,
-        }
+        }  # SYNC | PLAY
 
     @property
     def name(self):
@@ -706,16 +691,9 @@ class CustomActivity(BaseActivity):
 
     def to_dict(self):
         if self.name == self.state:
-            o = {
-                "type": ActivityType.custom.value,
-                "state": self.name,
-                "name": "Custom Status",
-            }
+            o = {"type": ActivityType.custom.value, "state": self.name, "name": "Custom Status"}
         else:
-            o = {
-                "type": ActivityType.custom.value,
-                "name": self.name,
-            }
+            o = {"type": ActivityType.custom.value, "name": self.name}
 
         if self.emoji:
             o["emoji"] = self.emoji.to_dict()

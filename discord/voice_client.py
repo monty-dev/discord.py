@@ -227,11 +227,7 @@ class VoiceClient(VoiceProtocol):
         self.ws = None
 
     warn_nacl = not has_nacl
-    supported_modes = (
-        "xsalsa20_poly1305_lite",
-        "xsalsa20_poly1305_suffix",
-        "xsalsa20_poly1305",
-    )
+    supported_modes = ("xsalsa20_poly1305_lite", "xsalsa20_poly1305_suffix", "xsalsa20_poly1305")
 
     @property
     def guild(self):
@@ -279,7 +275,7 @@ class VoiceClient(VoiceProtocol):
         endpoint = data.get("endpoint")
 
         if endpoint is None or self.token is None:
-            log.warning("Awaiting endpoint... This requires waiting. " "If timeout occurred considering raising the timeout and reconnecting.")
+            log.warning("Awaiting endpoint... This requires waiting. If timeout occurred considering raising the timeout and reconnecting.")
             return
 
         self.endpoint, _, _ = endpoint.rpartition(":")
@@ -336,10 +332,7 @@ class VoiceClient(VoiceProtocol):
             self.prepare_handshake()
 
             # This has to be created before we start the flow.
-            futures = [
-                self._voice_state_complete.wait(),
-                self._voice_server_complete.wait(),
-            ]
+            futures = [self._voice_state_complete.wait(), self._voice_server_complete.wait()]
 
             # Start the connection flow
             await self.voice_connect()

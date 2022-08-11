@@ -29,10 +29,7 @@ from .asset import Asset
 from .enums import TeamMembershipState, try_enum
 from .user import BaseUser
 
-__all__ = (
-    "Team",
-    "TeamMember",
-)
+__all__ = ("Team", "TeamMember")
 
 
 class Team:
@@ -160,4 +157,4 @@ class TeamMember(BaseUser):
         super().__init__(state=state, data=data["user"])
 
     def __repr__(self):
-        return "<{0.__class__.__name__} id={0.id} name={0.name!r} " "discriminator={0.discriminator!r} membership_state={0.membership_state!r}>".format(self)
+        return "<{0.__class__.__name__} id={0.id} name={0.name!r} discriminator={0.discriminator!r} membership_state={0.membership_state!r}>".format(self)

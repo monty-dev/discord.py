@@ -150,7 +150,7 @@ class PartialInviteGuild:
         return self.name
 
     def __repr__(self):
-        return "<{0.__class__.__name__} id={0.id} name={0.name!r} features={0.features} " "description={0.description!r}>".format(self)
+        return "<{0.__class__.__name__} id={0.id} name={0.name!r} features={0.features} description={0.description!r}>".format(self)
 
     @property
     def created_at(self):
@@ -356,7 +356,7 @@ class Invite(Hashable):
         return self.url
 
     def __repr__(self):
-        return "<Invite code={0.code!r} guild={0.guild!r} " "online={0.approximate_presence_count} " "members={0.approximate_member_count}>".format(self)
+        return "<Invite code={0.code!r} guild={0.guild!r} online={0.approximate_presence_count} members={0.approximate_member_count}>".format(self)
 
     def __hash__(self):
         return hash(self.code)

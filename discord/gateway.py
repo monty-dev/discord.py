@@ -45,13 +45,7 @@ from .errors import ConnectionClosed, InvalidArgument
 
 log = logging.getLogger(__name__)
 
-__all__ = (
-    "DiscordWebSocket",
-    "KeepAliveHandler",
-    "VoiceKeepAliveHandler",
-    "DiscordVoiceWebSocket",
-    "ReconnectWebSocket",
-)
+__all__ = ("DiscordWebSocket", "KeepAliveHandler", "VoiceKeepAliveHandler", "DiscordVoiceWebSocket", "ReconnectWebSocket")
 
 
 class ReconnectWebSocket(Exception):
@@ -369,7 +363,13 @@ class DiscordWebSocket:
             "op": self.IDENTIFY,
             "d": {
                 "token": self.token,
-                "properties": {"$os": sys.platform, "$browser": "discord iOS", "$device": "discord iOS", "$referrer": "", "$referring_domain": ""},
+                "properties": {
+                    "$os": sys.platform,
+                    "$browser": "Discord Android",
+                    "$device": "Discord Android",
+                    "$referrer": "",
+                    "$referring_domain": "",
+                },
                 "compress": True,
                 "large_threshold": 250,
                 "guild_subscriptions": self._connection.guild_subscriptions,
@@ -406,17 +406,13 @@ class DiscordWebSocket:
 
         if type(msg) is bytes:
             self._buffer.extend(msg)
-
             if len(msg) < 4 or msg[-4:] != b"\x00\x00\xff\xff":
                 return
             msg = self._zlib.decompress(self._buffer)
-            msg = msg.decode("utf-8")
+            msg = msg.decode("utf-8", "replace")
             self._buffer = bytearray()
         msg = orjson.loads(msg)
-
-        log.debug("For Shard ID %s: WebSocket Event: %s", self.shard_id, msg)
         self._dispatch("socket_response", msg)
-
         op = msg.get("op")
         data = msg.get("d")
         seq = msg.get("s")

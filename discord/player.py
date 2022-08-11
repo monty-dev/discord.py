@@ -43,14 +43,7 @@ from .opus import Encoder as OpusEncoder
 
 log = logging.getLogger(__name__)
 
-__all__ = (
-    "AudioSource",
-    "PCMAudio",
-    "FFmpegAudio",
-    "FFmpegPCMAudio",
-    "FFmpegOpusAudio",
-    "PCMVolumeTransformer",
-)
+__all__ = ("AudioSource", "PCMAudio", "FFmpegAudio", "FFmpegPCMAudio", "FFmpegOpusAudio", "PCMVolumeTransformer")
 
 if sys.platform != "win32":
     CREATE_NO_WINDOW = 0
@@ -302,7 +295,6 @@ class FFmpegOpusAudio(FFmpegAudio):
     """
 
     def __init__(self, source, *, bitrate=128, codec=None, executable="ffmpeg", pipe=False, stderr=None, before_options=None, options=None):
-
         args = []
         subprocess_kwargs = {"stdin": source if pipe else subprocess.DEVNULL, "stderr": stderr}
 
@@ -430,7 +422,7 @@ class FFmpegOpusAudio(FFmpegAudio):
             probefunc = method
             fallback = cls._probe_codec_fallback
         else:
-            raise TypeError("Expected str or callable for parameter 'probe', " "not '{0.__class__.__name__}'".format(method))
+            raise TypeError("Expected str or callable for parameter 'probe', not '{0.__class__.__name__}'".format(method))
 
         codec = bitrate = None
         loop = asyncio.get_event_loop()

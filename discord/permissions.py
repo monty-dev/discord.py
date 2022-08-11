@@ -26,10 +26,7 @@ DEALINGS IN THE SOFTWARE.
 
 from .flags import alias_flag_value, BaseFlags, fill_with_flags, flag_value
 
-__all__ = (
-    "Permissions",
-    "PermissionOverwrite",
-)
+__all__ = ("Permissions", "PermissionOverwrite")
 
 # A permission alias works like a regular flag but is marked
 # So the PermissionOverwrite knows to work with it

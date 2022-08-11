@@ -99,11 +99,7 @@ class _ClientEventTask(asyncio.Task):
         self.__original_coro = original_coro
 
     def __repr__(self):
-        info = [
-            ("state", self._state.lower()),
-            ("event", self.__event_name),
-            ("coro", repr(self.__original_coro)),
-        ]
+        info = [("state", self._state.lower()), ("event", self.__event_name), ("coro", repr(self.__original_coro))]
         if self._exception is not None:
             info.append(("exception", repr(self._exception)))
         return "<ClientEventTask {}>".format(" ".join("%s=%s" % t for t in info))
@@ -350,9 +346,7 @@ class Client:
         return _ClientEventTask(original_coro=coro, event_name=event_name, coro=wrapped, loop=self.loop)
 
     def dispatch(self, event, *args, **kwargs):
-        log.debug("Dispatching event %s", event)
         method = "on_" + event
-
         listeners = self._listeners.get(event)
         if listeners:
             removed = []
@@ -548,10 +542,7 @@ class Client:
         """
 
         backoff = ExponentialBackoff()
-        ws_params = {
-            "initial": True,
-            "shard_id": self.shard_id,
-        }
+        ws_params = {"initial": True, "shard_id": self.shard_id}
         while not self.is_closed():
             try:
                 coro = DiscordWebSocket.from_client(self, **ws_params)
@@ -565,7 +556,6 @@ class Client:
                 ws_params.update(sequence=self.ws.sequence, resume=e.resume, session=self.ws.session_id)
                 continue
             except (OSError, HTTPException, GatewayNotFound, ConnectionClosed, aiohttp.ClientError, asyncio.TimeoutError) as exc:
-
                 self.dispatch("disconnect")
                 if not reconnect:
                     await self.close()

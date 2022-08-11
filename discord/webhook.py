@@ -47,13 +47,7 @@ from .message import Message
 from .mixins import Hashable
 from .user import BaseUser, User
 
-__all__ = (
-    "WebhookAdapter",
-    "AsyncWebhookAdapter",
-    "RequestsWebhookAdapter",
-    "Webhook",
-    "WebhookMessage",
-)
+__all__ = ("WebhookAdapter", "AsyncWebhookAdapter", "RequestsWebhookAdapter", "Webhook", "WebhookMessage")
 
 log = logging.getLogger(__name__)
 

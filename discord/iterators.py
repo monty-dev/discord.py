@@ -236,7 +236,6 @@ class HistoryIterator(_AsyncIterator):
     """
 
     def __init__(self, messageable, limit, before=None, after=None, around=None, oldest_first=None):
-
         if isinstance(before, datetime.datetime):
             before = Object(id=time_snowflake(before, high=False))
         if isinstance(after, datetime.datetime):
@@ -508,7 +507,6 @@ class GuildIterator(_AsyncIterator):
     """
 
     def __init__(self, bot, limit, before=None, after=None):
-
         if isinstance(before, datetime.datetime):
             before = Object(id=time_snowflake(before, high=False))
         if isinstance(after, datetime.datetime):
@@ -609,7 +607,6 @@ class GuildIterator(_AsyncIterator):
 
 class MemberIterator(_AsyncIterator):
     def __init__(self, guild, limit=1000, after=None):
-
         if isinstance(after, datetime.datetime):
             after = Object(id=time_snowflake(after, high=True))
 

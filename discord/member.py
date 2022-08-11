@@ -233,7 +233,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         return str(self._user)
 
     def __repr__(self):
-        return "<Member id={1.id} name={1.name!r} discriminator={1.discriminator!r}" " bot={1.bot} nick={0.nick!r} guild={0.guild!r}>".format(self, self._user)
+        return "<Member id={1.id} name={1.name!r} discriminator={1.discriminator!r} bot={1.bot} nick={0.nick!r} guild={0.guild!r}>".format(self, self._user)
 
     def __eq__(self, other):
         return isinstance(other, _BaseUser) and other.id == self.id
@@ -646,10 +646,7 @@ class Member(discord.abc.Messageable, _BaseUser):
 
         suppress = fields.get("suppress")
         if suppress is not None:
-            voice_state_payload = {
-                "channel_id": self.voice.channel.id,
-                "suppress": suppress,
-            }
+            voice_state_payload = {"channel_id": self.voice.channel.id, "suppress": suppress}
 
             if suppress or self.bot:
                 voice_state_payload["request_to_speak_timestamp"] = None
@@ -701,10 +698,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         HTTPException
             The operation failed.
         """
-        payload = {
-            "channel_id": self.voice.channel.id,
-            "request_to_speak_timestamp": datetime.datetime.utcnow().isoformat(),
-        }
+        payload = {"channel_id": self.voice.channel.id, "request_to_speak_timestamp": datetime.datetime.utcnow().isoformat()}
 
         if self._state.self_id != self.id:
             payload["suppress"] = False
