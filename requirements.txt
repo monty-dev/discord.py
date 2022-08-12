@@ -1,2 +1,4 @@
-aiohttp>=3.6.0,<3.8.0
+aiohttp
 limits==2.7.0
+aiodns
+orjson

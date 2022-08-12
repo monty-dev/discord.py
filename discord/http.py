@@ -120,6 +120,15 @@ class HTTPClient:
 
     def __init__(self, connector=None, *, proxy=None, proxy_auth=None, loop=None, unsync_clock=True):
         self.loop = asyncio.get_event_loop() if loop is None else loop
+
+        if not connector:
+            connector = aiohttp.TCPConnector(
+                resolver=aiohttp.AsyncResolver(),
+                use_dns_cache=True,
+                limit=1000,
+                keepalive_timeout=60,
+            )
+
         self.connector = connector
         self.__session = None  # filled in static_login
         self._locks = LRU(5000)
