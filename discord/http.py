@@ -1,4 +1,10 @@
 from __future__ import annotations
+import io
+import os
+import random
+import time
+from email import header
+from anyio import create_task_group, create_memory_object_stream, run
 
 """
 The MIT License (MIT)
@@ -23,19 +29,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
-
 import asyncio
 import contextlib
 import logging
-import sys
-import weakref
-from collections import deque
-from types import TracebackType
 from urllib.parse import quote as _uriquote
 
 import aiohttp
 import limits
 import orjson
+import pycurl
+from anyio import AsyncFile
+from loguru import logger as log
+from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httputil import url_concat
 
 from . import __version__, utils
 from .cacheutils import LRU
@@ -49,14 +55,14 @@ from .errors import (
 )
 from .gateway import DiscordClientWebSocketResponse
 
-log = logging.getLogger(__name__)
-
-# For some reason, the Discord voice websocket expects this header to be
-# completely lowercase while aiohttp respects spec and does it as case-insensitive
 aiohttp.hdrs.WEBSOCKET = "websocket"
 
 
 def orjson_dumps(obj):
+    if type(obj) is str:
+        obj = str.encode("UTF-8", "replace")
+    if type(obj) is str:
+        obj = str.encode("UTF-8", "replace")
     return orjson.dumps(obj)
 
 
@@ -64,10 +70,13 @@ class Ratelimiter:
     def __init__(self) -> None:
         self.backend = limits.storage.storage_from_string("async+memory://")
         self.moving_window = limits.aio.strategies.MovingWindowRateLimiter(self.backend)
-        self.default_rate = limits.RateLimitItemPerSecond(40, 1)
+        self.default_rate = limits.RateLimitItemPerSecond(60, 1)
 
     async def hit(self):
         return await self.moving_window.hit(self.default_rate, "global", "main")
+
+    async def test(self):
+        return await self.moving_window.test(self.default_rate, "global", "main")
 
 
 class Route:
@@ -92,24 +101,20 @@ class Route:
 
 
 class DeferrableLock(asyncio.Lock):
-    def __init__(self, bucket, *a):
+    def __init__(self, bucket):
         self.bucket = bucket
         self.delay = 0
         self.loop = asyncio.get_running_loop()
-        super().__init__(*a)
+        super().__init__()
 
     def defer_for(self, delay: float):
         self.delay = delay
-
     async def __aenter__(self) -> None:
         await self.acquire()
         return self
-
     async def __aexit__(self, *e) -> None:
-        if self.delay:
-            return self.loop.call_later(self.delay, self.release)
-        else:
-            self.release()
+        self.loop.call_later(self.delay, self.release)
+        self.delay = 0
 
 
 class HTTPClient:
@@ -119,45 +124,24 @@ class HTTPClient:
     REQUEST_LOG = "{method} {url} with {json} has returned {status}"
 
     def __init__(self, connector=None, *, proxy=None, proxy_auth=None, loop=None, unsync_clock=True):
-        self.loop = asyncio.get_event_loop() if loop is None else loop
+        from melanie import get_curl
 
-        if not connector:
-            connector = aiohttp.TCPConnector(
-                resolver=aiohttp.AsyncResolver(),
-                use_dns_cache=True,
-                limit=1000,
-                keepalive_timeout=60,
-            )
-
-        self.connector = connector
+        self.loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
         self.__session = None  # filled in static_login
-        self._locks = LRU(5000)
+        self._locks = {}
         self.token = None
         self.ratelimiter = Ratelimiter()
         self.bot_token = False
         self.proxy = proxy
-        self.global_cond = asyncio.Condition()
+        self.global_event = asyncio.Event()
+        self.global_event.set()
         self.control_lock = asyncio.Lock()
         self.proxy_auth = proxy_auth
-        self.use_clock = True
-        self.global_defer_till_ts = 0
-
-        user_agent = "DiscordBot (https://github.com/Rapptz/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}"
-        self.user_agent = user_agent.format(__version__, sys.version_info, aiohttp.__version__)
-
-    def set_global_delay(self, delay: int):
-        self.global_defer_till_ts = self.loop.time() + delay
-
-    def can_continue(self):
-        return self.loop.time() > self.global_defer_till_ts
-
-    def recreate(self):
-        if self.__session.closed:
-            self.__session = aiohttp.ClientSession(
-                connector=self.connector,
-                ws_response_class=DiscordClientWebSocketResponse,
-                json_serialize=orjson_dumps,
-            )
+        self.use_clock = False
+        self.count = 0
+        self.user_agent = "discord.gg/melaniebot (libcurl)"
+        self.curl = get_curl()
+        self.requst_queue = asyncio.LifoQueue()
 
     async def get_lock(self, bucket) -> DeferrableLock:
         async with self.control_lock:
@@ -183,34 +167,33 @@ class HTTPClient:
 
         return await self.__session.ws_connect(url, **kwargs)
 
-    async def request(self, route, *, files=None, form=None, **kwargs):
+    def recreate(self):
+        from melanie import global_aio
 
+        self.__session = global_aio()
+
+        return global_aio()
+
+    async def request(self, route, *, files=None, form=None, **kwargs):
         bucket = route.bucket
         method = route.method
         url = route.url
-
         headers = {
             "User-Agent": self.user_agent,
             "X-Ratelimit-Precision": "millisecond",
         }
-
         if self.token:
-            headers["Authorization"] = "Bot " + self.token if self.bot_token else self.token
+            headers["Authorization"] = f"Bot {self.token}" if self.bot_token else self.token
 
         if "json" in kwargs:
             headers["Content-Type"] = "application/json"
             kwargs["data"] = utils.to_json(kwargs.pop("json"))
-
-        try:
+        if "reason" in kwargs:
             reason = kwargs.pop("reason")
-        except KeyError:
-            pass
-        else:
             if reason:
                 headers["X-Audit-Log-Reason"] = _uriquote(reason, safe="/ ")
 
         kwargs["headers"] = headers
-
         if self.proxy:
             kwargs["proxy"] = self.proxy
         if self.proxy_auth:
@@ -220,9 +203,7 @@ class HTTPClient:
         # sure stampedes don't cause the lock to be replaced with a new one
         async with lock:
             for tries in range(5):
-                if files:
-                    for f in files:
-                        f.reset(seek=tries)
+                await self.global_event.wait()
                 if form:
                     form_data = aiohttp.FormData()
                     for params in form:
@@ -230,62 +211,59 @@ class HTTPClient:
                     kwargs["data"] = form_data
 
                 try:
-                    # This ratelimiter counts the number of requests made to the api. If it tells us to wait, keep waiting till OK to go.
-                    while not await self.ratelimiter.hit():
-                        await asyncio.sleep(0.001)  # sleep(0) and sleep(.0001) are very different in mechanics. Intentionally requesting the loop have enough time to yield another future.
-                    async with self.global_cond:
-                        # The condition lets us stop requests going to the API when we lock it in the event of a global ratelimit.
-                        # The original HTTPClient would allow for retries and already spawned tasks to continue hitting the API while the ratelimit
-                        # was in effect.
-
-                        await self.global_cond.wait_for(self.can_continue)
-                    async with self.__session.request(method, url, **kwargs) as r:
-                        # log.debug("%s %s with %s has returned %s %s", method, url, kwargs.get("data"), r.status, r.headers)
-                        data = (await r.read()).decode("UTF-8", "replace")
-                        # Orjson doesn't support invalid UTF-8, so let's be safe and replace it here just in case.
-                        with contextlib.suppress(orjson.JSONDecodeError):
-                            data = orjson.loads(data)
-                        remaining = r.headers.get("X-Ratelimit-Remaining")
-                        if remaining == "0" and r.status != 429:
-                            delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
-                            log.warning("Deferring %s seconds @ bucket %s ", delta, bucket)
-                            lock.defer_for(delta)  # Using the method 429's are almost non-existant
-
-                        if 300 > r.status >= 200:
-                            return data
-
-                        if r.status == 429:
-                            retry_after = data["retry_after"] / 1000.0
-                            if not r.headers.get("Via"):
-                                raise HTTPException(r, data)
-                            is_global = data.get("global", False)
-                            if is_global:
-                                async with self.global_cond:
-                                    log.error("Ratelimited globally. Retrying in %.2f seconds.", retry_after)
-                                    self.set_global_delay(retry_after)
-                                    # Discord tells us with the X-Ratelimit-Reset-After header how long we need to wait before continuing.
-                                    # To make sure the other requests can track this (and new ones spawned), the client's set_global_delay sets
-                                    # a loop timestamp for when it's ok to continue issuing requests, and self.can_continue compares current loop time with the  set expiry.
-                                    await self.global_cond.wait_for(self.can_continue)
-                                    self.global_cond.notify_all()  # Wakeup held tasks.
-                            else:
-                                fmt = "Ratelimt for bucket %s. Retrying in %.2f"
-                                log.error(fmt, bucket, retry_after)
-                                await asyncio.shield(asyncio.sleep(retry_after))
-                            continue
-
-                        if r.status in {500, 502}:
-                            await asyncio.sleep(1 + tries * 2)
-                            continue
-
-                        if r.status == 403:
-                            raise Forbidden(r, data)
-                        elif r.status == 404:
-                            raise NotFound(r, data)
-                        elif r.status == 503:
-                            raise DiscordServerError(r, data)
-                        else:
+                    while not await self.ratelimiter.test():
+                        await asyncio.sleep(0.001)
+                    await self.ratelimiter.hit()
+                    if not form and not files:
+                        if "params" in kwargs:
+                            url = url_concat(url, kwargs.pop("params"))
+                        body = kwargs.pop("data") if "data" in kwargs else None
+                        r = await self.curl.fetch(HTTPRequest(url, body=body, method=method, allow_nonstandard_methods=True, allow_ipv6=True, **kwargs), raise_error=False)
+                        r.status = r.code
+                        data = r.body.decode("UTF-8", "replace")
+                    else:
+                        async with self.__session.request(method, url, **kwargs) as r:
+                            data = await r.text("UTF-8")
+                    # Orjson doesn't support invalid UTF-8, so let's be safe and replace it here just in case.
+                    with contextlib.suppress(orjson.JSONDecodeError):
+                        data = orjson.loads(data)
+                    remaining = r.headers.get("X-Ratelimit-Remaining")
+                    # log.info(remaining)
+                    self.count += 1
+                    if remaining == "0" and r.status != 429:
+                        delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
+                        lock.defer_for(delta)  # Using the method 429's are almost non-existant
+                    if 300 > r.status >= 200:
+                        return data
+                    if r.status == 429:
+                        retry_after = data["retry_after"] / 1000.0
+                        if not r.headers.get("Via"):
                             raise HTTPException(r, data)
+                        is_global = data.get("global", False)
+                        if is_global:
+                            retry_after = retry_after + 0.5
+                            self.global_event.clear()
+                            current = asyncio.current_task()
+                            log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
+                            await asyncio.sleep(retry_after)
+                            self.global_event.set()
+                        else:
+                            fmt = "Ratelimt for bucket %s. Retrying in %.2f"
+                            log.error(fmt, bucket, retry_after)
+                            await asyncio.shield(asyncio.sleep(retry_after))
+                        continue
+
+                    if r.status in {500, 502}:
+                        await asyncio.sleep(random.uniform(0.2, 1))
+                        continue
+                    if r.status == 403:
+                        raise Forbidden(r, data)
+                    elif r.status == 404:
+                        raise NotFound(r, data)
+                    elif r.status == 503:
+                        raise DiscordServerError(r, data)
+                    else:
+                        raise HTTPException(r, data)
 
                 except (OSError, aiohttp.ClientConnectionError) as e:
                     if tries < 4:
@@ -324,11 +302,9 @@ class HTTPClient:
     # login management
 
     async def static_login(self, token, *, bot):
-        self.__session = aiohttp.ClientSession(
-            connector=self.connector,
-            ws_response_class=DiscordClientWebSocketResponse,
-            json_serialize=orjson_dumps,
-        )
+        from melanie import global_aio
+
+        self.__session = global_aio()
         old_token, old_bot = self.token, self.bot_token
         self._token(token, bot=bot)
 
@@ -915,7 +891,7 @@ class HTTPClient:
         except HTTPException as exc:
             raise GatewayNotFound() from exc
         if zlib:
-            value = "{0}?encoding={1}&v={2}&compress=zlib-stream"
+            value = "{0}?encoding={1}&v={2}"
         else:
             value = "{0}?encoding={1}&v={2}"
         return value.format(data["url"], encoding, v)
@@ -927,7 +903,7 @@ class HTTPClient:
             raise GatewayNotFound() from exc
 
         if zlib:
-            value = "{0}?encoding={1}&v={2}&compress=zlib-stream"
+            value = "{0}?encoding={1}&v={2}"
         else:
             value = "{0}?encoding={1}&v={2}"
         return data["shards"], value.format(data["url"], encoding, v)
