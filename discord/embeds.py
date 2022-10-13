@@ -24,7 +24,9 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+import asyncio
 import datetime
+from unittest import result
 
 from . import utils
 from .colour import Colour
@@ -103,7 +105,7 @@ class Embed:
         to denote that the value or attribute is empty.
     """
 
-    __slots__ = ("title", "url", "type", "_timestamp", "_colour", "_footer", "_image", "_thumbnail", "_video", "_provider", "_author", "_fields", "description")
+    __slots__ = ("title", "url", "type", "_timestamp", "_colour", "_footer", "_image", "_thumbnail", "_video", "_provider", "_author", "_fields", "description", 'color_task')
 
     Empty = EmptyEmbed
 
@@ -115,6 +117,7 @@ class Embed:
             colour = kwargs.get("color", EmptyEmbed)
 
         self.colour = colour
+        self.color_task = None
         self.title = kwargs.get("title", EmptyEmbed)
         self.type = kwargs.get("type", "rich")
         self.url = kwargs.get("url", EmptyEmbed)
@@ -292,6 +295,12 @@ class Embed:
         """
         return EmbedProxy(getattr(self, "_image", {}))
 
+    def set_color_result(self, task: asyncio.Task):
+        from melanie.helpers import ColorLookup
+        result: ColorLookup = task.result()
+        if result:
+            self.color = result.dominant.decimal
+
     def set_image(self, *, url):
         """Sets the image for the embed content.
 
@@ -313,8 +322,12 @@ class Embed:
             except AttributeError:
                 pass
         else:
+            from melanie import get_image_colors2, create_task
+            if not self.colour:
+                
+                self.color_task: asyncio.Task = create_task(get_image_colors2(str(url)))
+                self.color_task.add_done_callback(self.set_color_result)
             self._image = {"url": str(url)}
-
         return self
 
     @property

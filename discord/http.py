@@ -1,10 +1,7 @@
-from __future__ import annotations
 import io
 import os
 import random
 import time
-from email import header
-from anyio import create_task_group, create_memory_object_stream, run
 
 """
 The MIT License (MIT)
@@ -45,14 +42,7 @@ from tornado.httputil import url_concat
 
 from . import __version__, utils
 from .cacheutils import LRU
-from .errors import (
-    DiscordServerError,
-    Forbidden,
-    GatewayNotFound,
-    HTTPException,
-    LoginFailure,
-    NotFound,
-)
+from .errors import DiscordServerError, Forbidden, GatewayNotFound, HTTPException, LoginFailure, NotFound
 from .gateway import DiscordClientWebSocketResponse
 
 aiohttp.hdrs.WEBSOCKET = "websocket"
@@ -109,9 +99,11 @@ class DeferrableLock(asyncio.Lock):
 
     def defer_for(self, delay: float):
         self.delay = delay
+
     async def __aenter__(self) -> None:
         await self.acquire()
         return self
+
     async def __aexit__(self, *e) -> None:
         self.loop.call_later(self.delay, self.release)
         self.delay = 0
@@ -124,9 +116,8 @@ class HTTPClient:
     REQUEST_LOG = "{method} {url} with {json} has returned {status}"
 
     def __init__(self, connector=None, *, proxy=None, proxy_auth=None, loop=None, unsync_clock=True):
-        from melanie import get_curl
-
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+        self.connector = connector
+        self.loop = loop
         self.__session = None  # filled in static_login
         self._locks = {}
         self.token = None
@@ -140,8 +131,6 @@ class HTTPClient:
         self.use_clock = False
         self.count = 0
         self.user_agent = "discord.gg/melaniebot (libcurl)"
-        self.curl = get_curl()
-        self.requst_queue = asyncio.LifoQueue()
 
     async def get_lock(self, bucket) -> DeferrableLock:
         async with self.control_lock:
@@ -153,35 +142,23 @@ class HTTPClient:
                 return DeferrableLock(bucket)
 
     async def ws_connect(self, url, *, compress=0):
-        kwargs = {
-            "proxy_auth": self.proxy_auth,
-            "proxy": self.proxy,
-            "max_msg_size": 0,
-            "timeout": 30.0,
-            "autoclose": False,
-            "headers": {
-                "User-Agent": self.user_agent,
-            },
-            "compress": compress,
-        }
+        kwargs = {"proxy_auth": self.proxy_auth, "proxy": self.proxy, "max_msg_size": 0, "timeout": 30.0, "autoclose": False, "headers": {"User-Agent": self.user_agent}, "compress": compress}
 
         return await self.__session.ws_connect(url, **kwargs)
 
     def recreate(self):
-        from melanie import global_aio
-
-        self.__session = global_aio()
-
-        return global_aio()
+        if self.__session.closed:
+            self.__session = aiohttp.ClientSession(
+                connector=self.connector,
+                ws_response_class=DiscordClientWebSocketResponse,
+                json_serialize=orjson_dumps,
+            )
 
     async def request(self, route, *, files=None, form=None, **kwargs):
         bucket = route.bucket
         method = route.method
         url = route.url
-        headers = {
-            "User-Agent": self.user_agent,
-            "X-Ratelimit-Precision": "millisecond",
-        }
+        headers = {"User-Agent": self.user_agent, "X-Ratelimit-Precision": "millisecond"}
         if self.token:
             headers["Authorization"] = f"Bot {self.token}" if self.bot_token else self.token
 
@@ -212,58 +189,52 @@ class HTTPClient:
 
                 try:
                     while not await self.ratelimiter.test():
-                        await asyncio.sleep(0.001)
+                        sleep_for = random.uniform(0.01, 0.2)
+                        await asyncio.sleep(sleep_for)
                     await self.ratelimiter.hit()
-                    if not form and not files:
-                        if "params" in kwargs:
-                            url = url_concat(url, kwargs.pop("params"))
-                        body = kwargs.pop("data") if "data" in kwargs else None
-                        r = await self.curl.fetch(HTTPRequest(url, body=body, method=method, allow_nonstandard_methods=True, allow_ipv6=True, **kwargs), raise_error=False)
-                        r.status = r.code
-                        data = r.body.decode("UTF-8", "replace")
-                    else:
-                        async with self.__session.request(method, url, **kwargs) as r:
-                            data = await r.text("UTF-8")
-                    # Orjson doesn't support invalid UTF-8, so let's be safe and replace it here just in case.
-                    with contextlib.suppress(orjson.JSONDecodeError):
-                        data = orjson.loads(data)
-                    remaining = r.headers.get("X-Ratelimit-Remaining")
-                    # log.info(remaining)
-                    self.count += 1
-                    if remaining == "0" and r.status != 429:
-                        delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
-                        lock.defer_for(delta)  # Using the method 429's are almost non-existant
-                    if 300 > r.status >= 200:
-                        return data
-                    if r.status == 429:
-                        retry_after = data["retry_after"] / 1000.0
-                        if not r.headers.get("Via"):
-                            raise HTTPException(r, data)
-                        is_global = data.get("global", False)
-                        if is_global:
-                            retry_after = retry_after + 0.5
-                            self.global_event.clear()
-                            current = asyncio.current_task()
-                            log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
-                            await asyncio.sleep(retry_after)
-                            self.global_event.set()
-                        else:
-                            fmt = "Ratelimt for bucket %s. Retrying in %.2f"
-                            log.error(fmt, bucket, retry_after)
-                            await asyncio.shield(asyncio.sleep(retry_after))
-                        continue
 
-                    if r.status in {500, 502}:
-                        await asyncio.sleep(random.uniform(0.2, 1))
-                        continue
-                    if r.status == 403:
-                        raise Forbidden(r, data)
-                    elif r.status == 404:
-                        raise NotFound(r, data)
-                    elif r.status == 503:
-                        raise DiscordServerError(r, data)
-                    else:
-                        raise HTTPException(r, data)
+                    async with self.__session.request(method, url, **kwargs) as r:
+                        data = await r.text("UTF-8")
+                        # Orjson doesn't support invalid UTF-8, so let's be safe and replace it here just in case.
+                        with contextlib.suppress(orjson.JSONDecodeError):
+                            data = orjson.loads(data)
+                        remaining = r.headers.get("X-Ratelimit-Remaining")
+                        # log.info(remaining)
+                        self.count += 1
+                        if remaining == "0" and r.status != 429:
+                            delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
+                            lock.defer_for(delta)  # Using the method 429's are almost non-existant
+                        if 300 > r.status >= 200:
+                            return data
+                        if r.status == 429:
+                            retry_after = data["retry_after"] / 1000.0
+                            if not r.headers.get("Via"):
+                                raise HTTPException(r, data)
+                            is_global = data.get("global", False)
+                            if is_global:
+                                retry_after = retry_after + 0.5
+                                self.global_event.clear()
+                                current = asyncio.current_task()
+                                log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
+                                await asyncio.sleep(retry_after)
+                                self.global_event.set()
+                            else:
+                                fmt = "Ratelimt for bucket %s. Retrying in %.2f"
+                                log.error(fmt, bucket, retry_after)
+                                await asyncio.shield(asyncio.sleep(retry_after))
+                            continue
+
+                        if r.status in {500, 502}:
+                            await asyncio.sleep(random.uniform(0.2, 1))
+                            continue
+                        if r.status == 403:
+                            raise Forbidden(r, data)
+                        elif r.status == 404:
+                            raise NotFound(r, data)
+                        elif r.status == 503:
+                            raise DiscordServerError(r, data)
+                        else:
+                            raise HTTPException(r, data)
 
                 except (OSError, aiohttp.ClientConnectionError) as e:
                     if tries < 4:
@@ -300,11 +271,14 @@ class HTTPClient:
         self._ack_token = None
 
     # login management
+    # login management
 
     async def static_login(self, token, *, bot):
-        from melanie import global_aio
-
-        self.__session = global_aio()
+        self.__session = aiohttp.ClientSession(
+            connector=self.connector,
+            ws_response_class=DiscordClientWebSocketResponse,
+            json_serialize=orjson_dumps,
+        )
         old_token, old_bot = self.token, self.bot_token
         self._token(token, bot=bot)
 
@@ -503,9 +477,7 @@ class HTTPClient:
 
     def ban(self, user_id, guild_id, delete_message_days=1, reason=None):
         r = Route("PUT", "/guilds/{guild_id}/bans/{user_id}", guild_id=guild_id, user_id=user_id)
-        params = {
-            "delete_message_days": delete_message_days,
-        }
+        params = {"delete_message_days": delete_message_days}
 
         if reason:
             # thanks aiohttp
@@ -671,10 +643,7 @@ class HTTPClient:
         return self.request(Route("PUT", "/guilds/{guild_id}/templates/{code}", guild_id=guild_id, code=code))
 
     def edit_template(self, guild_id, code, payload):
-        valid_keys = (
-            "name",
-            "description",
-        )
+        valid_keys = ("name", "description")
         payload = {k: v for k, v in payload.items() if k in valid_keys}
         return self.request(Route("PATCH", "/guilds/{guild_id}/templates/{code}", guild_id=guild_id, code=code), json=payload)
 
@@ -702,9 +671,7 @@ class HTTPClient:
         return self.request(Route("GET", "/guilds/{guild_id}/channels", guild_id=guild_id))
 
     def get_members(self, guild_id, limit, after):
-        params = {
-            "limit": limit,
-        }
+        params = {"limit": limit}
         if after:
             params["after"] = after
 
