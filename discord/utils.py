@@ -348,7 +348,7 @@ def _bytes_to_base64_data(data):
 
 
 def to_json(obj):
-    return orjson.dumps(obj).decode("UTF-8")
+    return orjson.dumps(obj).decode("UTF-8",'ignore')
 
 
 class nullcontext(AbstractContextManager, AbstractAsyncContextManager):

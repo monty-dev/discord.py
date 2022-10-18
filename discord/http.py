@@ -142,17 +142,24 @@ class HTTPClient:
                 return DeferrableLock(bucket)
 
     async def ws_connect(self, url, *, compress=0):
-        kwargs = {"proxy_auth": self.proxy_auth, "proxy": self.proxy, "max_msg_size": 0, "timeout": 30.0, "autoclose": False, "headers": {"User-Agent": self.user_agent}, "compress": compress}
+        kwargs = {
+            "proxy_auth": self.proxy_auth,
+            "proxy": self.proxy,
+            "max_msg_size": 0,
+            "timeout": 30.0,
+            "autoclose": False,
+            "headers": {
+                "User-Agent": self.user_agent,
+            },
+            "compress": compress,
+        }
 
         return await self.__session.ws_connect(url, **kwargs)
 
     def recreate(self):
         if self.__session.closed:
-            self.__session = aiohttp.ClientSession(
-                connector=self.connector,
-                ws_response_class=DiscordClientWebSocketResponse,
-                json_serialize=orjson_dumps,
-            )
+            self.__session = aiohttp.ClientSession(connector=self.connector, ws_response_class=DiscordClientWebSocketResponse)
+
 
     async def request(self, route, *, files=None, form=None, **kwargs):
         bucket = route.bucket
@@ -236,9 +243,8 @@ class HTTPClient:
                         else:
                             raise HTTPException(r, data)
 
-                except (OSError, aiohttp.ClientConnectionError) as e:
+                except (OSError) as e:
                     if tries < 4:
-                        await asyncio.sleep(0.1)
                         continue
                     raise
 
@@ -277,7 +283,6 @@ class HTTPClient:
         self.__session = aiohttp.ClientSession(
             connector=self.connector,
             ws_response_class=DiscordClientWebSocketResponse,
-            json_serialize=orjson_dumps,
         )
         old_token, old_bot = self.token, self.bot_token
         self._token(token, bot=bot)
@@ -858,7 +863,7 @@ class HTTPClient:
         except HTTPException as exc:
             raise GatewayNotFound() from exc
         if zlib:
-            value = "{0}?encoding={1}&v={2}"
+            value = "{0}?encoding={1}&v={2}&compress=zlib-stream"
         else:
             value = "{0}?encoding={1}&v={2}"
         return value.format(data["url"], encoding, v)
@@ -870,7 +875,7 @@ class HTTPClient:
             raise GatewayNotFound() from exc
 
         if zlib:
-            value = "{0}?encoding={1}&v={2}"
+            value = "{0}?encoding={1}&v={2}&compress=zlib-stream"
         else:
             value = "{0}?encoding={1}&v={2}"
         return data["shards"], value.format(data["url"], encoding, v)
