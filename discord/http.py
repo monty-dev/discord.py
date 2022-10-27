@@ -3,6 +3,8 @@ import os
 import random
 import time
 
+import msgspec
+
 """
 The MIT License (MIT)
 
@@ -128,6 +130,8 @@ class HTTPClient:
         self.global_event.set()
         self.control_lock = asyncio.Lock()
         self.proxy_auth = proxy_auth
+        self.encoder = msgspec.json.Encoder()
+        self.decoder = msgspec.json.Decoder()
         self.use_clock = False
         self.count = 0
         self.user_agent = "discord.gg/melaniebot (libcurl)"
@@ -160,7 +164,6 @@ class HTTPClient:
         if self.__session.closed:
             self.__session = aiohttp.ClientSession(connector=self.connector, ws_response_class=DiscordClientWebSocketResponse)
 
-
     async def request(self, route, *, files=None, form=None, **kwargs):
         bucket = route.bucket
         method = route.method
@@ -171,7 +174,8 @@ class HTTPClient:
 
         if "json" in kwargs:
             headers["Content-Type"] = "application/json"
-            kwargs["data"] = utils.to_json(kwargs.pop("json"))
+
+            kwargs["data"] = self.encoder.encode(kwargs.pop("json"))
         if "reason" in kwargs:
             reason = kwargs.pop("reason")
             if reason:
@@ -196,15 +200,13 @@ class HTTPClient:
 
                 try:
                     while not await self.ratelimiter.test():
-                        sleep_for = random.uniform(0.01, 0.2)
-                        await asyncio.sleep(sleep_for)
-                    await self.ratelimiter.hit()
-
+                        await asyncio.sleep(random.uniform(0.01, 0.1))
                     async with self.__session.request(method, url, **kwargs) as r:
-                        data = await r.text("UTF-8")
-                        # Orjson doesn't support invalid UTF-8, so let's be safe and replace it here just in case.
-                        with contextlib.suppress(orjson.JSONDecodeError):
-                            data = orjson.loads(data)
+                        data = await r.read()
+                        if "json" in r.content_type:
+                            data = self.decoder.decode(data)
+                        else:
+                            data = data.decode("UTF-8")
                         remaining = r.headers.get("X-Ratelimit-Remaining")
                         # log.info(remaining)
                         self.count += 1
@@ -243,7 +245,7 @@ class HTTPClient:
                         else:
                             raise HTTPException(r, data)
 
-                except (OSError) as e:
+                except OSError as e:
                     if tries < 4:
                         continue
                     raise

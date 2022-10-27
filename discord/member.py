@@ -252,6 +252,7 @@ class Member(discord.abc.Messageable, _BaseUser):
 
     def _update_from_message(self, data):
         self.joined_at = utils.parse_time(data.get("joined_at"))
+        self.communication_disabled_until = data.get("communication_disabled_until", None)
         self.premium_since = utils.parse_time(data.get("premium_since"))
         self._update_roles(data)
         self.nick = data.get("nick", None)
@@ -289,6 +290,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         self.pending = member.pending
         self.activities = member.activities
         self._state = member._state
+        self.communication_disabled_until = member.communication_disabled_until
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below

@@ -35,8 +35,9 @@ import time
 import threading
 import traceback
 import zlib
-
+import msgspec
 import aiohttp
+import orjson
 
 from . import utils
 from .activity import BaseActivity
@@ -276,6 +277,8 @@ class DiscordWebSocket:
     def __init__(self, socket, *, loop):
         self.socket = socket
         self.loop = loop
+        self.encoder = msgspec.json.Encoder()
+        self.decoder = msgspec.json.Decoder()
 
         # an empty dispatcher to prevent crashes
         self._dispatch = lambda *args: None
@@ -408,13 +411,12 @@ class DiscordWebSocket:
 
         if type(msg) is bytes:
             self._buffer.extend(msg)
-
             if len(msg) < 4 or msg[-4:] != b"\x00\x00\xff\xff":
                 return
             msg = self._zlib.decompress(self._buffer)
-            msg = msg.decode("utf-8")
             self._buffer = bytearray()
-        msg = json.loads(msg)
+
+        msg = orjson.loads(msg)
 
         log.debug("For Shard ID %s: WebSocket Event: %s", self.shard_id, msg)
         self._dispatch("socket_response", msg)
@@ -491,7 +493,6 @@ class DiscordWebSocket:
         except KeyError:
             log.debug("Unknown event %s.", event)
         else:
-
             loop.add_callback(func, data)
 
         # remove the dispatched listeners
@@ -574,7 +575,7 @@ class DiscordWebSocket:
 
     async def send_as_json(self, data):
         try:
-            await self.send(utils.to_json(data))
+            await self.send(orjson.dumps(data).decode("UTF-8"))
         except RuntimeError as exc:
             if not self._can_handle_close():
                 raise ConnectionClosed(self.socket, shard_id=self.shard_id) from exc
