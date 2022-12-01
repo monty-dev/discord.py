@@ -76,7 +76,7 @@ class _PartialTemplateState:
         return []
 
     def __getattr__(self, attr):
-        raise AttributeError("PartialTemplateState does not support {0!r}.".format(attr))
+        raise AttributeError(f"PartialTemplateState does not support {attr!r}.")
 
 
 class Template:
@@ -132,7 +132,7 @@ class Template:
         self.source_guild = guild
 
     def __repr__(self):
-        return "<Template code={0.code!r} uses={0.uses} name={0.name!r} creator={0.creator!r} source_guild={0.source_guild!r}>".format(self)
+        return f"<Template code={self.code!r} uses={self.uses} name={self.name!r} creator={self.creator!r} source_guild={self.source_guild!r}>"
 
     async def create_guild(self, name, region=None, icon=None):
         """|coro|

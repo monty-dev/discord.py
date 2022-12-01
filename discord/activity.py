@@ -191,7 +191,7 @@ class Activity(BaseActivity):
     def __repr__(self):
         attrs = ("type", "name", "url", "details", "application_id", "session_id", "emoji")
         mapped = " ".join("%s=%r" % (attr, getattr(self, attr)) for attr in attrs)
-        return "<Activity %s>" % mapped
+        return f"<Activity {mapped}>"
 
     def to_dict(self):
         ret = {}
@@ -236,7 +236,7 @@ class Activity(BaseActivity):
         except KeyError:
             return None
         else:
-            return Asset.BASE + "/app-assets/{0}/{1}.png".format(self.application_id, large_image)
+            return Asset.BASE + f"/app-assets/{self.application_id}/{large_image}.png"
 
     @property
     def small_image_url(self):
@@ -249,7 +249,7 @@ class Activity(BaseActivity):
         except KeyError:
             return None
         else:
-            return Asset.BASE + "/app-assets/{0}/{1}.png".format(self.application_id, small_image)
+            return Asset.BASE + f"/app-assets/{self.application_id}/{small_image}.png"
 
     @property
     def large_image_text(self):
@@ -349,7 +349,7 @@ class Game(BaseActivity):
         return str(self.name)
 
     def __repr__(self):
-        return "<Game name={0.name!r}>".format(self)
+        return f"<Game name={self.name!r}>"
 
     def to_dict(self):
         timestamps = {}
@@ -439,7 +439,7 @@ class Streaming(BaseActivity):
         return str(self.name)
 
     def __repr__(self):
-        return "<Streaming name={0.name!r}>".format(self)
+        return f"<Streaming name={self.name!r}>"
 
     @property
     def twitch_name(self):
@@ -569,7 +569,7 @@ class Spotify:
         return "Spotify"
 
     def __repr__(self):
-        return "<Spotify title={0.title!r} artist={0.artist!r} track_id={0.track_id!r}>".format(self)
+        return f"<Spotify title={self.title!r} artist={self.artist!r} track_id={self.track_id!r}>"
 
     @property
     def title(self):
@@ -679,7 +679,7 @@ class CustomActivity(BaseActivity):
         elif isinstance(emoji, PartialEmoji):
             self.emoji = emoji
         else:
-            raise TypeError("Expected str, PartialEmoji, or None, received {0!r} instead.".format(type(emoji)))
+            raise TypeError(f"Expected str, PartialEmoji, or None, received {type(emoji)!r} instead.")
 
     @property
     def type(self):
@@ -711,13 +711,13 @@ class CustomActivity(BaseActivity):
     def __str__(self):
         if self.emoji:
             if self.name:
-                return "%s %s" % (self.emoji, self.name)
+                return f"{self.emoji} {self.name}"
             return str(self.emoji)
         else:
             return str(self.name)
 
     def __repr__(self):
-        return "<CustomActivity name={0.name!r} emoji={0.emoji!r}>".format(self)
+        return f"<CustomActivity name={self.name!r} emoji={self.emoji!r}>"
 
 
 def create_activity(data):

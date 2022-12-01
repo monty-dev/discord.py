@@ -47,7 +47,7 @@ def when_mentioned(bot, msg):
 
     These are meant to be passed into the :attr:`.Bot.command_prefix` attribute.
     """
-    return [bot.user.mention + " ", "<@!%s> " % bot.user.id]
+    return [bot.user.mention + " ", f"<@!{bot.user.id}> "]
 
 
 def when_mentioned_or(*prefixes):
@@ -121,7 +121,7 @@ class BotBase(GroupMixin):
             raise TypeError("Both owner_id and owner_ids are set.")
 
         if self.owner_ids and not isinstance(self.owner_ids, collections.abc.Collection):
-            raise TypeError("owner_ids must be a collection not {0.__class__!r}".format(self.owner_ids))
+            raise TypeError(f"owner_ids must be a collection not {self.owner_ids.__class__!r}")
 
         if options.pop("self_bot", False):
             self._skip_check = lambda x, y: x != y
@@ -176,7 +176,7 @@ class BotBase(GroupMixin):
         if cog and Cog._get_overridden_method(cog.cog_command_error) is not None:
             return
 
-        print("Ignoring exception in command {}:".format(context.command), file=sys.stderr)
+        print(f"Ignoring exception in command {context.command}:", file=sys.stderr)
         traceback.print_exception(type(exception), exception, exception.__traceback__, file=sys.stderr)
 
     # global check registration
@@ -842,7 +842,7 @@ class BotBase(GroupMixin):
                 if isinstance(ret, collections.abc.Iterable):
                     raise
 
-                raise TypeError("command_prefix must be plain string, iterable of strings, or callable returning either of these, not {}".format(ret.__class__.__name__))
+                raise TypeError(f"command_prefix must be plain string, iterable of strings, or callable returning either of these, not {ret.__class__.__name__}")
 
             if not ret:
                 raise ValueError("Iterable command_prefix must contain at least one prefix")
@@ -902,12 +902,12 @@ class BotBase(GroupMixin):
 
             except TypeError:
                 if not isinstance(prefix, list):
-                    raise TypeError("get_prefix must return either a string or a list of string, not {}".format(prefix.__class__.__name__))
+                    raise TypeError(f"get_prefix must return either a string or a list of string, not {prefix.__class__.__name__}")
 
                 # It's possible a bad command_prefix got us here.
                 for value in prefix:
                     if not isinstance(value, str):
-                        raise TypeError("Iterable command_prefix or list returned from get_prefix must contain only strings, not {}".format(value.__class__.__name__))
+                        raise TypeError(f"Iterable command_prefix or list returned from get_prefix must contain only strings, not {value.__class__.__name__}")
 
                 # Getting here shouldn't happen
                 raise
@@ -944,7 +944,7 @@ class BotBase(GroupMixin):
             else:
                 self.dispatch("command_completion", ctx)
         elif ctx.invoked_with:
-            exc = errors.CommandNotFound('Command "{}" is not found'.format(ctx.invoked_with))
+            exc = errors.CommandNotFound(f'Command "{ctx.invoked_with}" is not found')
             self.dispatch("command_error", ctx, exc)
 
     async def process_commands(self, message):

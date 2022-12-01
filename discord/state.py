@@ -23,7 +23,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
-
+from loguru import logger as log2
 import asyncio
 import copy
 import datetime
@@ -420,6 +420,8 @@ class ConnectionState:
                         break
                     else:
                         if self._guild_needs_chunking(guild):
+                            log2.info("Requesting chunks for guild {}", guild)
+
                             future = await self.chunk_guild(guild, wait=False)
                             states.append((guild, future))
                         else:
@@ -433,7 +435,6 @@ class ConnectionState:
                         await asyncio.wait_for(future, timeout=5.0)
                     except asyncio.TimeoutError:
                         log.warning("Shard ID %s timed out waiting for chunks for guild_id %s.", guild.shard_id, guild.id)
-
                     if guild.unavailable is False:
                         self.dispatch("guild_available", guild)
                     else:

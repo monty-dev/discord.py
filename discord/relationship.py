@@ -52,7 +52,7 @@ class Relationship:
         self.user = state.store_user(data["user"])
 
     def __repr__(self):
-        return "<Relationship user={0.user!r} type={0.type!r}>".format(self)
+        return f"<Relationship user={self.user!r} type={self.type!r}>"
 
     @utils.deprecated()
     async def delete(self):

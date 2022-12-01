@@ -247,7 +247,7 @@ class Guild(Hashable):
         attrs = ("id", "name", "shard_id", "chunked")
         resolved = ["%s=%r" % (attr, getattr(self, attr)) for attr in attrs]
         resolved.append("member_count=%r" % getattr(self, "_member_count", None))
-        return "<Guild %s>" % " ".join(resolved)
+        return f"<Guild {' '.join(resolved)}>"
 
     def _update_voice_state(self, data, channel_id):
         user_id = int(data["user_id"])
@@ -869,7 +869,7 @@ class Guild(Hashable):
         perms = []
         for target, perm in overwrites.items():
             if not isinstance(perm, PermissionOverwrite):
-                raise InvalidArgument("Expected PermissionOverwrite received {0.__name__}".format(type(perm)))
+                raise InvalidArgument(f"Expected PermissionOverwrite received {type(perm).__name__}")
 
             allow, deny = perm.pair()
             payload = {"allow": allow.value, "deny": deny.value, "id": target.id}
@@ -1531,7 +1531,7 @@ class Guild(Hashable):
         """
 
         if not isinstance(days, int):
-            raise InvalidArgument("Expected int for ``days``, received {0.__class__.__name__} instead.".format(days))
+            raise InvalidArgument(f"Expected int for ``days``, received {days.__class__.__name__} instead.")
 
         if roles:
             roles = [str(role.id) for role in roles]
@@ -1619,7 +1619,7 @@ class Guild(Hashable):
         """
 
         if not isinstance(days, int):
-            raise InvalidArgument("Expected int for ``days``, received {0.__class__.__name__} instead.".format(days))
+            raise InvalidArgument(f"Expected int for ``days``, received {days.__class__.__name__} instead.")
 
         if roles:
             roles = [str(role.id) for role in roles]

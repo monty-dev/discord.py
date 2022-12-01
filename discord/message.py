@@ -53,7 +53,7 @@ def convert_emoji_reaction(emoji):
         emoji = emoji.emoji
 
     if isinstance(emoji, Emoji):
-        return "%s:%s" % (emoji.name, emoji.id)
+        return f"{emoji.name}:{emoji.id}"
     if isinstance(emoji, PartialEmoji):
         return emoji._as_reaction()
     if isinstance(emoji, str):
@@ -604,7 +604,7 @@ class Message(Hashable):
 
         for handler in ("author", "member", "mentions", "mention_roles", "call", "flags"):
             try:
-                getattr(self, "_handle_%s" % handler)(data[handler])
+                getattr(self, f"_handle_{handler}")(data[handler])
             except KeyError:
                 continue
 
@@ -851,18 +851,18 @@ class Message(Hashable):
             respectively, along with this function.
         """
 
-        transformations = {re.escape("<#%s>" % channel.id): "#" + channel.name for channel in self.channel_mentions}
+        transformations = {re.escape(f"<#{channel.id}>"): "#" + channel.name for channel in self.channel_mentions}
 
-        mention_transforms = {re.escape("<@%s>" % member.id): "@" + member.display_name for member in self.mentions}
+        mention_transforms = {re.escape(f"<@{member.id}>"): "@" + member.display_name for member in self.mentions}
 
         # add the <@!user_id> cases as well..
-        second_mention_transforms = {re.escape("<@!%s>" % member.id): "@" + member.display_name for member in self.mentions}
+        second_mention_transforms = {re.escape(f"<@!{member.id}>"): "@" + member.display_name for member in self.mentions}
 
         transformations.update(mention_transforms)
         transformations.update(second_mention_transforms)
 
         if self.guild is not None:
-            role_transforms = {re.escape("<@&%s>" % role.id): "@" + role.name for role in self.role_mentions}
+            role_transforms = {re.escape(f"<@&{role.id}>"): "@" + role.name for role in self.role_mentions}
             transformations.update(role_transforms)
 
         def repl(obj):

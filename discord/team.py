@@ -63,7 +63,7 @@ class Team:
         self.members = [TeamMember(self, self._state, member) for member in data["members"]]
 
     def __repr__(self):
-        return "<{0.__class__.__name__} id={0.id} name={0.name}>".format(self)
+        return f"<{self.__class__.__name__} id={self.id} name={self.name}>"
 
     @property
     def icon_url(self):
@@ -157,4 +157,4 @@ class TeamMember(BaseUser):
         super().__init__(state=state, data=data["user"])
 
     def __repr__(self):
-        return "<{0.__class__.__name__} id={0.id} name={0.name!r} discriminator={0.discriminator!r} membership_state={0.membership_state!r}>".format(self)
+        return f"<{self.__class__.__name__} id={self.id} name={self.name!r} discriminator={self.discriminator!r} membership_state={self.membership_state!r}>"

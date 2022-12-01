@@ -232,7 +232,7 @@ class Embed:
         elif isinstance(value, int):
             self._colour = Colour(value=value)
         else:
-            raise TypeError("Expected discord.Colour, int, or Embed.Empty but received %s instead." % value.__class__.__name__)
+            raise TypeError(f"Expected discord.Colour, int, or Embed.Empty but received {value.__class__.__name__} instead.")
 
     color = colour
 
@@ -245,7 +245,7 @@ class Embed:
         if isinstance(value, (datetime.datetime, _EmptyEmbed)):
             self._timestamp = value
         else:
-            raise TypeError("Expected datetime.datetime or Embed.Empty received %s instead" % value.__class__.__name__)
+            raise TypeError(f"Expected datetime.datetime or Embed.Empty received {value.__class__.__name__} instead")
 
     @property
     def footer(self):

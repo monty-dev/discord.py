@@ -101,7 +101,7 @@ class BaseUser(_BaseUser):
         self._update(data)
 
     def __str__(self):
-        return "{0.name}#{0.discriminator}".format(self)
+        return f"{self.name}#{self.discriminator}"
 
     def __eq__(self, other):
         return isinstance(other, _BaseUser) and other.id == self.id
@@ -203,7 +203,7 @@ class BaseUser(_BaseUser):
     @property
     def default_avatar_url(self):
         """:class:`Asset`: Returns a URL for a user's default avatar."""
-        return Asset(self._state, "/embed/avatars/{}.png".format(self.default_avatar.value))
+        return Asset(self._state, f"/embed/avatars/{self.default_avatar.value}.png")
 
     @property
     def colour(self):
@@ -226,7 +226,7 @@ class BaseUser(_BaseUser):
     @property
     def mention(self):
         """:class:`str`: Returns a string that allows you to mention the given user."""
-        return "<@{0.id}>".format(self)
+        return f"<@{self.id}>"
 
     def permissions_in(self, channel):
         """An alias for :meth:`abc.GuildChannel.permissions_for`.
@@ -348,7 +348,7 @@ class ClientUser(BaseUser):
         self._relationships = {}
 
     def __repr__(self):
-        return "<ClientUser id={0.id} name={0.name!r} discriminator={0.discriminator!r} bot={0.bot} verified={0.verified} mfa_enabled={0.mfa_enabled}>".format(self)
+        return f"<ClientUser id={self.id} name={self.name!r} discriminator={self.discriminator!r} bot={self.bot} verified={self.verified} mfa_enabled={self.mfa_enabled}>"
 
     def _update(self, data):
         super()._update(data)
@@ -715,7 +715,7 @@ class User(BaseUser, discord.abc.Messageable):
     __slots__ = BaseUser.__slots__ + ("__weakref__",)
 
     def __repr__(self):
-        return "<User id={0.id} name={0.name!r} discriminator={0.discriminator!r} bot={0.bot}>".format(self)
+        return f"<User id={self.id} name={self.name!r} discriminator={self.discriminator!r} bot={self.bot}>"
 
     async def _get_channel(self):
         ch = await self.create_dm()

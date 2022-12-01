@@ -480,7 +480,7 @@ class Command(_BaseCommand):
             except AttributeError:
                 name = converter.__class__.__name__
 
-            raise BadArgument('Converting to "{}" failed for parameter "{}".'.format(name, param.name)) from exc
+            raise BadArgument(f'Converting to "{name}" failed for parameter "{param.name}".') from exc
 
     async def do_conversion(self, ctx, converter, argument, param):
         try:
@@ -782,7 +782,7 @@ class Command(_BaseCommand):
         ctx.command = self
 
         if not await self.can_run(ctx):
-            raise CheckFailure("The check functions for command {0.qualified_name} failed.".format(self))
+            raise CheckFailure(f"The check functions for command {self.qualified_name} failed.")
 
         if self._max_concurrency is not None:
             await self._max_concurrency.acquire(ctx)
@@ -1020,22 +1020,22 @@ class Command(_BaseCommand):
                 # do [name] since [name=None] or [name=] are not exactly useful for the user.
                 should_print = param.default if isinstance(param.default, str) else param.default is not None
                 if should_print:
-                    result.append("[%s=%s]" % (name, param.default) if not greedy else "[%s=%s]..." % (name, param.default))
+                    result.append(f"[{name}={param.default}]" if not greedy else f"[{name}={param.default}]...")
                     continue
                 else:
-                    result.append("[%s]" % name)
+                    result.append(f"[{name}]")
 
             elif param.kind == param.VAR_POSITIONAL:
                 if self.require_var_positional:
-                    result.append("<%s...>" % name)
+                    result.append(f"<{name}...>")
                 else:
-                    result.append("[%s...]" % name)
+                    result.append(f"[{name}...]")
             elif greedy:
-                result.append("[%s]..." % name)
+                result.append(f"[{name}]...")
             elif self._is_typing_optional(param.annotation):
-                result.append("[%s]" % name)
+                result.append(f"[{name}]")
             else:
-                result.append("<%s>" % name)
+                result.append(f"<{name}>")
 
         return " ".join(result)
 
@@ -1067,14 +1067,14 @@ class Command(_BaseCommand):
         """
 
         if not self.enabled:
-            raise DisabledCommand("{0.name} command is disabled".format(self))
+            raise DisabledCommand(f"{self.name} command is disabled")
 
         original = ctx.command
         ctx.command = self
 
         try:
             if not await ctx.bot.can_run(ctx):
-                raise CheckFailure("The global check functions for command {0.qualified_name} failed.".format(self))
+                raise CheckFailure(f"The global check functions for command {self.qualified_name} failed.")
 
             cog = self.cog
             if cog is not None:
@@ -1803,7 +1803,7 @@ def has_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
+        raise TypeError(f"Invalid permission(s): {', '.join(invalid)}")
 
     def predicate(ctx):
         ch = ctx.channel
@@ -1829,7 +1829,7 @@ def bot_has_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
+        raise TypeError(f"Invalid permission(s): {', '.join(invalid)}")
 
     def predicate(ctx):
         guild = ctx.guild
@@ -1858,7 +1858,7 @@ def has_guild_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
+        raise TypeError(f"Invalid permission(s): {', '.join(invalid)}")
 
     def predicate(ctx):
         if not ctx.guild:
@@ -1884,7 +1884,7 @@ def bot_has_guild_permissions(**perms):
 
     invalid = set(perms) - set(discord.Permissions.VALID_FLAGS)
     if invalid:
-        raise TypeError("Invalid permission(s): %s" % ", ".join(invalid))
+        raise TypeError(f"Invalid permission(s): {', '.join(invalid)}")
 
     def predicate(ctx):
         if not ctx.guild:

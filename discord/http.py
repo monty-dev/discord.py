@@ -89,7 +89,7 @@ class Route:
     @property
     def bucket(self):
         # the bucket is just method + path w/ major parameters
-        return "{0.channel_id}:{0.guild_id}:{0.path}".format(self)
+        return f"{self.channel_id}:{self.guild_id}:{self.path}"
 
 
 class DeferrableLock(asyncio.Lock):
@@ -228,8 +228,7 @@ class HTTPClient:
                                 await asyncio.sleep(retry_after)
                                 self.global_event.set()
                             else:
-                                fmt = "Ratelimt for bucket %s. Retrying in %.2f"
-                                log.error(fmt, bucket, retry_after)
+                                log.error(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
                                 await asyncio.shield(asyncio.sleep(retry_after))
                             continue
 
@@ -385,7 +384,7 @@ class HTTPClient:
             form.append({"name": "file", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"})
         else:
             for index, file in enumerate(files):
-                form.append({"name": "file%s" % index, "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"})
+                form.append({"name": f"file{index}", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"})
 
         return self.request(r, form=form, files=files)
 
@@ -478,7 +477,7 @@ class HTTPClient:
         r = Route("DELETE", "/guilds/{guild_id}/members/{user_id}", guild_id=guild_id, user_id=user_id)
         if reason:
             # thanks aiohttp
-            r.url = "{0.url}?reason={1}".format(r, _uriquote(reason))
+            r.url = f"{r.url}?reason={_uriquote(reason)}"
 
         return self.request(r)
 
@@ -488,7 +487,7 @@ class HTTPClient:
 
         if reason:
             # thanks aiohttp
-            r.url = "{0.url}?reason={1}".format(r, _uriquote(reason))
+            r.url = f"{r.url}?reason={_uriquote(reason)}"
 
         return self.request(r, params=params)
 

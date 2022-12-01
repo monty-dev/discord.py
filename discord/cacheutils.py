@@ -408,7 +408,7 @@ class _HashedKey(list):
         return self.hash_value
 
     def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, list.__repr__(self))
+        return f"{self.__class__.__name__}({list.__repr__(self)})"
 
 
 def make_cache_key(args, kwargs, typed=False, kwarg_mark=_KWARG_MARK, fasttypes=frozenset([int, str, frozenset, type(None)])):
@@ -650,7 +650,7 @@ class cachedproperty(object):
 
     def __repr__(self):
         cn = self.__class__.__name__
-        return "<%s func=%s>" % (cn, self.func)
+        return f"<{cn} func={self.func}>"
 
 
 class ThresholdCounter(object):

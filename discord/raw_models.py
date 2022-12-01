@@ -28,7 +28,7 @@ DEALINGS IN THE SOFTWARE.
 class _RawReprMixin:
     def __repr__(self):
         value = " ".join("%s=%r" % (attr, getattr(self, attr)) for attr in self.__slots__)
-        return "<%s %s>" % (self.__class__.__name__, value)
+        return f"<{self.__class__.__name__} {value}>"
 
 
 class RawMessageDeleteEvent(_RawReprMixin):

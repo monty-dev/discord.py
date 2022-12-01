@@ -76,12 +76,12 @@ class PartialInviteChannel:
         return self.name
 
     def __repr__(self):
-        return "<PartialInviteChannel id={0.id} name={0.name} type={0.type!r}>".format(self)
+        return f"<PartialInviteChannel id={self.id} name={self.name} type={self.type!r}>"
 
     @property
     def mention(self):
         """:class:`str`: The string that allows you to mention the channel."""
-        return "<#%s>" % self.id
+        return f"<#{self.id}>"
 
     @property
     def created_at(self):
@@ -150,7 +150,7 @@ class PartialInviteGuild:
         return self.name
 
     def __repr__(self):
-        return "<{0.__class__.__name__} id={0.id} name={0.name!r} features={0.features} description={0.description!r}>".format(self)
+        return f"<{self.__class__.__name__} id={self.id} name={self.name!r} features={self.features} description={self.description!r}>"
 
     @property
     def created_at(self):
@@ -356,7 +356,7 @@ class Invite(Hashable):
         return self.url
 
     def __repr__(self):
-        return "<Invite code={0.code!r} guild={0.guild!r} online={0.approximate_presence_count} members={0.approximate_member_count}>".format(self)
+        return f"<Invite code={self.code!r} guild={self.guild!r} online={self.approximate_presence_count} members={self.approximate_member_count}>"
 
     def __hash__(self):
         return hash(self.code)

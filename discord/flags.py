@@ -92,7 +92,7 @@ class BaseFlags:
         return hash(self.value)
 
     def __repr__(self):
-        return "<%s value=%s>" % (self.__class__.__name__, self.value)
+        return f"<{self.__class__.__name__} value={self.value}>"
 
     def __iter__(self):
         for name, value in self.__class__.__dict__.items():
@@ -111,7 +111,7 @@ class BaseFlags:
         elif toggle is False:
             self.value &= ~o
         else:
-            raise TypeError("Value to set for %s must be a bool." % self.__class__.__name__)
+            raise TypeError(f"Value to set for {self.__class__.__name__} must be a bool.")
 
 
 @fill_with_flags(inverted=True)

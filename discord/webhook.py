@@ -66,7 +66,7 @@ class WebhookAdapter:
     def _prepare(self, webhook):
         self._webhook_id = webhook.id
         self._webhook_token = webhook.token
-        self._request_url = "{0.BASE}/webhooks/{1}/{2}".format(self, webhook.id, webhook.token)
+        self._request_url = f"{self.BASE}/webhooks/{webhook.id}/{webhook.token}"
         self.webhook = webhook
 
     def is_async(self):
@@ -101,10 +101,10 @@ class WebhookAdapter:
         return self.request("PATCH", self._request_url, payload=payload, reason=reason)
 
     def edit_webhook_message(self, message_id, payload):
-        return self.request("PATCH", "{}/messages/{}".format(self._request_url, message_id), payload=payload)
+        return self.request("PATCH", f"{self._request_url}/messages/{message_id}", payload=payload)
 
     def delete_webhook_message(self, message_id):
-        return self.request("DELETE", "{}/messages/{}".format(self._request_url, message_id))
+        return self.request("DELETE", f"{self._request_url}/messages/{message_id}")
 
     def handle_execution_response(self, data, *, wait):
         """Transforms the webhook execution response into something
@@ -422,7 +422,7 @@ class _PartialWebhookState:
         if self.parent is not None:
             return getattr(self.parent, attr)
 
-        raise AttributeError("PartialWebhookState does not support {0!r}.".format(attr))
+        raise AttributeError(f"PartialWebhookState does not support {attr!r}.")
 
 
 class WebhookMessage(Message):
@@ -629,7 +629,7 @@ class Webhook(Hashable):
     @property
     def url(self):
         """:class:`str` : Returns the webhook's url."""
-        return "https://discord.com/api/webhooks/{}/{}".format(self.id, self.token)
+        return f"https://discord.com/api/webhooks/{self.id}/{self.token}"
 
     @classmethod
     def partial(cls, id, token, *, adapter):
@@ -694,7 +694,7 @@ class Webhook(Hashable):
 
     @classmethod
     def _as_follower(cls, data, *, channel, user):
-        name = "{} #{}".format(channel.guild, channel)
+        name = f"{channel.guild} #{channel}"
         feed = {
             "id": data["webhook_id"],
             "type": 2,
@@ -785,7 +785,7 @@ class Webhook(Hashable):
         if format not in ("png", "jpg", "jpeg"):
             raise InvalidArgument("format must be one of 'png', 'jpg', or 'jpeg'.")
 
-        url = "/avatars/{0.id}/{0.avatar}.{1}?size={2}".format(self, format, size)
+        url = f"/avatars/{self.id}/{self.avatar}.{format}?size={size}"
         return Asset(self._state, url)
 
     def delete(self, *, reason=None):

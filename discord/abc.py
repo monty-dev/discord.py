@@ -294,7 +294,7 @@ class GuildChannel:
             perms = []
             for target, perm in overwrites.items():
                 if not isinstance(perm, PermissionOverwrite):
-                    raise InvalidArgument("Expected PermissionOverwrite received {0.__name__}".format(type(perm)))
+                    raise InvalidArgument(f"Expected PermissionOverwrite received {type(perm).__name__}")
 
                 allow, deny = perm.pair()
                 payload = {"allow": allow.value, "deny": deny.value, "id": target.id}
@@ -364,7 +364,7 @@ class GuildChannel:
     @property
     def mention(self):
         """:class:`str`: The string that allows you to mention the channel."""
-        return "<#%s>" % self.id
+        return f"<#{self.id}>"
 
     @property
     def created_at(self):

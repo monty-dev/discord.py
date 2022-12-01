@@ -74,7 +74,7 @@ class RoleTags:
         return self.integration_id is not None
 
     def __repr__(self):
-        return "<RoleTags bot_id={0.bot_id} integration_id={0.integration_id} premium_subscriber={1}>".format(self, self.is_premium_subscriber())
+        return f"<RoleTags bot_id={self.bot_id} integration_id={self.integration_id} premium_subscriber={self.is_premium_subscriber()}>"
 
 
 class Role(Hashable):
@@ -148,7 +148,7 @@ class Role(Hashable):
         return self.name
 
     def __repr__(self):
-        return "<Role id={0.id} name={0.name!r}>".format(self)
+        return f"<Role id={self.id} name={self.name!r}>"
 
     def __lt__(self, other):
         if not isinstance(other, Role) or not isinstance(self, Role):
@@ -248,7 +248,7 @@ class Role(Hashable):
     @property
     def mention(self):
         """:class:`str`: Returns a string that allows you to mention a role."""
-        return "<@&%s>" % self.id
+        return f"<@&{self.id}>"
 
     @property
     def members(self):

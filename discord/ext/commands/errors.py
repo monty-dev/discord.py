@@ -152,7 +152,7 @@ class MissingRequiredArgument(UserInputError):
 
     def __init__(self, param):
         self.param = param
-        super().__init__("{0.name} is a required argument that is missing.".format(param))
+        super().__init__(f"{param.name} is a required argument that is missing.")
 
 
 class TooManyArguments(UserInputError):
@@ -252,7 +252,7 @@ class MemberNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Member "{}" not found.'.format(argument))
+        super().__init__(f'Member "{argument}" not found.')
 
 
 class GuildNotFound(BadArgument):
@@ -270,7 +270,7 @@ class GuildNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Guild "{}" not found.'.format(argument))
+        super().__init__(f'Guild "{argument}" not found.')
 
 
 class UserNotFound(BadArgument):
@@ -289,7 +289,7 @@ class UserNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('User "{}" not found.'.format(argument))
+        super().__init__(f'User "{argument}" not found.')
 
 
 class MessageNotFound(BadArgument):
@@ -307,7 +307,7 @@ class MessageNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Message "{}" not found.'.format(argument))
+        super().__init__(f'Message "{argument}" not found.')
 
 
 class ChannelNotReadable(BadArgument):
@@ -326,7 +326,7 @@ class ChannelNotReadable(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__("Can't read messages in {}.".format(argument.mention))
+        super().__init__(f"Can't read messages in {argument.mention}.")
 
 
 class ChannelNotFound(BadArgument):
@@ -344,7 +344,7 @@ class ChannelNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Channel "{}" not found.'.format(argument))
+        super().__init__(f'Channel "{argument}" not found.')
 
 
 class BadColourArgument(BadArgument):
@@ -362,7 +362,7 @@ class BadColourArgument(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Colour "{}" is invalid.'.format(argument))
+        super().__init__(f'Colour "{argument}" is invalid.')
 
 
 BadColorArgument = BadColourArgument
@@ -383,7 +383,7 @@ class RoleNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Role "{}" not found.'.format(argument))
+        super().__init__(f'Role "{argument}" not found.')
 
 
 class BadInviteArgument(BadArgument):
@@ -413,7 +413,7 @@ class EmojiNotFound(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Emoji "{}" not found.'.format(argument))
+        super().__init__(f'Emoji "{argument}" not found.')
 
 
 class PartialEmojiConversionFailure(BadArgument):
@@ -432,7 +432,7 @@ class PartialEmojiConversionFailure(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__('Couldn\'t convert "{}" to PartialEmoji.'.format(argument))
+        super().__init__(f'Couldn\'t convert "{argument}" to PartialEmoji.')
 
 
 class BadBoolArgument(BadArgument):
@@ -450,7 +450,7 @@ class BadBoolArgument(BadArgument):
 
     def __init__(self, argument):
         self.argument = argument
-        super().__init__("{} is not a recognised boolean option".format(argument))
+        super().__init__(f"{argument} is not a recognised boolean option")
 
 
 class DisabledCommand(CommandError):
@@ -476,7 +476,7 @@ class CommandInvokeError(CommandError):
 
     def __init__(self, e):
         self.original = e
-        super().__init__("Command raised an exception: {0.__class__.__name__}: {0}".format(e))
+        super().__init__(f"Command raised an exception: {e.__class__.__name__}: {e}")
 
 
 class CommandOnCooldown(CommandError):
@@ -496,7 +496,7 @@ class CommandOnCooldown(CommandError):
     def __init__(self, cooldown, retry_after):
         self.cooldown = cooldown
         self.retry_after = retry_after
-        super().__init__("You are on cooldown. Try again in {:.2f}s".format(retry_after))
+        super().__init__(f"You are on cooldown. Try again in {retry_after:.2f}s")
 
 
 class MaxConcurrencyReached(CommandError):
@@ -516,10 +516,10 @@ class MaxConcurrencyReached(CommandError):
         self.number = number
         self.per = per
         name = per.name
-        suffix = "per %s" % name if per.name != "default" else "globally"
+        suffix = f"per {name}" if per.name != "default" else "globally"
         plural = "%s times %s" if number > 1 else "%s time %s"
         fmt = plural % (number, suffix)
-        super().__init__("Too many people using this command. It can only be used {} concurrently.".format(fmt))
+        super().__init__(f"Too many people using this command. It can only be used {fmt} concurrently.")
 
 
 class MissingRole(CheckFailure):
@@ -538,7 +538,7 @@ class MissingRole(CheckFailure):
 
     def __init__(self, missing_role):
         self.missing_role = missing_role
-        message = "Role {0!r} is required to run this command.".format(missing_role)
+        message = f"Role {missing_role!r} is required to run this command."
         super().__init__(message)
 
 
@@ -558,7 +558,7 @@ class BotMissingRole(CheckFailure):
 
     def __init__(self, missing_role):
         self.missing_role = missing_role
-        message = "Bot requires the role {0!r} to run this command".format(missing_role)
+        message = f"Bot requires the role {missing_role!r} to run this command"
         super().__init__(message)
 
 
@@ -580,14 +580,14 @@ class MissingAnyRole(CheckFailure):
     def __init__(self, missing_roles):
         self.missing_roles = missing_roles
 
-        missing = ["'{}'".format(role) for role in missing_roles]
+        missing = [f"'{role}'" for role in missing_roles]
 
         if len(missing) > 2:
-            fmt = "{}, or {}".format(", ".join(missing[:-1]), missing[-1])
+            fmt = f"{', '.join(missing[:-1])}, or {missing[-1]}"
         else:
             fmt = " or ".join(missing)
 
-        message = "You are missing at least one of the required roles: {}".format(fmt)
+        message = f"You are missing at least one of the required roles: {fmt}"
         super().__init__(message)
 
 
@@ -610,14 +610,14 @@ class BotMissingAnyRole(CheckFailure):
     def __init__(self, missing_roles):
         self.missing_roles = missing_roles
 
-        missing = ["'{}'".format(role) for role in missing_roles]
+        missing = [f"'{role}'" for role in missing_roles]
 
         if len(missing) > 2:
-            fmt = "{}, or {}".format(", ".join(missing[:-1]), missing[-1])
+            fmt = f"{', '.join(missing[:-1])}, or {missing[-1]}"
         else:
             fmt = " or ".join(missing)
 
-        message = "Bot is missing at least one of the required roles: {}".format(fmt)
+        message = f"Bot is missing at least one of the required roles: {fmt}"
         super().__init__(message)
 
 
@@ -636,7 +636,7 @@ class NSFWChannelRequired(CheckFailure):
 
     def __init__(self, channel):
         self.channel = channel
-        super().__init__("Channel '{}' needs to be NSFW for this command to work.".format(channel))
+        super().__init__(f"Channel '{channel}' needs to be NSFW for this command to work.")
 
 
 class MissingPermissions(CheckFailure):
@@ -657,10 +657,10 @@ class MissingPermissions(CheckFailure):
         missing = [perm.replace("_", " ").replace("guild", "server").title() for perm in missing_perms]
 
         if len(missing) > 2:
-            fmt = "{}, and {}".format(", ".join(missing[:-1]), missing[-1])
+            fmt = f"{', '.join(missing[:-1])}, and {missing[-1]}"
         else:
             fmt = " and ".join(missing)
-        message = "You are missing {} permission(s) to run this command.".format(fmt)
+        message = f"You are missing {fmt} permission(s) to run this command."
         super().__init__(message, *args)
 
 
@@ -682,10 +682,10 @@ class BotMissingPermissions(CheckFailure):
         missing = [perm.replace("_", " ").replace("guild", "server").title() for perm in missing_perms]
 
         if len(missing) > 2:
-            fmt = "{}, and {}".format(", ".join(missing[:-1]), missing[-1])
+            fmt = f"{', '.join(missing[:-1])}, and {missing[-1]}"
         else:
             fmt = " and ".join(missing)
-        message = "Bot requires {} permission(s) to run this command.".format(fmt)
+        message = f"Bot requires {fmt} permission(s) to run this command."
         super().__init__(message, *args)
 
 
@@ -718,11 +718,11 @@ class BadUnionArgument(UserInputError):
 
         to_string = [_get_name(x) for x in converters]
         if len(to_string) > 2:
-            fmt = "{}, or {}".format(", ".join(to_string[:-1]), to_string[-1])
+            fmt = f"{', '.join(to_string[:-1])}, or {to_string[-1]}"
         else:
             fmt = " or ".join(to_string)
 
-        super().__init__('Could not convert "{0.name}" into {1}.'.format(param, fmt))
+        super().__init__(f'Could not convert "{param.name}" into {fmt}.')
 
 
 class ArgumentParsingError(UserInputError):
@@ -750,7 +750,7 @@ class UnexpectedQuoteError(ArgumentParsingError):
 
     def __init__(self, quote):
         self.quote = quote
-        super().__init__("Unexpected quote mark, {0!r}, in non-quoted string".format(quote))
+        super().__init__(f"Unexpected quote mark, {quote!r}, in non-quoted string")
 
 
 class InvalidEndOfQuotedStringError(ArgumentParsingError):
@@ -767,7 +767,7 @@ class InvalidEndOfQuotedStringError(ArgumentParsingError):
 
     def __init__(self, char):
         self.char = char
-        super().__init__("Expected space after closing quotation but received {0!r}".format(char))
+        super().__init__(f"Expected space after closing quotation but received {char!r}")
 
 
 class ExpectedClosingQuoteError(ArgumentParsingError):
@@ -783,7 +783,7 @@ class ExpectedClosingQuoteError(ArgumentParsingError):
 
     def __init__(self, close_quote):
         self.close_quote = close_quote
-        super().__init__("Expected closing {}.".format(close_quote))
+        super().__init__(f"Expected closing {close_quote}.")
 
 
 class ExtensionError(DiscordException):
@@ -799,7 +799,7 @@ class ExtensionError(DiscordException):
 
     def __init__(self, message=None, *args, name):
         self.name = name
-        message = message or "Extension {!r} had an error.".format(name)
+        message = message or f"Extension {name!r} had an error."
         # clean-up @everyone and @here mentions
         m = message.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
         super().__init__(m, *args)
@@ -812,7 +812,7 @@ class ExtensionAlreadyLoaded(ExtensionError):
     """
 
     def __init__(self, name):
-        super().__init__("Extension {!r} is already loaded.".format(name), name=name)
+        super().__init__(f"Extension {name!r} is already loaded.", name=name)
 
 
 class ExtensionNotLoaded(ExtensionError):
@@ -822,7 +822,7 @@ class ExtensionNotLoaded(ExtensionError):
     """
 
     def __init__(self, name):
-        super().__init__("Extension {!r} has not been loaded.".format(name), name=name)
+        super().__init__(f"Extension {name!r} has not been loaded.", name=name)
 
 
 class NoEntryPointError(ExtensionError):
@@ -832,7 +832,7 @@ class NoEntryPointError(ExtensionError):
     """
 
     def __init__(self, name):
-        super().__init__("Extension {!r} has no 'setup' function.".format(name), name=name)
+        super().__init__(f"Extension {name!r} has no 'setup' function.", name=name)
 
 
 class ExtensionFailed(ExtensionError):
@@ -897,4 +897,4 @@ class CommandRegistrationError(ClientException):
         self.name = name
         self.alias_conflict = alias_conflict
         type_ = "alias" if alias_conflict else "command"
-        super().__init__("The {} {} is already an existing command or alias.".format(type_, name))
+        super().__init__(f"The {type_} {name} is already an existing command or alias.")

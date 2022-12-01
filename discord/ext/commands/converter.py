@@ -818,7 +818,7 @@ class clean_content(Converter):
 
             def resolve_channel(id, *, _get=ctx.guild.get_channel):
                 ch = _get(id)
-                return ("<#%s>" % id), ("#" + ch.name if ch else "#deleted-channel")
+                return f"<#{id}>", ("#" + ch.name if ch else "#deleted-channel")
 
             transformations.update(resolve_channel(channel) for channel in message.raw_channel_mentions)
 
@@ -834,9 +834,9 @@ class clean_content(Converter):
                 m = _get(id)
                 return "@" + m.name if m else "@deleted-user"
 
-        transformations.update(("<@%s>" % member_id, resolve_member(member_id)) for member_id in message.raw_mentions)
+        transformations.update((f"<@{member_id}>", resolve_member(member_id)) for member_id in message.raw_mentions)
 
-        transformations.update(("<@!%s>" % member_id, resolve_member(member_id)) for member_id in message.raw_mentions)
+        transformations.update((f"<@!{member_id}>", resolve_member(member_id)) for member_id in message.raw_mentions)
 
         if ctx.guild:
 
@@ -844,7 +844,7 @@ class clean_content(Converter):
                 r = _find(_id)
                 return "@" + r.name if r else "@deleted-role"
 
-            transformations.update(("<@&%s>" % role_id, resolve_role(role_id)) for role_id in message.raw_role_mentions)
+            transformations.update((f"<@&{role_id}>", resolve_role(role_id)) for role_id in message.raw_role_mentions)
 
         def repl(obj):
             return transformations.get(obj.group(0), "")
@@ -878,7 +878,7 @@ class _Greedy:
             raise TypeError("Greedy[...] expects a type or a Converter instance.")
 
         if converter is str or converter is type(None) or converter is _Greedy:
-            raise TypeError("Greedy[%s] is invalid." % converter.__name__)
+            raise TypeError(f"Greedy[{converter.__name__}] is invalid.")
 
         if getattr(converter, "__origin__", None) is typing.Union and type(None) in converter.__args__:
             raise TypeError("Greedy[%r] is invalid." % converter)

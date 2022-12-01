@@ -124,7 +124,7 @@ class AppInfo:
         self.cover_image = data.get("cover_image")
 
     def __repr__(self):
-        return "<{0.__class__.__name__} id={0.id} name={0.name!r} description={0.description!r} public={0.bot_public} owner={0.owner!r}>".format(self)
+        return f"<{self.__class__.__name__} id={self.id} name={self.name!r} description={self.description!r} public={self.bot_public} owner={self.owner!r}>"
 
     @property
     def icon_url(self):
