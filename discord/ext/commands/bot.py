@@ -24,8 +24,10 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
+
 import asyncio
 import collections
+import contextlib
 import importlib.util
 import inspect
 import sys
@@ -47,7 +49,7 @@ def when_mentioned(bot, msg):
 
     These are meant to be passed into the :attr:`.Bot.command_prefix` attribute.
     """
-    return [bot.user.mention + " ", f"<@!{bot.user.id}> "]
+    return [f"{bot.user.mention} ", f"<@!{bot.user.id}> "]
 
 
 def when_mentioned_or(*prefixes):
@@ -89,7 +91,7 @@ def when_mentioned_or(*prefixes):
 
 
 def _is_submodule(parent, child):
-    return parent == child or child.startswith(parent + ".")
+    return parent == child or child.startswith(f"{parent}.")
 
 
 class _DefaultRepr:
@@ -137,23 +139,17 @@ class BotBase(GroupMixin):
 
     def dispatch(self, event_name, *args, **kwargs):
         super().dispatch(event_name, *args, **kwargs)
-        ev = "on_" + event_name
+        ev = f"on_{event_name}"
         for event in self.extra_events.get(ev, []):
             self._schedule_event(event, ev, *args, **kwargs)
 
     async def close(self):
         for extension in tuple(self.__extensions):
-            try:
+            with contextlib.suppress(Exception):
                 self.unload_extension(extension)
-            except Exception:
-                pass
-
         for cog in tuple(self.__cogs):
-            try:
+            with contextlib.suppress(Exception):
                 self.remove_cog(cog)
-            except Exception:
-                pass
-
         await super().close()
 
     async def on_command_error(self, context, exception):
@@ -245,10 +241,8 @@ class BotBase(GroupMixin):
         """
         l = self._check_once if call_once else self._checks
 
-        try:
+        with contextlib.suppress(ValueError):
             l.remove(func)
-        except ValueError:
-            pass
 
     def check_once(self, func):
         r"""A decorator that adds a "call once" global check to the bot.
@@ -447,10 +441,8 @@ class BotBase(GroupMixin):
         name = func.__name__ if name is None else name
 
         if name in self.extra_events:
-            try:
+            with contextlib.suppress(ValueError):
                 self.extra_events[name].remove(func)
-            except ValueError:
-                pass
 
     def listen(self, name=None):
         """A decorator that registers another function as an external
@@ -579,10 +571,7 @@ class BotBase(GroupMixin):
 
         # remove all the listeners from the module
         for event_list in self.extra_events.copy().values():
-            remove = []
-            for index, event in enumerate(event_list):
-                if event.__module__ is not None and _is_submodule(name, event.__module__):
-                    remove.append(index)
+            remove = [index for index, event in enumerate(event_list) if event.__module__ is not None and _is_submodule(name, event.__module__)]
 
             for index in reversed(remove):
                 del event_list[index]
@@ -593,10 +582,8 @@ class BotBase(GroupMixin):
         except AttributeError:
             pass
         else:
-            try:
+            with contextlib.suppress(Exception):
                 func(self)
-            except Exception:
-                pass
         finally:
             self.__extensions.pop(key, None)
             sys.modules.pop(key, None)
@@ -617,9 +604,9 @@ class BotBase(GroupMixin):
 
         try:
             setup = getattr(lib, "setup")
-        except AttributeError:
+        except AttributeError as exc:
             del sys.modules[key]
-            raise errors.NoEntryPointError(key)
+            raise errors.NoEntryPointError(key) from exc
 
         try:
             setup(self)
@@ -634,8 +621,8 @@ class BotBase(GroupMixin):
     def _resolve_name(self, name, package):
         try:
             return importlib.util.resolve_name(name, package)
-        except ImportError:
-            raise errors.ExtensionNotFound(name)
+        except ImportError as e:
+            raise errors.ExtensionNotFound(name) from e
 
     def load_extension(self, name, *, package=None):
         """Loads an extension.
@@ -836,13 +823,14 @@ class BotBase(GroupMixin):
         if not isinstance(ret, str):
             try:
                 ret = list(ret)
-            except TypeError:
+            except TypeError as e:
                 # It's possible that a generator raised this exception.  Don't
                 # replace it with our own error if that's the case.
                 if isinstance(ret, collections.abc.Iterable):
                     raise
 
-                raise TypeError(f"command_prefix must be plain string, iterable of strings, or callable returning either of these, not {ret.__class__.__name__}")
+                raise TypeError(f"command_prefix must be plain string, iterable of strings, or callable returning either of these, not {ret.__class__.__name__}") from e
+
 
             if not ret:
                 raise ValueError("Iterable command_prefix must contain at least one prefix")
@@ -900,14 +888,16 @@ class BotBase(GroupMixin):
                 else:
                     return ctx
 
-            except TypeError:
+            except TypeError as e:
                 if not isinstance(prefix, list):
-                    raise TypeError(f"get_prefix must return either a string or a list of string, not {prefix.__class__.__name__}")
+                    raise TypeError(f"get_prefix must return either a string or a list of string, not {prefix.__class__.__name__}") from e
+
 
                 # It's possible a bad command_prefix got us here.
                 for value in prefix:
                     if not isinstance(value, str):
-                        raise TypeError(f"Iterable command_prefix or list returned from get_prefix must contain only strings, not {value.__class__.__name__}")
+                        raise TypeError(f"Iterable command_prefix or list returned from get_prefix must contain only strings, not {value.__class__.__name__}") from e
+
 
                 # Getting here shouldn't happen
                 raise
