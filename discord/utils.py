@@ -176,15 +176,15 @@ def oauth_url(client_id, permissions=None, guild=None, redirect_uri=None, scopes
         The OAuth2 URL for inviting the bot into guilds.
     """
     url = f"https://discord.com/oauth2/authorize?client_id={client_id}"
-    url = url + "&scope=" + "+".join(scopes or ("bot",))
+    url = f"{url}&scope=" + "+".join(scopes or ("bot",))
     if permissions is not None:
-        url = url + "&permissions=" + str(permissions.value)
+        url = f"{url}&permissions={str(permissions.value)}"
     if guild is not None:
-        url = url + "&guild_id=" + str(guild.id)
+        url = f"{url}&guild_id={str(guild.id)}"
     if redirect_uri is not None:
         from urllib.parse import urlencode
 
-        url = url + "&response_type=code&" + urlencode({"redirect_uri": redirect_uri})
+        url = f"{url}&response_type=code&" + urlencode({"redirect_uri": redirect_uri})
     return url
 
 
@@ -241,10 +241,7 @@ def find(predicate, seq):
         The iterable to search through.
     """
 
-    for element in seq:
-        if predicate(element):
-            return element
-    return None
+    return next((element for element in seq if predicate(element)), None)
 
 
 def get(iterable, **attrs):
@@ -299,23 +296,15 @@ def get(iterable, **attrs):
     if len(attrs) == 1:
         k, v = attrs.popitem()
         pred = attrget(k.replace("__", "."))
-        for elem in iterable:
-            if pred(elem) == v:
-                return elem
-        return None
-
+        return next((elem for elem in iterable if pred(elem) == v), None)
     converted = [(attrget(attr.replace("__", ".")), value) for attr, value in attrs.items()]
 
-    for elem in iterable:
-        if _all(pred(elem) == value for pred, value in converted):
-            return elem
-    return None
+    return next((elem for elem in iterable if _all(pred(elem) == value for pred, value in converted)), None)
 
 
 def _unique(iterable):
     seen = set()
-    adder = seen.add
-    return [x for x in iterable if not (x in seen or adder(x))]
+    return [x for x in iterable if x not in seen and not seen.add(x)]
 
 
 def _get_as_snowflake(data, key):
@@ -330,7 +319,7 @@ def _get_as_snowflake(data, key):
 def _get_mime_type_for_image(data):
     if data.startswith(b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"):
         return "image/png"
-    elif data[0:3] == b"\xff\xd8\xff" or data[6:10] in (b"JFIF", b"Exif"):
+    elif data[:3] == b"\xff\xd8\xff" or data[6:10] in (b"JFIF", b"Exif"):
         return "image/jpeg"
     elif data.startswith((b"\x47\x49\x46\x38\x37\x61", b"\x47\x49\x46\x38\x39\x61")):
         return "image/gif"
@@ -380,19 +369,15 @@ class nullcontext(AbstractContextManager, AbstractAsyncContextManager):
 
 def _parse_ratelimit_header(request, *, use_clock=False):
     reset_after = request.headers.get("X-Ratelimit-Reset-After")
-    if use_clock or not reset_after:
-        reset = datetime.datetime.fromtimestamp(float(request.headers["X-Ratelimit-Reset"]), datetime.timezone.utc)
-        return reset.timestamp() - time.time()
-    else:
+    if not use_clock and reset_after:
         return float(reset_after)
+    reset = datetime.datetime.fromtimestamp(float(request.headers["X-Ratelimit-Reset"]), datetime.timezone.utc)
+    return reset.timestamp() - time.time()
 
 
 async def maybe_coroutine(f, *args, **kwargs):
     value = f(*args, **kwargs)
-    if _isawaitable(value):
-        return await value
-    else:
-        return value
+    return await value if _isawaitable(value) else value
 
 
 async def async_all(gen, *, check=_isawaitable):
@@ -481,8 +466,7 @@ _IS_ASCII = re.compile(r"^[\x00-\x7f]+$")
 
 def _string_width(string, *, _IS_ASCII=_IS_ASCII):
     """Returns string's width."""
-    match = _IS_ASCII.match(string)
-    if match:
+    if match := _IS_ASCII.match(string):
         return match.endpos
 
     UNICODE_WIDE_CHAR_TYPE = "WFA"
@@ -508,12 +492,8 @@ def resolve_invite(invite):
 
     if isinstance(invite, Invite):
         return invite.code
-    else:
-        rx = r"(?:https?\:\/\/)?discord(?:\.gg|(?:app)?\.com\/invite)\/(.+)"
-        m = re.match(rx, invite)
-        if m:
-            return m.group(1)
-    return invite
+    rx = r"(?:https?\:\/\/)?discord(?:\.gg|(?:app)?\.com\/invite)\/(.+)"
+    return m[1] if (m := re.match(rx, invite)) else invite
 
 
 def resolve_template(code):
@@ -536,12 +516,8 @@ def resolve_template(code):
 
     if isinstance(code, Template):
         return code.code
-    else:
-        rx = r"(?:https?\:\/\/)?discord(?:\.new|(?:app)?\.com\/template)\/(.+)"
-        m = re.match(rx, code)
-        if m:
-            return m.group(1)
-    return code
+    rx = r"(?:https?\:\/\/)?discord(?:\.new|(?:app)?\.com\/template)\/(.+)"
+    return m[1] if (m := re.match(rx, code)) else code
 
 
 _MARKDOWN_ESCAPE_SUBREGEX = "|".join(fr"\{c}(?=([\s\S]*((?<!\{c})\{c})))" for c in ("*", "`", "_", "~", "|"))
@@ -619,9 +595,7 @@ def escape_markdown(text, *, as_needed=False, ignore_links=True):
         def replacement(match):
             groupdict = match.groupdict()
             is_url = groupdict.get("url")
-            if is_url:
-                return is_url
-            return "\\" + groupdict["markdown"]
+            return is_url or "\\" + groupdict["markdown"]
 
         regex = _MARKDOWN_STOCK_REGEX
         if ignore_links:

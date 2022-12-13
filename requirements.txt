@@ -1,4 +1,4 @@
 aiohttp
-limits==2.7.0
+limits
 aiodns
 orjson

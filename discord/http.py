@@ -50,13 +50,6 @@ from .gateway import DiscordClientWebSocketResponse
 aiohttp.hdrs.WEBSOCKET = "websocket"
 
 
-def orjson_dumps(obj):
-    if type(obj) is str:
-        obj = str.encode("UTF-8", "replace")
-    if type(obj) is str:
-        obj = str.encode("UTF-8", "replace")
-    return orjson.dumps(obj)
-
 
 class Ratelimiter:
     def __init__(self) -> None:
@@ -138,12 +131,11 @@ class HTTPClient:
 
     async def get_lock(self, bucket) -> DeferrableLock:
         async with self.control_lock:
-            if bucket:
-                if bucket not in self._locks:
-                    self._locks[bucket] = DeferrableLock(bucket)
-                return self._locks[bucket]
-            else:
+            if not bucket:
                 return DeferrableLock(bucket)
+            if bucket not in self._locks:
+                self._locks[bucket] = DeferrableLock(bucket)
+            return self._locks[bucket]
 
     async def ws_connect(self, url, *, compress=0):
         kwargs = {
@@ -177,8 +169,7 @@ class HTTPClient:
 
             kwargs["data"] = self.encoder.encode(kwargs.pop("json"))
         if "reason" in kwargs:
-            reason = kwargs.pop("reason")
-            if reason:
+            if reason := kwargs.pop("reason"):
                 headers["X-Audit-Log-Reason"] = _uriquote(reason, safe="/ ")
 
         kwargs["headers"] = headers
@@ -219,8 +210,7 @@ class HTTPClient:
                             retry_after = data["retry_after"] / 1000.0
                             if not r.headers.get("Via"):
                                 raise HTTPException(r, data)
-                            is_global = data.get("global", False)
-                            if is_global:
+                            if is_global := data.get("global", False):
                                 retry_after = retry_after + 0.5
                                 self.global_event.clear()
                                 current = asyncio.current_task()
@@ -364,8 +354,6 @@ class HTTPClient:
 
     def send_files(self, channel_id, *, files, content=None, tts=False, embed=None, nonce=None, allowed_mentions=None, message_reference=None):
         r = Route("POST", "/channels/{channel_id}/messages", channel_id=channel_id)
-        form = []
-
         payload = {"tts": tts}
         if content:
             payload["content"] = content
@@ -378,13 +366,12 @@ class HTTPClient:
         if message_reference:
             payload["message_reference"] = message_reference
 
-        form.append({"name": "payload_json", "value": utils.to_json(payload)})
+        form = [{"name": "payload_json", "value": utils.to_json(payload)}]
         if len(files) == 1:
             file = files[0]
             form.append({"name": "file", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"})
         else:
-            for index, file in enumerate(files):
-                form.append({"name": f"file{index}", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"})
+            form.extend({"name": f"file{index}", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"} for index, file in enumerate(files))
 
         return self.request(r, form=form, files=files)
 
@@ -552,10 +539,8 @@ class HTTPClient:
         return self.request(r, json=data, reason=reason)
 
     def create_channel(self, guild_id, channel_type, *, reason=None, **options):
-        payload = {"type": channel_type}
-
         valid_keys = ("name", "parent_id", "topic", "bitrate", "nsfw", "user_limit", "position", "permission_overwrites", "rate_limit_per_user", "rtc_region")
-        payload.update({k: v for k, v in options.items() if k in valid_keys and v is not None})
+        payload = {"type": channel_type} | {k: v for k, v in options.items() if k in valid_keys and v is not None}
 
         return self.request(Route("POST", "/guilds/{guild_id}/channels", guild_id=guild_id), json=payload, reason=reason)
 
