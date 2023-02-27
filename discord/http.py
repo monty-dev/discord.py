@@ -32,7 +32,7 @@ import asyncio
 import contextlib
 import logging
 from urllib.parse import quote as _uriquote
-
+from melanie import get_curl, CurlRequest
 import aiohttp
 import limits
 import orjson
@@ -48,7 +48,6 @@ from .errors import DiscordServerError, Forbidden, GatewayNotFound, HTTPExceptio
 from .gateway import DiscordClientWebSocketResponse
 
 aiohttp.hdrs.WEBSOCKET = "websocket"
-
 
 
 class Ratelimiter:
@@ -123,10 +122,9 @@ class HTTPClient:
         self.global_event.set()
         self.control_lock = asyncio.Lock()
         self.proxy_auth = proxy_auth
-        self.encoder = msgspec.json.Encoder()
-        self.decoder = msgspec.json.Decoder()
         self.use_clock = False
         self.count = 0
+        self.curl = get_curl()
         self.user_agent = "discord.gg/melaniebot (libcurl)"
 
     async def get_lock(self, bucket) -> DeferrableLock:
@@ -167,7 +165,7 @@ class HTTPClient:
         if "json" in kwargs:
             headers["Content-Type"] = "application/json"
 
-            kwargs["data"] = self.encoder.encode(kwargs.pop("json"))
+            kwargs["data"] = orjson.dumps(kwargs.pop("json"))
         if "reason" in kwargs:
             if reason := kwargs.pop("reason"):
                 headers["X-Audit-Log-Reason"] = _uriquote(reason, safe="/ ")
@@ -192,57 +190,69 @@ class HTTPClient:
                 try:
                     while not await self.ratelimiter.test():
                         await asyncio.sleep(random.uniform(0.01, 0.1))
-                    async with self.__session.request(method, url, **kwargs) as r:
-                        data = await r.read()
-                        if "json" in r.content_type:
-                            data = self.decoder.decode(data)
-                        else:
-                            data = data.decode("UTF-8")
-                        remaining = r.headers.get("X-Ratelimit-Remaining")
-                        # log.info(remaining)
-                        self.count += 1
-                        if remaining == "0" and r.status != 429:
-                            delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
-                            lock.defer_for(delta)  # Using the method 429's are almost non-existant
-                        if 300 > r.status >= 200:
-                            return data
-                        if r.status == 429:
-                            retry_after = data["retry_after"] / 1000.0
-                            if not r.headers.get("Via"):
-                                raise HTTPException(r, data)
-                            if is_global := data.get("global", False):
-                                retry_after = retry_after + 0.5
-                                self.global_event.clear()
-                                current = asyncio.current_task()
-                                log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
-                                await asyncio.sleep(retry_after)
-                                self.global_event.set()
+
+                    if not files and not form:
+                        if "params" in kwargs:
+                            url = url_concat(url, kwargs["params"])
+                        _request = CurlRequest(url, method=method, headers=headers, body=kwargs["data"] if "data" in kwargs else None)
+                        r = await self.curl.fetch(_request, raise_error=False)
+                        r.status = r.code
+                        try:
+                            data = orjson.loads(r.body)
+                        except orjson.JSONDecodeError:
+                            data = r.body.decode("UTF-8")
+                    else:
+                        async with self.__session.request(method, url, **kwargs) as r:
+                            data = await r.read()
+                            if "json" in r.content_type:
+                                data = orjson.loads(data)
                             else:
-                                log.error(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
-                                await asyncio.shield(asyncio.sleep(retry_after))
-                            continue
-
-                        if r.status in {500, 502}:
-                            await asyncio.sleep(random.uniform(0.2, 1))
-                            continue
-                        if r.status == 403:
-                            raise Forbidden(r, data)
-                        elif r.status == 404:
-                            raise NotFound(r, data)
-                        elif r.status == 503:
-                            raise DiscordServerError(r, data)
-                        else:
+                                data = data.decode("UTF-8")
+                    remaining = r.headers.get("X-Ratelimit-Remaining")
+                    self.count += 1
+                    if remaining == "0" and r.status != 429:
+                        delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
+                        lock.defer_for(delta)  # Using the method 429's are almost non-existant
+                    if 300 > r.status >= 200:
+                        return data
+                    if r.status == 429:
+                        retry_after = data["retry_after"] / 1000.0
+                        if not r.headers.get("Via"):
                             raise HTTPException(r, data)
+                        if is_global := data.get("global", False):
+                            retry_after = retry_after + 0.5
+                            self.global_event.clear()
+                            current = asyncio.current_task()
+                            log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
+                            await asyncio.sleep(retry_after)
+                            self.global_event.set()
+                        else:
+                            log.error(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
+                            await asyncio.shield(asyncio.sleep(retry_after))
+                        continue
 
-                except OSError as e:
+                    if r.status in {500, 502}:
+                        await asyncio.sleep(random.uniform(0.2, 1))
+                        continue
+                    if r.status == 403:
+                        raise Forbidden(r, data)
+                    elif r.status == 404:
+                        raise NotFound(r, data)
+                    elif r.status == 503:
+                        raise DiscordServerError(r, data)
+                    else:
+                        raise HTTPException(r, data)
+
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
                     if tries < 4:
                         continue
-                    raise
-
+                    else:
+                        raise
             # We've run out of retries, raise.
             if r.status >= 500:
                 raise DiscordServerError(r, data)
-
             raise HTTPException(r, data)
 
     async def get_from_cdn(self, url):
@@ -371,7 +381,10 @@ class HTTPClient:
             file = files[0]
             form.append({"name": "file", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"})
         else:
-            form.extend({"name": f"file{index}", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"} for index, file in enumerate(files))
+            form.extend(
+                {"name": f"file{index}", "value": file.fp, "filename": file.filename, "content_type": "application/octet-stream"}
+                for index, file in enumerate(files)
+            )
 
         return self.request(r, form=form, files=files)
 
@@ -398,15 +411,26 @@ class HTTPClient:
         return self.request(r, json=fields)
 
     def add_reaction(self, channel_id, message_id, emoji):
-        r = Route("PUT", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji)
+        r = Route(
+            "PUT", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji
+        )
         return self.request(r)
 
     def remove_reaction(self, channel_id, message_id, emoji, member_id):
-        r = Route("DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/{member_id}", channel_id=channel_id, message_id=message_id, member_id=member_id, emoji=emoji)
+        r = Route(
+            "DELETE",
+            "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/{member_id}",
+            channel_id=channel_id,
+            message_id=message_id,
+            member_id=member_id,
+            emoji=emoji,
+        )
         return self.request(r)
 
     def remove_own_reaction(self, channel_id, message_id, emoji):
-        r = Route("DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji)
+        r = Route(
+            "DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji
+        )
         return self.request(r)
 
     def get_reaction_users(self, channel_id, message_id, emoji, limit, after=None):
@@ -423,7 +447,9 @@ class HTTPClient:
         return self.request(r)
 
     def clear_single_reaction(self, channel_id, message_id, emoji):
-        r = Route("DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}", channel_id=channel_id, message_id=message_id, emoji=emoji)
+        r = Route(
+            "DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}", channel_id=channel_id, message_id=message_id, emoji=emoji
+        )
         return self.request(r)
 
     def get_message(self, channel_id, message_id):
@@ -530,7 +556,19 @@ class HTTPClient:
 
     def edit_channel(self, channel_id, *, reason=None, **options):
         r = Route("PATCH", "/channels/{channel_id}", channel_id=channel_id)
-        valid_keys = ("name", "parent_id", "topic", "bitrate", "nsfw", "user_limit", "position", "permission_overwrites", "rate_limit_per_user", "type", "rtc_region")
+        valid_keys = (
+            "name",
+            "parent_id",
+            "topic",
+            "bitrate",
+            "nsfw",
+            "user_limit",
+            "position",
+            "permission_overwrites",
+            "rate_limit_per_user",
+            "type",
+            "rtc_region",
+        )
         payload = {k: v for k, v in options.items() if k in valid_keys}
         return self.request(r, reason=reason, json=payload)
 
@@ -539,7 +577,18 @@ class HTTPClient:
         return self.request(r, json=data, reason=reason)
 
     def create_channel(self, guild_id, channel_type, *, reason=None, **options):
-        valid_keys = ("name", "parent_id", "topic", "bitrate", "nsfw", "user_limit", "position", "permission_overwrites", "rate_limit_per_user", "rtc_region")
+        valid_keys = (
+            "name",
+            "parent_id",
+            "topic",
+            "bitrate",
+            "nsfw",
+            "user_limit",
+            "position",
+            "permission_overwrites",
+            "rate_limit_per_user",
+            "rtc_region",
+        )
         payload = {"type": channel_type} | {k: v for k, v in options.items() if k in valid_keys and v is not None}
 
         return self.request(Route("POST", "/guilds/{guild_id}/channels", guild_id=guild_id), json=payload, reason=reason)
@@ -754,7 +803,12 @@ class HTTPClient:
 
     def create_invite(self, channel_id, *, reason=None, **options):
         r = Route("POST", "/channels/{channel_id}/invites", channel_id=channel_id)
-        payload = {"max_age": options.get("max_age", 0), "max_uses": options.get("max_uses", 0), "temporary": options.get("temporary", False), "unique": options.get("unique", True)}
+        payload = {
+            "max_age": options.get("max_age", 0),
+            "max_uses": options.get("max_uses", 0),
+            "temporary": options.get("temporary", False),
+            "unique": options.get("unique", True),
+        }
 
         return self.request(r, reason=reason, json=payload)
 
