@@ -524,13 +524,17 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         return PartialMessage(channel=self, id=message_id)
 
 
-class VocalGuildChannel(discord.abc.Connectable, discord.abc.GuildChannel, Hashable):
+class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discord.abc.GuildChannel, Hashable):
     __slots__ = ("name", "id", "guild", "bitrate", "user_limit", "_state", "position", "_overwrites", "category_id", "rtc_region")
 
     def __init__(self, *, state, guild, data):
         self._state = state
         self.id = int(data["id"])
         self._update(guild, data)
+
+
+    async def _get_channel(self):
+        return self
 
     def _get_voice_client_key(self):
         return self.guild.id, "guild_id"
