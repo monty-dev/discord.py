@@ -29,9 +29,8 @@ import logging
 import signal
 import sys
 import traceback
-
 import aiohttp
-
+import itertools
 from . import utils
 from .activity import BaseActivity, create_activity
 from .appinfo import AppInfo
@@ -54,6 +53,7 @@ from .webhook import Webhook
 from .widget import Widget
 
 log = logging.getLogger(__name__)
+_task_name_counter = itertools.count(1).__next__
 
 
 def _cancel_tasks(loop):
@@ -224,8 +224,12 @@ class Client:
         self.ws = None
         self.loop = asyncio.get_event_loop() if loop is None else loop
         self._listeners = {}
+        self.tg:asyncio.TaskGroup = None
         self.shard_id = options.get("shard_id")
         self.shard_count = options.get("shard_count")
+        self.task_worker = self.loop.create_task(self._task_runner())
+      
+        self.task_queue = asyncio.Queue()
 
         connector = options.pop("connector", None)
         proxy = options.pop("proxy", None)
@@ -254,7 +258,9 @@ class Client:
         return self.ws
 
     def _get_state(self, **options):
-        return ConnectionState(dispatch=self.dispatch, handlers=self._handlers, hooks=self._hooks, syncer=self._syncer, http=self.http, loop=self.loop, **options)
+        return ConnectionState(
+            dispatch=self.dispatch, handlers=self._handlers, hooks=self._hooks, syncer=self._syncer, http=self.http, loop=self.loop, **options
+        )
 
     async def _syncer(self, guilds):
         await self.ws.request_sync(guilds)
@@ -329,21 +335,22 @@ class Client:
         """:class:`bool`: Specifies if the client's internal cache is ready for use."""
         return self._ready.is_set()
 
-    async def _run_event(self, coro, event_name, *args, **kwargs):
+    async def _run_task(self, task, event_name, args, kwargs):
         try:
-            await coro(*args, **kwargs)
+            await task(*args, **kwargs)
         except asyncio.CancelledError:
-            pass
-        except Exception:
-            try:
-                await self.on_error(event_name, *args, **kwargs)
-            except asyncio.CancelledError:
-                pass
+            raise
+        except Exception as e:
+            await self.on_error(event_name, *args, **kwargs)
+
+    async def _task_runner(self):
+        async with asyncio.TaskGroup() as self.tg:
+            while True:
+                task, event_name, args, kwargs = await self.task_queue.get()
+                self.tg.create_task(self._run_task(task, event_name, args, kwargs))
 
     def _schedule_event(self, coro, event_name, *args, **kwargs):
-        wrapped = self._run_event(coro, event_name, *args, **kwargs)
-        # Schedules the task
-        return _ClientEventTask(original_coro=coro, event_name=event_name, coro=wrapped, loop=self.loop)
+        self.task_queue.put_nowait((coro, event_name, args, kwargs))
 
     def dispatch(self, event, *args, **kwargs):
         method = "on_" + event
@@ -1405,7 +1412,13 @@ class Client:
         since = data.get("premium_since")
         mutual_guilds = list(filter(None, map(transform, data.get("mutual_guilds", []))))
         user = data["user"]
-        return Profile(flags=user.get("flags", 0), premium_since=utils.parse_time(since), mutual_guilds=mutual_guilds, user=User(data=user, state=state), connected_accounts=data["connected_accounts"])
+        return Profile(
+            flags=user.get("flags", 0),
+            premium_since=utils.parse_time(since),
+            mutual_guilds=mutual_guilds,
+            user=User(data=user, state=state),
+            connected_accounts=data["connected_accounts"],
+        )
 
     async def fetch_channel(self, channel_id):
         """|coro|

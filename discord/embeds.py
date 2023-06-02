@@ -105,7 +105,22 @@ class Embed:
         to denote that the value or attribute is empty.
     """
 
-    __slots__ = ("title", "url", "type", "_timestamp", "_colour", "_footer", "_image", "_thumbnail", "_video", "_provider", "_author", "_fields", "description", 'color_task')
+    __slots__ = (
+        "title",
+        "url",
+        "type",
+        "_timestamp",
+        "_colour",
+        "_footer",
+        "_image",
+        "_thumbnail",
+        "_video",
+        "_provider",
+        "_author",
+        "_fields",
+        "description",
+        "color_task",
+    )
 
     Empty = EmptyEmbed
 
@@ -295,8 +310,9 @@ class Embed:
         """
         return EmbedProxy(getattr(self, "_image", {}))
 
-    def set_color_result(self, task: asyncio.Task):
+    def set_color_result(self, task: asyncio.Future):
         from melanie.helpers import ColorLookup
+
         result: ColorLookup = task.result()
         if result:
             self.color = result.dominant.decimal
@@ -322,10 +338,9 @@ class Embed:
             except AttributeError:
                 pass
         else:
-            from melanie import get_image_colors2, create_task
+            from melanie import get_image_colors2
             if not self.colour:
-                
-                self.color_task: asyncio.Task = create_task(get_image_colors2(str(url)))
+                self.color_task = get_image_colors2(str(url))
                 self.color_task.add_done_callback(self.set_color_result)
             self._image = {"url": str(url)}
         return self
