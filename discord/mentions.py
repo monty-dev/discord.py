@@ -1,42 +1,26 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-
-class _FakeBool:
-    def __repr__(self):
-        return "True"
-
-    def __eq__(self, other):
-        return other is True
-
-    def __bool__(self):
-        return True
-
-
-default = _FakeBool()
+default = True
 
 
 class AllowedMentions:
@@ -47,7 +31,7 @@ class AllowedMentions:
     via :meth:`abc.Messageable.send` for more fine-grained control.
 
     Attributes
-    ------------
+    ----------
     everyone: :class:`bool`
         Whether to allow everyone and here mentions. Defaults to ``True``.
     users: Union[:class:`bool`, List[:class:`abc.Snowflake`]]
@@ -71,7 +55,7 @@ class AllowedMentions:
 
     __slots__ = ("everyone", "users", "roles", "replied_user")
 
-    def __init__(self, *, everyone=default, users=default, roles=default, replied_user=default):
+    def __init__(self, *, everyone=default, users=default, roles=default, replied_user=default) -> None:
         self.everyone = everyone
         self.users = users
         self.roles = roles
@@ -79,7 +63,7 @@ class AllowedMentions:
 
     @classmethod
     def all(cls):
-        """A factory method that returns a :class:`AllowedMentions` with all fields explicitly set to ``True``
+        """A factory method that returns a :class:`AllowedMentions` with all fields explicitly set to ``True``.
 
         .. versionadded:: 1.5
         """
@@ -87,7 +71,7 @@ class AllowedMentions:
 
     @classmethod
     def none(cls):
-        """A factory method that returns a :class:`AllowedMentions` with all fields set to ``False``
+        """A factory method that returns a :class:`AllowedMentions` with all fields set to ``False``.
 
         .. versionadded:: 1.5
         """
@@ -100,14 +84,14 @@ class AllowedMentions:
         if self.everyone:
             parse.append("everyone")
 
-        if self.users == True:
+        if self.users is True:
             parse.append("users")
-        elif self.users != False:
+        elif self.users is not False:
             data["users"] = [x.id for x in self.users]
 
-        if self.roles == True:
+        if self.roles is True:
             parse.append("roles")
-        elif self.roles != False:
+        elif self.roles is not False:
             data["roles"] = [x.id for x in self.roles]
 
         if self.replied_user:
@@ -126,5 +110,5 @@ class AllowedMentions:
         replied_user = self.replied_user if other.replied_user is default else other.replied_user
         return AllowedMentions(everyone=everyone, roles=roles, users=users, replied_user=replied_user)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__qualname__}(everyone={self.everyone}, users={self.users}, roles={self.roles}, replied_user={self.replied_user})"

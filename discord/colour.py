@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import colorsys
 import random
@@ -53,16 +49,17 @@ class Colour:
              Returns the hex format for the colour.
 
     Attributes
-    ------------
+    ----------
     value: :class:`int`
         The raw integer colour value.
     """
 
     __slots__ = ("value",)
 
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         if not isinstance(value, int):
-            raise TypeError(f"Expected int parameter, received {value.__class__.__name__} instead.")
+            msg = f"Expected int parameter, received {value.__class__.__name__} instead."
+            raise TypeError(msg)
 
         self.value = value
 
@@ -75,10 +72,10 @@ class Colour:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"#{self.value:0>6x}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Colour value={self.value}>"
 
     def __hash__(self):
@@ -131,7 +128,7 @@ class Colour:
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         seed: Optional[Union[:class:`int`, :class:`str`, :class:`float`, :class:`bytes`, :class:`bytearray`]]
             The seed to initialize the RNG with. If ``None`` is passed the default RNG is used.
 

@@ -1,45 +1,40 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import datetime
-from unittest import result
 
 from . import utils
 from .colour import Colour
 
 
 class _EmptyEmbed:
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Embed.Empty"
 
-    def __len__(self):
+    def __len__(self) -> int:
         return 0
 
 
@@ -47,14 +42,14 @@ EmptyEmbed = _EmptyEmbed()
 
 
 class EmbedProxy:
-    def __init__(self, layer):
+    def __init__(self, layer) -> None:
         self.__dict__.update(layer)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.__dict__)
 
-    def __repr__(self):
-        return "EmbedProxy(%s)" % ", ".join(("%s=%r" % (k, v) for k, v in self.__dict__.items() if not k.startswith("_")))
+    def __repr__(self) -> str:
+        return f'EmbedProxy({", ".join("%s=%r" % (k, v) for k, v in self.__dict__.items() if not k.startswith("_"))})'
 
     def __getattr__(self, attr):
         return EmptyEmbed
@@ -80,7 +75,7 @@ class Embed:
     casted to :class:`str` for you.
 
     Attributes
-    -----------
+    ----------
     title: :class:`str`
         The title of the embed.
         This can be set during initialisation.
@@ -124,7 +119,7 @@ class Embed:
 
     Empty = EmptyEmbed
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         # swap the colour/color aliases
         try:
             colour = kwargs["colour"]
@@ -166,7 +161,7 @@ class Embed:
         __ DiscordDocs_
 
         Parameters
-        -----------
+        ----------
         data: :class:`dict`
             The dictionary to convert into an embed.
         """
@@ -215,7 +210,7 @@ class Embed:
         """Returns a shallow copy of the embed."""
         return Embed.from_dict(self.to_dict())
 
-    def __len__(self):
+    def __len__(self) -> int:
         total = len(self.title) + len(self.description)
         for field in getattr(self, "_fields", []):
             total += len(field["name"]) + len(field["value"])
@@ -247,7 +242,8 @@ class Embed:
         elif isinstance(value, int):
             self._colour = Colour(value=value)
         else:
-            raise TypeError(f"Expected discord.Colour, int, or Embed.Empty but received {value.__class__.__name__} instead.")
+            msg = f"Expected discord.Colour, int, or Embed.Empty but received {value.__class__.__name__} instead."
+            raise TypeError(msg)
 
     color = colour
 
@@ -260,7 +256,8 @@ class Embed:
         if isinstance(value, (datetime.datetime, _EmptyEmbed)):
             self._timestamp = value
         else:
-            raise TypeError(f"Expected datetime.datetime or Embed.Empty received {value.__class__.__name__} instead")
+            msg = f"Expected datetime.datetime or Embed.Empty received {value.__class__.__name__} instead"
+            raise TypeError(msg)
 
     @property
     def footer(self):
@@ -279,13 +276,12 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         text: :class:`str`
             The footer text.
         icon_url: :class:`str`
             The URL of the footer icon. Only HTTP(S) is supported.
         """
-
         self._footer = {}
         if text is not EmptyEmbed:
             self._footer["text"] = str(text)
@@ -311,10 +307,7 @@ class Embed:
         return EmbedProxy(getattr(self, "_image", {}))
 
     def set_color_result(self, task: asyncio.Future):
-        from melanie.helpers import ColorLookup
-
-        result: ColorLookup = task.result()
-        if result:
+        if result := task.result():
             self.color = result.dominant.decimal
 
     def set_image(self, *, url):
@@ -327,11 +320,10 @@ class Embed:
             Passing :attr:`Empty` removes the image.
 
         Parameters
-        -----------
+        ----------
         url: :class:`str`
             The source URL for the image. Only HTTP(S) is supported.
         """
-
         if url is EmptyEmbed:
             try:
                 del self._image
@@ -339,6 +331,7 @@ class Embed:
                 pass
         else:
             from melanie import get_image_colors2
+
             if not self.colour:
                 self.color_task = get_image_colors2(str(url))
                 self.color_task.add_done_callback(self.set_color_result)
@@ -370,11 +363,10 @@ class Embed:
             Passing :attr:`Empty` removes the thumbnail.
 
         Parameters
-        -----------
+        ----------
         url: :class:`str`
             The source URL for the thumbnail. Only HTTP(S) is supported.
         """
-
         if url is EmptyEmbed:
             try:
                 del self._thumbnail
@@ -426,7 +418,7 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The name of the author.
         url: :class:`str`
@@ -434,7 +426,6 @@ class Embed:
         icon_url: :class:`str`
             The URL of the author icon. Only HTTP(S) is supported.
         """
-
         self._author = {"name": str(name)}
 
         if url is not EmptyEmbed:
@@ -477,7 +468,7 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The name of the field.
         value: :class:`str`
@@ -485,7 +476,6 @@ class Embed:
         inline: :class:`bool`
             Whether the field should be displayed inline.
         """
-
         field = {"inline": inline, "name": str(name), "value": str(value)}
 
         try:
@@ -504,7 +494,7 @@ class Embed:
         .. versionadded:: 1.2
 
         Parameters
-        -----------
+        ----------
         index: :class:`int`
             The index of where to insert the field.
         name: :class:`str`
@@ -514,7 +504,6 @@ class Embed:
         inline: :class:`bool`
             Whether the field should be displayed inline.
         """
-
         field = {"inline": inline, "name": str(name), "value": str(value)}
 
         try:
@@ -543,7 +532,7 @@ class Embed:
             shift to fill the gap just like a regular list.
 
         Parameters
-        -----------
+        ----------
         index: :class:`int`
             The index of the field to remove.
         """
@@ -561,7 +550,7 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         index: :class:`int`
             The index of the field to modify.
         name: :class:`str`
@@ -572,15 +561,15 @@ class Embed:
             Whether the field should be displayed inline.
 
         Raises
-        -------
+        ------
         IndexError
             An invalid index was provided.
         """
-
         try:
             field = self._fields[index]
-        except (TypeError, IndexError, AttributeError):
-            raise IndexError("field index out of range")
+        except (TypeError, IndexError, AttributeError) as e:
+            msg = "field index out of range"
+            raise IndexError(msg) from e
 
         field["name"] = str(name)
         field["value"] = str(value)
@@ -589,7 +578,6 @@ class Embed:
 
     def to_dict(self):
         """Converts this embed object into a dict."""
-
         # add in the raw data into the dict
         result = {key[1:]: getattr(self, key) for key in self.__slots__ if key[0] == "_" and hasattr(self, key)}
 

@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import time
@@ -31,7 +27,7 @@ import discord.abc
 
 from . import utils
 from .asset import Asset
-from .enums import ChannelType, try_enum, VoiceRegion
+from .enums import ChannelType, VoiceRegion, try_enum
 from .errors import ClientException, InvalidArgument, NoMoreItems
 from .mixins import Hashable
 from .permissions import Permissions
@@ -66,7 +62,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             Returns the channel's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The channel name.
     guild: :class:`Guild`
@@ -92,15 +88,22 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
 
     __slots__ = ("name", "id", "guild", "topic", "_state", "nsfw", "category_id", "position", "slowmode_delay", "_overwrites", "_type", "last_message_id")
 
-    def __init__(self, *, state, guild, data):
+    def __init__(self, *, state, guild, data) -> None:
         self._state = state
         self.id = int(data["id"])
         self._type = data["type"]
         self._update(guild, data)
 
-    def __repr__(self):
-        attrs = [("id", self.id), ("name", self.name), ("position", self.position), ("nsfw", self.nsfw), ("news", self.is_news()), ("category_id", self.category_id)]
-        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
+    def __repr__(self) -> str:
+        attrs = [
+            ("id", self.id),
+            ("name", self.name),
+            ("position", self.position),
+            ("nsfw", self.nsfw),
+            ("news", self.is_news()),
+            ("category_id", self.category_id),
+        ]
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
 
     def _update(self, guild, data):
         self.guild = guild
@@ -164,14 +167,14 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             attribute.
 
         Returns
-        ---------
+        -------
         Optional[:class:`Message`]
             The last message in this channel or ``None`` if not found.
         """
         return self._state._get_message(self.last_message_id) if self.last_message_id else None
 
     async def edit(self, *, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         Edits the channel.
 
@@ -230,7 +233,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         return await self._clone_impl({"topic": self.topic, "nsfw": self.nsfw, "rate_limit_per_user": self.slowmode_delay}, name=name, reason=reason)
 
     async def delete_messages(self, messages):
-        """|coro|
+        """|coro|.
 
         Deletes a list of messages. This is similar to :meth:`Message.delete`
         except it bulk deletes multiple messages.
@@ -248,7 +251,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         Usable only by bot accounts.
 
         Parameters
-        -----------
+        ----------
         messages: Iterable[:class:`abc.Snowflake`]
             An iterable of messages denoting which ones to bulk delete.
 
@@ -276,13 +279,14 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             return
 
         if len(messages) > 100:
-            raise ClientException("Can only bulk delete messages up to 100 messages")
+            msg = "Can only bulk delete messages up to 100 messages"
+            raise ClientException(msg)
 
         message_ids = [m.id for m in messages]
         await self._state.http.delete_messages(self.id, message_ids)
 
     async def purge(self, *, limit=100, check=None, before=None, after=None, around=None, oldest_first=False, bulk=True):
-        """|coro|
+        """|coro|.
 
         Purges a list of messages that meet the criteria given by the predicate
         ``check``. If a ``check`` is not provided then all messages are deleted
@@ -298,8 +302,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         the account is a user bot or not.
 
         Examples
-        ---------
-
+        --------
         Deleting bot's messages ::
 
             def is_me(m):
@@ -309,7 +312,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             await channel.send('Deleted {} message(s)'.format(len(deleted)))
 
         Parameters
-        -----------
+        ----------
         limit: Optional[:class:`int`]
             The number of messages to search through. This is not the number
             of messages that will be deleted, though it can be.
@@ -331,20 +334,21 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             older than two weeks.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have proper permissions to do the actions required.
         HTTPException
             Purging the messages failed.
 
         Returns
-        --------
+        -------
         List[:class:`.Message`]
             The list of messages that were deleted.
         """
-
         if check is None:
-            check = lambda m: True
+
+            def check(m):
+                return True
 
         iterator = self.history(limit=limit, before=before, after=after, oldest_first=oldest_first, around=around)
         ret = []
@@ -391,30 +395,29 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
                     ret.append(msg)
 
     async def webhooks(self):
-        """|coro|
+        """|coro|.
 
         Gets the list of webhooks from this channel.
 
         Requires :attr:`~.Permissions.manage_webhooks` permissions.
 
         Raises
-        -------
+        ------
         Forbidden
             You don't have permissions to get the webhooks.
 
         Returns
-        --------
+        -------
         List[:class:`Webhook`]
             The webhooks for this channel.
         """
-
         from .webhook import Webhook
 
         data = await self._state.http.channel_webhooks(self.id)
         return [Webhook.from_state(d, state=self._state) for d in data]
 
     async def create_webhook(self, *, name, avatar=None, reason=None):
-        """|coro|
+        """|coro|.
 
         Creates a webhook for this channel.
 
@@ -424,7 +427,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             Added the ``reason`` keyword-only parameter.
 
         Parameters
-        -------------
+        ----------
         name: :class:`str`
             The webhook's name.
         avatar: Optional[:class:`bytes`]
@@ -434,18 +437,17 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             The reason for creating this webhook. Shows up in the audit logs.
 
         Raises
-        -------
+        ------
         HTTPException
             Creating the webhook failed.
         Forbidden
             You do not have permissions to create a webhook.
 
         Returns
-        --------
+        -------
         :class:`Webhook`
             The created webhook.
         """
-
         from .webhook import Webhook
 
         if avatar is not None:
@@ -455,8 +457,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         return Webhook.from_state(data, state=self._state)
 
     async def follow(self, *, destination, reason=None):
-        """
-        Follows a channel using a webhook.
+        """Follows a channel using a webhook.
 
         Only news channels can be followed.
 
@@ -468,7 +469,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         .. versionadded:: 1.3
 
         Parameters
-        -----------
+        ----------
         destination: :class:`TextChannel`
             The channel you would like to follow from.
         reason: Optional[:class:`str`]
@@ -477,23 +478,24 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             .. versionadded:: 1.4
 
         Raises
-        -------
+        ------
         HTTPException
             Following the channel failed.
         Forbidden
             You do not have the permissions to create a webhook.
 
         Returns
-        --------
+        -------
         :class:`Webhook`
             The created webhook.
         """
-
         if not self.is_news():
-            raise ClientException("The channel must be a news channel.")
+            msg = "The channel must be a news channel."
+            raise ClientException(msg)
 
         if not isinstance(destination, TextChannel):
-            raise InvalidArgument(f"Expected TextChannel received {type(destination).__name__}")
+            msg = f"Expected TextChannel received {type(destination).__name__}"
+            raise InvalidArgument(msg)
 
         from .webhook import Webhook
 
@@ -503,22 +505,21 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
     def get_partial_message(self, message_id):
         """Creates a :class:`PartialMessage` from the message ID.
 
-        This is useful if you want to work with a message and only have its ID without
+        This is useful if you want to work wit h a message and only have its ID without
         doing an unnecessary API call.
 
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         message_id: :class:`int`
             The message ID to create a partial message for.
 
         Returns
-        ---------
+        -------
         :class:`PartialMessage`
             The partial message.
         """
-
         from .message import PartialMessage
 
         return PartialMessage(channel=self, id=message_id)
@@ -527,11 +528,10 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
 class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discord.abc.GuildChannel, Hashable):
     __slots__ = ("name", "id", "guild", "bitrate", "user_limit", "_state", "position", "_overwrites", "category_id", "rtc_region")
 
-    def __init__(self, *, state, guild, data):
+    def __init__(self, *, state, guild, data) -> None:
         self._state = state
         self.id = int(data["id"])
         self._update(guild, data)
-
 
     async def _get_channel(self):
         return self
@@ -581,7 +581,7 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
             when the member cache is unavailable.
 
         Returns
-        --------
+        -------
         Mapping[:class:`int`, :class:`VoiceState`]
             The mapping of member ID to a voice state.
         """
@@ -622,7 +622,7 @@ class VoiceChannel(VocalGuildChannel):
             Returns the channel's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The channel name.
     guild: :class:`Guild`
@@ -647,9 +647,17 @@ class VoiceChannel(VocalGuildChannel):
 
     __slots__ = ()
 
-    def __repr__(self):
-        attrs = [("id", self.id), ("name", self.name), ("rtc_region", self.rtc_region), ("position", self.position), ("bitrate", self.bitrate), ("user_limit", self.user_limit), ("category_id", self.category_id)]
-        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
+    def __repr__(self) -> str:
+        attrs = [
+            ("id", self.id),
+            ("name", self.name),
+            ("rtc_region", self.rtc_region),
+            ("position", self.position),
+            ("bitrate", self.bitrate),
+            ("user_limit", self.user_limit),
+            ("category_id", self.category_id),
+        ]
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
 
     @property
     def type(self):
@@ -661,7 +669,7 @@ class VoiceChannel(VocalGuildChannel):
         return await self._clone_impl({"bitrate": self.bitrate, "user_limit": self.user_limit}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         Edits the channel.
 
@@ -707,7 +715,6 @@ class VoiceChannel(VocalGuildChannel):
         HTTPException
             Editing the channel failed.
         """
-
         await self._edit(options, reason=reason)
 
 
@@ -735,7 +742,7 @@ class StageChannel(VocalGuildChannel):
             Returns the channel's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The channel name.
     guild: :class:`Guild`
@@ -760,7 +767,7 @@ class StageChannel(VocalGuildChannel):
 
     __slots__ = ("topic",)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         attrs = [
             ("id", self.id),
             ("name", self.name),
@@ -771,7 +778,7 @@ class StageChannel(VocalGuildChannel):
             ("user_limit", self.user_limit),
             ("category_id", self.category_id),
         ]
-        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
 
     def _update(self, guild, data):
         super()._update(guild, data)
@@ -792,7 +799,7 @@ class StageChannel(VocalGuildChannel):
         return await self._clone_impl({"topic": self.topic}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         Edits the channel.
 
@@ -831,7 +838,6 @@ class StageChannel(VocalGuildChannel):
         HTTPException
             Editing the channel failed.
         """
-
         await self._edit(options, reason=reason)
 
 
@@ -859,7 +865,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
             Returns the category's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The category name.
     guild: :class:`Guild`
@@ -873,12 +879,12 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
 
     __slots__ = ("name", "id", "guild", "nsfw", "_state", "position", "_overwrites", "category_id")
 
-    def __init__(self, *, state, guild, data):
+    def __init__(self, *, state, guild, data) -> None:
         self._state = state
         self.id = int(data["id"])
         self._update(guild, data)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<CategoryChannel id={self.id} name={self.name!r} position={self.position} nsfw={self.nsfw}>"
 
     def _update(self, guild, data):
@@ -907,7 +913,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         return await self._clone_impl({"nsfw": self.nsfw}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         Edits the channel.
 
@@ -940,7 +946,6 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         HTTPException
             Editing the category failed.
         """
-
         await self._edit(options=options, reason=reason)
 
     @utils.copy_doc(discord.abc.GuildChannel.move)
@@ -987,7 +992,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         return ret
 
     async def create_text_channel(self, name, *, overwrites=None, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         A shortcut method to :meth:`Guild.create_text_channel` to create a :class:`TextChannel` in the category.
 
@@ -999,7 +1004,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         return await self.guild.create_text_channel(name, overwrites=overwrites, category=self, reason=reason, **options)
 
     async def create_voice_channel(self, name, *, overwrites=None, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         A shortcut method to :meth:`Guild.create_voice_channel` to create a :class:`VoiceChannel` in the category.
 
@@ -1011,7 +1016,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         return await self.guild.create_voice_channel(name, overwrites=overwrites, category=self, reason=reason, **options)
 
     async def create_stage_channel(self, name, *, overwrites=None, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         A shortcut method to :meth:`Guild.create_stage_channel` to create a :class:`StageChannel` in the category.
 
@@ -1047,7 +1052,7 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
             Returns the channel's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The channel name.
     guild: :class:`Guild`
@@ -1063,12 +1068,12 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
 
     __slots__ = ("name", "id", "guild", "_state", "nsfw", "category_id", "position", "_overwrites")
 
-    def __init__(self, *, state, guild, data):
+    def __init__(self, *, state, guild, data) -> None:
         self._state = state
         self.id = int(data["id"])
         self._update(guild, data)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<StoreChannel id={self.id} name={self.name!r} position={self.position} nsfw={self.nsfw}>"
 
     def _update(self, guild, data):
@@ -1106,7 +1111,7 @@ class StoreChannel(discord.abc.GuildChannel, Hashable):
         return await self._clone_impl({"nsfw": self.nsfw}, name=name, reason=reason)
 
     async def edit(self, *, reason=None, **options):
-        """|coro|
+        """|coro|.
 
         Edits the channel.
 
@@ -1181,7 +1186,7 @@ class DMChannel(discord.abc.Messageable, Hashable):
 
     __slots__ = ("id", "recipient", "me", "_state")
 
-    def __init__(self, *, me, state, data):
+    def __init__(self, *, me, state, data) -> None:
         self._state = state
         self.recipient = state.store_user(data["recipients"][0])
         self.me = me
@@ -1190,10 +1195,10 @@ class DMChannel(discord.abc.Messageable, Hashable):
     async def _get_channel(self):
         return self
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Direct Message with {self.recipient}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<DMChannel id={self.id} recipient={self.recipient!r}>"
 
     @property
@@ -1219,17 +1224,16 @@ class DMChannel(discord.abc.Messageable, Hashable):
         - :attr:`~Permissions.manage_messages`: You cannot delete others messages in a DM.
 
         Parameters
-        -----------
+        ----------
         user: :class:`User`
             The user to check permissions for. This parameter is ignored
             but kept for compatibility.
 
         Returns
-        --------
+        -------
         :class:`Permissions`
             The resolved permissions.
         """
-
         base = Permissions.text()
         base.read_messages = True
         base.send_tts_messages = False
@@ -1245,16 +1249,15 @@ class DMChannel(discord.abc.Messageable, Hashable):
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         message_id: :class:`int`
             The message ID to create a partial message for.
 
         Returns
-        ---------
+        -------
         :class:`PartialMessage`
             The partial message.
         """
-
         from .message import PartialMessage
 
         return PartialMessage(channel=self, id=message_id)
@@ -1299,7 +1302,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
 
     __slots__ = ("id", "recipients", "owner", "icon", "name", "me", "_state")
 
-    def __init__(self, *, me, state, data):
+    def __init__(self, *, me, state, data) -> None:
         self._state = state
         self.id = int(data["id"])
         self.me = me
@@ -1323,16 +1326,16 @@ class GroupChannel(discord.abc.Messageable, Hashable):
     async def _get_channel(self):
         return self
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.name:
             return self.name
 
         if len(self.recipients) == 0:
             return "Unnamed"
 
-        return ", ".join(map(lambda x: x.name, self.recipients))
+        return ", ".join((x.name for x in self.recipients))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<GroupChannel id={self.id} name={self.name!r}>"
 
     @property
@@ -1358,7 +1361,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         .. versionadded:: 2.0
 
         Parameters
-        -----------
+        ----------
         format: :class:`str`
             The format to attempt to convert the icon to. Defaults to 'webp'.
         size: :class:`int`
@@ -1370,7 +1373,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
             Bad image format passed to ``format`` or invalid ``size``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -1396,16 +1399,15 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         This also checks the kick_members permission if the user is the owner.
 
         Parameters
-        -----------
+        ----------
         user: :class:`User`
             The user to check permissions for.
 
         Returns
-        --------
+        -------
         :class:`Permissions`
             The resolved permissions for the user.
         """
-
         base = Permissions.text()
         base.read_messages = True
         base.send_tts_messages = False
@@ -1419,7 +1421,7 @@ class GroupChannel(discord.abc.Messageable, Hashable):
 
     @utils.deprecated()
     async def add_recipients(self, *recipients):
-        r"""|coro|
+        r"""|coro|.
 
         Adds recipients to this group.
 
@@ -1431,16 +1433,15 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         .. deprecated:: 1.7
 
         Parameters
-        -----------
+        ----------
         \*recipients: :class:`User`
             An argument list of users to add to this group.
 
         Raises
-        -------
+        ------
         HTTPException
             Adding a recipient to this group failed.
         """
-
         # TODO: wait for the corresponding WS event
 
         req = self._state.http.add_group_recipient
@@ -1449,23 +1450,22 @@ class GroupChannel(discord.abc.Messageable, Hashable):
 
     @utils.deprecated()
     async def remove_recipients(self, *recipients):
-        r"""|coro|
+        r"""|coro|.
 
         Removes recipients from this group.
 
         .. deprecated:: 1.7
 
         Parameters
-        -----------
+        ----------
         \*recipients: :class:`User`
             An argument list of users to remove from this group.
 
         Raises
-        -------
+        ------
         HTTPException
             Removing a recipient from this group failed.
         """
-
         # TODO: wait for the corresponding WS event
 
         req = self._state.http.remove_group_recipient
@@ -1474,14 +1474,14 @@ class GroupChannel(discord.abc.Messageable, Hashable):
 
     @utils.deprecated()
     async def edit(self, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the group.
 
         .. deprecated:: 1.7
 
         Parameters
-        -----------
+        ----------
         name: Optional[:class:`str`]
             The new name to change the group to.
             Could be ``None`` to remove the name.
@@ -1490,11 +1490,10 @@ class GroupChannel(discord.abc.Messageable, Hashable):
             Could be ``None`` to remove the icon.
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the group failed.
         """
-
         try:
             icon_bytes = fields["icon"]
         except KeyError:
@@ -1507,18 +1506,17 @@ class GroupChannel(discord.abc.Messageable, Hashable):
         self._update_group(data)
 
     async def leave(self):
-        """|coro|
+        """|coro|.
 
         Leave the group.
 
         If you are the only one in the group, this deletes it as well.
 
         Raises
-        -------
+        ------
         HTTPException
             Leaving the group failed.
         """
-
         await self._state.http.leave_group(self.id)
 
 

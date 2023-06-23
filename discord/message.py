@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import datetime
@@ -61,7 +57,8 @@ def convert_emoji_reaction(emoji):
         # No existing emojis have <> in them, so this should be okay.
         return emoji.strip("<>")
 
-    raise InvalidArgument("emoji argument must be str, Emoji, or Reaction not {.__class__.__name__}.".format(emoji))
+    msg = "emoji argument must be str, Emoji, or Reaction not {.__class__.__name__}.".format(emoji)
+    raise InvalidArgument(msg)
 
 
 class Attachment(Hashable):
@@ -89,7 +86,7 @@ class Attachment(Hashable):
         Attachment can now be casted to :class:`str` and is hashable.
 
     Attributes
-    ------------
+    ----------
     id: :class:`int`
         The attachment ID.
     size: :class:`int`
@@ -115,7 +112,7 @@ class Attachment(Hashable):
 
     __slots__ = ("id", "size", "height", "width", "filename", "url", "proxy_url", "_http", "content_type")
 
-    def __init__(self, *, data, state):
+    def __init__(self, *, data, state) -> None:
         self.id = int(data["id"])
         self.size = data["size"]
         self.height = data.get("height")
@@ -130,19 +127,19 @@ class Attachment(Hashable):
         """:class:`bool`: Whether this attachment contains a spoiler."""
         return self.filename.startswith("SPOILER_")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<Attachment id={0.id} filename={0.filename!r} url={0.url!r}>".format(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.url or ""
 
     async def save(self, fp, *, seek_begin=True, use_cached=False):
-        """|coro|
+        """|coro|.
 
         Saves this attachment into a file-like object.
 
         Parameters
-        -----------
+        ----------
         fp: Union[:class:`io.BufferedIOBase`, :class:`os.PathLike`]
             The file-like object to save this attachment to or the filename
             to use. If a filename is passed then a file is created with that
@@ -159,14 +156,14 @@ class Attachment(Hashable):
             on some types of attachments.
 
         Raises
-        --------
+        ------
         HTTPException
             Saving the attachment failed.
         NotFound
             The attachment was deleted.
 
         Returns
-        --------
+        -------
         :class:`int`
             The number of bytes written.
         """
@@ -181,14 +178,14 @@ class Attachment(Hashable):
                 return f.write(data)
 
     async def read(self, *, use_cached=False):
-        """|coro|
+        """|coro|.
 
         Retrieves the content of this attachment as a :class:`bytes` object.
 
         .. versionadded:: 1.1
 
         Parameters
-        -----------
+        ----------
         use_cached: :class:`bool`
             Whether to use :attr:`proxy_url` rather than :attr:`url` when downloading
             the attachment. This will allow attachments to be saved after deletion
@@ -212,11 +209,10 @@ class Attachment(Hashable):
             The contents of the attachment.
         """
         url = self.proxy_url if use_cached else self.url
-        data = await self._http.get_from_cdn(url)
-        return data
+        return await self._http.get_from_cdn(url)
 
     async def to_file(self, *, use_cached=False, spoiler=False):
-        """|coro|
+        """|coro|.
 
         Converts the attachment into a :class:`File` suitable for sending via
         :meth:`abc.Messageable.send`.
@@ -224,7 +220,7 @@ class Attachment(Hashable):
         .. versionadded:: 1.3
 
         Parameters
-        -----------
+        ----------
         use_cached: :class:`bool`
             Whether to use :attr:`proxy_url` rather than :attr:`url` when downloading
             the attachment. This will allow attachments to be saved after deletion
@@ -253,7 +249,6 @@ class Attachment(Hashable):
         :class:`File`
             The attachment as a file suitable for sending.
         """
-
         data = await self.read(use_cached=use_cached)
         return File(io.BytesIO(data), filename=self.filename, spoiler=spoiler)
 
@@ -270,7 +265,7 @@ class DeletedReferencedMessage:
 
     __slots__ = "_parent"
 
-    def __init__(self, parent):
+    def __init__(self, parent) -> None:
         self._parent = parent
 
     @property
@@ -298,7 +293,7 @@ class MessageReference:
         This class can now be constructed by users.
 
     Attributes
-    -----------
+    ----------
     message_id: Optional[:class:`int`]
         The id of the message referenced.
     channel_id: :class:`int`
@@ -325,7 +320,7 @@ class MessageReference:
 
     __slots__ = ("message_id", "channel_id", "guild_id", "fail_if_not_exists", "resolved", "_state")
 
-    def __init__(self, *, message_id, channel_id, guild_id=None, fail_if_not_exists=True):
+    def __init__(self, *, message_id, channel_id, guild_id=None, fail_if_not_exists=True) -> None:
         self._state = None
         self.resolved = None
         self.message_id = message_id
@@ -383,7 +378,7 @@ class MessageReference:
         guild_id = self.guild_id if self.guild_id is not None else "@me"
         return "https://discord.com/channels/{0}/{1.channel_id}/{1.message_id}".format(guild_id, self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<MessageReference message_id={0.message_id!r} channel_id={0.channel_id!r} guild_id={0.guild_id!r}>".format(self)
 
     def to_dict(self):
@@ -428,7 +423,7 @@ class Message(Hashable):
             Returns the message's hash.
 
     Attributes
-    -----------
+    ----------
     tts: :class:`bool`
         Specifies if the message was done with text-to-speech.
         This can only be accurately received in :func:`on_message` due to
@@ -559,7 +554,7 @@ class Message(Hashable):
         "stickers",
     )
 
-    def __init__(self, *, state, channel, data):
+    def __init__(self, *, state, channel, data) -> None:
         self._state = state
         self.id = int(data["id"])
         self.webhook_id = utils._get_as_snowflake(data, "webhook_id")
@@ -608,7 +603,7 @@ class Message(Hashable):
             except KeyError:
                 continue
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<Message id={0.id} channel={0.channel!r} type={0.type!r} author={0.author!r} flags={0.flags!r}>".format(self)
 
     def _try_patch(self, data, key, transform=None):
@@ -641,7 +636,8 @@ class Message(Hashable):
 
         if reaction is None:
             # already removed?
-            raise ValueError("Emoji already removed?")
+            msg = "Emoji already removed?"
+            raise ValueError(msg)
 
         # if reaction isn't in the list, we crash. This means discord
         # sent bad data, or we stored improperly
@@ -850,7 +846,6 @@ class Message(Hashable):
             or remove markdown then use :func:`utils.escape_markdown` or :func:`utils.remove_markdown`
             respectively, along with this function.
         """
-
         transformations = {re.escape(f"<#{channel.id}>"): "#" + channel.name for channel in self.channel_mentions}
 
         mention_transforms = {re.escape(f"<@{member.id}>"): "@" + member.display_name for member in self.mentions}
@@ -904,7 +899,6 @@ class Message(Hashable):
         regular :attr:`Message.content`. Otherwise this returns an English
         message denoting the contents of the system message.
         """
-
         if self.type is MessageType.default:
             return self.content
 
@@ -978,7 +972,9 @@ class Message(Hashable):
             return "{0.author.name} is live! Now streaming {0.author.activity.name}".format(self)
 
         if self.type is MessageType.guild_discovery_disqualified:
-            return "This server has been removed from Server Discovery because it no longer passes all the requirements. Check Server Settings for more details."
+            return (
+                "This server has been removed from Server Discovery because it no longer passes all the requirements. Check Server Settings for more details."
+            )
 
         if self.type is MessageType.guild_discovery_requalified:
             return "This server is eligible for Server Discovery again and has been automatically relisted!"
@@ -990,7 +986,7 @@ class Message(Hashable):
             return "This server has failed Discovery activity requirements for 3 weeks in a row. If this server fails for 1 more week, it will be removed from Discovery."
 
     async def delete(self, *, delay=None):
-        """|coro|
+        """|coro|.
 
         Deletes the message.
 
@@ -1002,7 +998,7 @@ class Message(Hashable):
             Added the new ``delay`` keyword-only parameter.
 
         Parameters
-        -----------
+        ----------
         delay: Optional[:class:`float`]
             If provided, the number of seconds to wait in the background
             before deleting the message. If the deletion fails then it is silently ignored.
@@ -1030,7 +1026,7 @@ class Message(Hashable):
             await self._state.http.delete_message(self.channel.id, self.id)
 
     async def edit(self, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the message.
 
@@ -1040,7 +1036,7 @@ class Message(Hashable):
             The ``suppress`` keyword-only parameter was added.
 
         Parameters
-        -----------
+        ----------
         content: Optional[:class:`str`]
             The new content to replace the message with.
             Could be ``None`` to remove the content.
@@ -1067,14 +1063,13 @@ class Message(Hashable):
             .. versionadded:: 1.4
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the message failed.
         Forbidden
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
         """
-
         try:
             content = fields["content"]
         except KeyError:
@@ -1122,7 +1117,7 @@ class Message(Hashable):
             await self.delete(delay=delete_after)
 
     async def publish(self):
-        """|coro|
+        """|coro|.
 
         Publishes this message to your announcement channel.
 
@@ -1132,17 +1127,16 @@ class Message(Hashable):
         permission is also needed.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have the proper permissions to publish this message.
         HTTPException
             Publishing the message failed.
         """
-
         await self._state.http.publish_message(self.channel.id, self.id)
 
     async def pin(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Pins the message.
 
@@ -1150,14 +1144,14 @@ class Message(Hashable):
         this in a non-private channel context.
 
         Parameters
-        -----------
+        ----------
         reason: Optional[:class:`str`]
             The reason for pinning the message. Shows up on the audit log.
 
             .. versionadded:: 1.4
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to pin the message.
         NotFound
@@ -1166,12 +1160,11 @@ class Message(Hashable):
             Pinning the message failed, probably due to the channel
             having more than 50 pinned messages.
         """
-
         await self._state.http.pin_message(self.channel.id, self.id, reason=reason)
         self.pinned = True
 
     async def unpin(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Unpins the message.
 
@@ -1179,14 +1172,14 @@ class Message(Hashable):
         this in a non-private channel context.
 
         Parameters
-        -----------
+        ----------
         reason: Optional[:class:`str`]
             The reason for unpinning the message. Shows up on the audit log.
 
             .. versionadded:: 1.4
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to unpin the message.
         NotFound
@@ -1194,12 +1187,11 @@ class Message(Hashable):
         HTTPException
             Unpinning the message failed.
         """
-
         await self._state.http.unpin_message(self.channel.id, self.id, reason=reason)
         self.pinned = False
 
     async def add_reaction(self, emoji):
-        """|coro|
+        """|coro|.
 
         Add a reaction to the message.
 
@@ -1210,12 +1202,12 @@ class Message(Hashable):
         emoji, the :attr:`~Permissions.add_reactions` permission is required.
 
         Parameters
-        ------------
+        ----------
         emoji: Union[:class:`Emoji`, :class:`Reaction`, :class:`PartialEmoji`, :class:`str`]
             The emoji to react with.
 
         Raises
-        --------
+        ------
         HTTPException
             Adding the reaction failed.
         Forbidden
@@ -1225,12 +1217,11 @@ class Message(Hashable):
         InvalidArgument
             The emoji parameter is invalid.
         """
-
         emoji = convert_emoji_reaction(emoji)
         await self._state.http.add_reaction(self.channel.id, self.id, emoji)
 
     async def remove_reaction(self, emoji, member):
-        """|coro|
+        """|coro|.
 
         Remove a reaction by the member from the message.
 
@@ -1243,14 +1234,14 @@ class Message(Hashable):
         the :class:`abc.Snowflake` abc.
 
         Parameters
-        ------------
+        ----------
         emoji: Union[:class:`Emoji`, :class:`Reaction`, :class:`PartialEmoji`, :class:`str`]
             The emoji to remove.
         member: :class:`abc.Snowflake`
             The member for which to remove the reaction.
 
         Raises
-        --------
+        ------
         HTTPException
             Removing the reaction failed.
         Forbidden
@@ -1260,7 +1251,6 @@ class Message(Hashable):
         InvalidArgument
             The emoji parameter is invalid.
         """
-
         emoji = convert_emoji_reaction(emoji)
 
         if member.id == self._state.self_id:
@@ -1269,7 +1259,7 @@ class Message(Hashable):
             await self._state.http.remove_reaction(self.channel.id, self.id, emoji, member.id)
 
     async def clear_reaction(self, emoji):
-        """|coro|
+        """|coro|.
 
         Clears a specific reaction from the message.
 
@@ -1280,12 +1270,12 @@ class Message(Hashable):
         .. versionadded:: 1.3
 
         Parameters
-        -----------
+        ----------
         emoji: Union[:class:`Emoji`, :class:`Reaction`, :class:`PartialEmoji`, :class:`str`]
             The emoji to clear.
 
         Raises
-        --------
+        ------
         HTTPException
             Clearing the reaction failed.
         Forbidden
@@ -1295,19 +1285,18 @@ class Message(Hashable):
         InvalidArgument
             The emoji parameter is invalid.
         """
-
         emoji = convert_emoji_reaction(emoji)
         await self._state.http.clear_single_reaction(self.channel.id, self.id, emoji)
 
     async def clear_reactions(self):
-        """|coro|
+        """|coro|.
 
         Removes all the reactions from the message.
 
         You need the :attr:`~Permissions.manage_messages` permission to use this.
 
         Raises
-        --------
+        ------
         HTTPException
             Removing the reactions failed.
         Forbidden
@@ -1317,7 +1306,7 @@ class Message(Hashable):
 
     @utils.deprecated()
     async def ack(self):
-        """|coro|
+        """|coro|.
 
         Marks this message as read.
 
@@ -1326,20 +1315,20 @@ class Message(Hashable):
         .. deprecated:: 1.7
 
         Raises
-        -------
+        ------
         HTTPException
             Acking failed.
         ClientException
             You must not be a bot user.
         """
-
         state = self._state
         if state.is_bot:
-            raise ClientException("Must not be a bot account to ack messages.")
+            msg = "Must not be a bot account to ack messages."
+            raise ClientException(msg)
         return await state.http.ack_message(self.channel.id, self.id)
 
     async def reply(self, content=None, **kwargs):
-        """|coro|
+        """|coro|.
 
         A shortcut method to :meth:`.abc.Messageable.send` to reply to the
         :class:`.Message`.
@@ -1347,7 +1336,7 @@ class Message(Hashable):
         .. versionadded:: 1.6
 
         Raises
-        --------
+        ------
         ~discord.HTTPException
             Sending the message failed.
         ~discord.Forbidden
@@ -1357,11 +1346,10 @@ class Message(Hashable):
             you specified both ``file`` and ``files``.
 
         Returns
-        ---------
+        -------
         :class:`.Message`
             The message that was sent.
         """
-
         return await self.channel.send(content, reference=self, **kwargs)
 
     def to_reference(self, *, fail_if_not_exists=True):
@@ -1378,11 +1366,10 @@ class Message(Hashable):
             .. versionadded:: 1.7
 
         Returns
-        ---------
+        -------
         :class:`~discord.MessageReference`
             The reference to this message.
         """
-
         return MessageReference.from_message(self, fail_if_not_exists=fail_if_not_exists)
 
     def to_message_reference_dict(self):
@@ -1430,7 +1417,7 @@ class PartialMessage(Hashable):
             Returns the partial message's hash.
 
     Attributes
-    -----------
+    ----------
     channel: Union[:class:`TextChannel`, :class:`DMChannel`]
         The channel associated with this partial message.
     id: :class:`int`
@@ -1439,9 +1426,22 @@ class PartialMessage(Hashable):
 
     __slots__ = ("channel", "id", "_cs_guild", "_state")
 
-    _exported_names = ("jump_url", "delete", "publish", "pin", "unpin", "add_reaction", "remove_reaction", "clear_reaction", "clear_reactions", "reply", "to_reference", "to_message_reference_dict")
+    _exported_names = (
+        "jump_url",
+        "delete",
+        "publish",
+        "pin",
+        "unpin",
+        "add_reaction",
+        "remove_reaction",
+        "clear_reaction",
+        "clear_reactions",
+        "reply",
+        "to_reference",
+        "to_message_reference_dict",
+    )
 
-    def __init__(self, *, channel, id):
+    def __init__(self, *, channel, id) -> None:
         if channel.type not in (ChannelType.text, ChannelType.news, ChannelType.private):
             raise TypeError("Expected TextChannel or DMChannel not %r" % type(channel))
 
@@ -1458,7 +1458,7 @@ class PartialMessage(Hashable):
     # n.b. not exposed
     pinned = property(None, lambda x, y: ...)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<PartialMessage id={0.id} channel={0.channel!r}>".format(self)
 
     @property
@@ -1472,12 +1472,12 @@ class PartialMessage(Hashable):
         return getattr(self.channel, "guild", None)
 
     async def fetch(self):
-        """|coro|
+        """|coro|.
 
         Fetches the partial message to a full :class:`Message`.
 
         Raises
-        --------
+        ------
         NotFound
             The message was not found.
         Forbidden
@@ -1486,16 +1486,15 @@ class PartialMessage(Hashable):
             Retrieving the message failed.
 
         Returns
-        --------
+        -------
         :class:`Message`
             The full message.
         """
-
         data = await self._state.http.get_message(self.channel.id, self.id)
         return self._state.create_message(channel=self.channel, data=data)
 
     async def edit(self, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the message.
 
@@ -1505,7 +1504,7 @@ class PartialMessage(Hashable):
             :class:`discord.Message` is returned instead of ``None`` if an edit took place.
 
         Parameters
-        -----------
+        ----------
         content: Optional[:class:`str`]
             The new content to replace the message with.
             Could be ``None`` to remove the content.
@@ -1530,7 +1529,7 @@ class PartialMessage(Hashable):
             are used instead.
 
         Raises
-        -------
+        ------
         NotFound
             The message was not found.
         HTTPException
@@ -1540,11 +1539,10 @@ class PartialMessage(Hashable):
             edited a message's content or embed that isn't yours.
 
         Returns
-        ---------
+        -------
         Optional[:class:`Message`]
             The message that was edited.
         """
-
         try:
             content = fields["content"]
         except KeyError:

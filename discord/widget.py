@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from .activity import create_activity
 from .enums import Status, try_enum
@@ -53,7 +49,7 @@ class WidgetChannel:
             Returns the partial channel's name.
 
     Attributes
-    -----------
+    ----------
     id: :class:`int`
         The channel's ID.
     name: :class:`str`
@@ -64,15 +60,15 @@ class WidgetChannel:
 
     __slots__ = ("id", "name", "position")
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.id = kwargs.pop("id")
         self.name = kwargs.pop("name")
         self.position = kwargs.pop("position")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<WidgetChannel id={self.id} name={self.name!r} position={self.position!r}>"
 
     @property
@@ -108,7 +104,7 @@ class WidgetMember(BaseUser):
             Returns the widget member's `name#discriminator`.
 
     Attributes
-    -----------
+    ----------
     id: :class:`int`
         The member's ID.
     name: :class:`str`
@@ -137,7 +133,7 @@ class WidgetMember(BaseUser):
 
     __slots__ = ("name", "status", "nick", "avatar", "discriminator", "id", "bot", "activity", "deafened", "suppress", "muted", "connected_channel")
 
-    def __init__(self, *, state, data, connected_channel=None):
+    def __init__(self, *, state, data, connected_channel=None) -> None:
         super().__init__(state=state, data=data)
         self.nick = data.get("nick")
         self.status = try_enum(Status, data.get("status"))
@@ -178,7 +174,7 @@ class Widget:
             Returns the widget's JSON URL.
 
     Attributes
-    -----------
+    ----------
     id: :class:`int`
         The guild's ID.
     name: :class:`str`
@@ -200,7 +196,7 @@ class Widget:
 
     __slots__ = ("_state", "channels", "_invite", "id", "members", "name")
 
-    def __init__(self, *, state, data):
+    def __init__(self, *, state, data) -> None:
         self._state = state
         self._invite = data["instant_invite"]
         self.name = data["name"]
@@ -222,13 +218,13 @@ class Widget:
 
             self.members.append(WidgetMember(state=self._state, data=member, connected_channel=connected_channel))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.json_url
 
     def __eq__(self, other):
         return self.id == other.id
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Widget id={self.id} name={self.name!r} invite_url={self.invite_url!r}>"
 
     @property
@@ -247,21 +243,21 @@ class Widget:
         return self._invite
 
     async def fetch_invite(self, *, with_counts=True):
-        """|coro|
+        """|coro|.
 
         Retrieves an :class:`Invite` from a invite URL or ID.
         This is the same as :meth:`Client.fetch_invite`; the invite
         code is abstracted away.
 
         Parameters
-        -----------
+        ----------
         with_counts: :class:`bool`
             Whether to include count information in the invite. This fills the
             :attr:`Invite.approximate_member_count` and :attr:`Invite.approximate_presence_count`
             fields.
 
         Returns
-        --------
+        -------
         :class:`Invite`
             The invite from the URL/ID.
         """

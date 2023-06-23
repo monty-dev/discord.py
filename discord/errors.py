@@ -1,37 +1,31 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 
 class DiscordException(Exception):
-    """Base exception class for discord.py
+    """Base exception class for discord.py.
 
     Ideally speaking, this could be caught to handle any exceptions thrown from this library.
     """
-
-    pass
 
 
 class ClientException(DiscordException):
@@ -40,21 +34,19 @@ class ClientException(DiscordException):
     These are usually for exceptions that happened due to user input.
     """
 
-    pass
-
 
 class NoMoreItems(DiscordException):
     """Exception that is thrown when an async iteration operation has no more
-    items."""
-
-    pass
+    items.
+    """
 
 
 class GatewayNotFound(DiscordException):
     """An exception that is usually thrown when the gateway hub
-    for the :class:`Client` websocket is not found."""
+    for the :class:`Client` websocket is not found.
+    """
 
-    def __init__(self):
+    def __init__(self) -> None:
         message = "The gateway to connect to discord was not found."
         super(GatewayNotFound, self).__init__(message)
 
@@ -81,7 +73,7 @@ class HTTPException(DiscordException):
     """Exception that's thrown when an HTTP request operation fails.
 
     Attributes
-    ------------
+    ----------
     response: :class:`aiohttp.ClientResponse`
         The response of the failed HTTP request. This is an
         instance of :class:`aiohttp.ClientResponse`. In some cases
@@ -95,14 +87,13 @@ class HTTPException(DiscordException):
         The Discord specific error code for the failure.
     """
 
-    def __init__(self, response, message):
+    def __init__(self, response, message) -> None:
         self.response = response
         self.status = response.status
         if isinstance(message, dict):
             self.code = message.get("code", 0)
             base = message.get("message", "")
-            errors = message.get("errors")
-            if errors:
+            if errors := message.get("errors"):
                 errors = flatten_error_dict(errors)
                 helpful = "\n".join("In %s: %s" % t for t in errors.items())
                 self.text = base + "\n" + helpful
@@ -125,16 +116,12 @@ class Forbidden(HTTPException):
     Subclass of :exc:`HTTPException`
     """
 
-    pass
-
 
 class NotFound(HTTPException):
     """Exception that's thrown for when status code 404 occurs.
 
     Subclass of :exc:`HTTPException`
     """
-
-    pass
 
 
 class DiscordServerError(HTTPException):
@@ -145,15 +132,11 @@ class DiscordServerError(HTTPException):
     .. versionadded:: 1.5
     """
 
-    pass
-
 
 class InvalidData(ClientException):
     """Exception that's raised when the library encounters unknown
     or invalid data from Discord.
     """
-
-    pass
 
 
 class InvalidArgument(ClientException):
@@ -165,8 +148,6 @@ class InvalidArgument(ClientException):
     :exc:`DiscordException`.
     """
 
-    pass
-
 
 class LoginFailure(ClientException):
     """Exception that's thrown when the :meth:`Client.login` function
@@ -174,15 +155,13 @@ class LoginFailure(ClientException):
     failure.
     """
 
-    pass
-
 
 class ConnectionClosed(ClientException):
     """Exception that's thrown when the gateway connection is
     closed for reasons that could not be handled internally.
 
     Attributes
-    -----------
+    ----------
     code: :class:`int`
         The close code of the websocket.
     reason: :class:`str`
@@ -191,7 +170,7 @@ class ConnectionClosed(ClientException):
         The shard ID that got closed if applicable.
     """
 
-    def __init__(self, socket, *, shard_id, code=None):
+    def __init__(self, socket, *, shard_id, code=None) -> None:
         # This exception is just the same exception except
         # reconfigured to subclass ClientException for users
         self.code = code or socket.close_code
@@ -212,12 +191,12 @@ class PrivilegedIntentsRequired(ClientException):
     - :attr:`Intents.presences`
 
     Attributes
-    -----------
+    ----------
     shard_id: Optional[:class:`int`]
         The shard ID that got closed if applicable.
     """
 
-    def __init__(self, shard_id):
+    def __init__(self, shard_id) -> None:
         self.shard_id = shard_id
         msg = "Shard ID %s is requesting privileged intents that have not been explicitly enabled in the developer portal. It is recommended to go to https://discord.com/developers/applications/ and explicitly enable the privileged intents within your application's page. If this is not possible, then consider disabling the privileged intents instead."
         super().__init__(msg % shard_id)

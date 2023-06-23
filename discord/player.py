@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import audioop
@@ -45,10 +41,7 @@ log = logging.getLogger(__name__)
 
 __all__ = ("AudioSource", "PCMAudio", "FFmpegAudio", "FFmpegPCMAudio", "FFmpegOpusAudio", "PCMVolumeTransformer")
 
-if sys.platform != "win32":
-    CREATE_NO_WINDOW = 0
-else:
-    CREATE_NO_WINDOW = 0x08000000
+CREATE_NO_WINDOW = 0 if sys.platform != "win32" else 0x08000000
 
 
 class AudioSource:
@@ -76,7 +69,7 @@ class AudioSource:
         per frame (20ms worth of audio).
 
         Returns
-        --------
+        -------
         :class:`bytes`
             A bytes like object that represents the PCM or Opus data.
         """
@@ -92,9 +85,8 @@ class AudioSource:
         Useful for clearing buffer data or processes after
         it is done playing audio.
         """
-        pass
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.cleanup()
 
 
@@ -102,19 +94,17 @@ class PCMAudio(AudioSource):
     """Represents raw 16-bit 48KHz stereo PCM audio source.
 
     Attributes
-    -----------
+    ----------
     stream: :term:`py:file object`
         A file-like object that reads byte data representing raw PCM.
     """
 
-    def __init__(self, stream):
+    def __init__(self, stream) -> None:
         self.stream = stream
 
     def read(self):
         ret = self.stream.read(OpusEncoder.FRAME_SIZE)
-        if len(ret) != OpusEncoder.FRAME_SIZE:
-            return b""
-        return ret
+        return b"" if len(ret) != OpusEncoder.FRAME_SIZE else ret
 
 
 class FFmpegAudio(AudioSource):
@@ -126,13 +116,11 @@ class FFmpegAudio(AudioSource):
     .. versionadded:: 1.3
     """
 
-    def __init__(self, source, *, executable="ffmpeg", args, **subprocess_kwargs):
+    def __init__(self, source, *, executable="ffmpeg", args, **subprocess_kwargs) -> None:
         self._process = self._stdout = None
 
         args = [executable, *args]
-        kwargs = {"stdout": subprocess.PIPE}
-        kwargs.update(subprocess_kwargs)
-
+        kwargs = {"stdout": subprocess.PIPE} | subprocess_kwargs
         self._process = self._spawn_process(args, **kwargs)
         self._stdout = self._process.stdout
 
@@ -144,7 +132,8 @@ class FFmpegAudio(AudioSource):
             executable = args.partition(" ")[0] if isinstance(args, str) else args[0]
             raise ClientException(executable + " was not found.") from None
         except subprocess.SubprocessError as exc:
-            raise ClientException(f"Popen failed: {exc.__class__.__name__}: {exc}") from exc
+            msg = f"Popen failed: {exc.__class__.__name__}: {exc}"
+            raise ClientException(msg) from exc
         else:
             return process
 
@@ -181,7 +170,7 @@ class FFmpegPCMAudio(FFmpegAudio):
         variable in order for this to work.
 
     Parameters
-    ------------
+    ----------
     source: Union[:class:`str`, :class:`io.BufferedIOBase`]
         The input that ffmpeg will take and convert to PCM bytes.
         If ``pipe`` is ``True`` then this is a file-like object that is
@@ -200,22 +189,19 @@ class FFmpegPCMAudio(FFmpegAudio):
         Extra command line arguments to pass to ffmpeg after the ``-i`` flag.
 
     Raises
-    --------
+    ------
     ClientException
         The subprocess failed to be created.
     """
 
-    def __init__(self, source, *, executable="ffmpeg", pipe=False, stderr=None, before_options=None, options=None):
+    def __init__(self, source, *, executable="ffmpeg", pipe=False, stderr=None, before_options=None, options=None) -> None:
         args = []
         subprocess_kwargs = {"stdin": source if pipe else subprocess.DEVNULL, "stderr": stderr}
 
         if isinstance(before_options, str):
             args.extend(shlex.split(before_options))
 
-        args.append("-i")
-        args.append("-" if pipe else source)
-        args.extend(("-f", "s16le", "-ar", "48000", "-ac", "2", "-loglevel", "warning"))
-
+        args.extend(("-i", "-" if pipe else source, "-f", "s16le", "-ar", "48000", "-ac", "2", "-loglevel", "warning"))
         if isinstance(options, str):
             args.extend(shlex.split(options))
 
@@ -225,9 +211,7 @@ class FFmpegPCMAudio(FFmpegAudio):
 
     def read(self):
         ret = self._stdout.read(OpusEncoder.FRAME_SIZE)
-        if len(ret) != OpusEncoder.FRAME_SIZE:
-            return b""
-        return ret
+        return b"" if len(ret) != OpusEncoder.FRAME_SIZE else ret
 
     def is_opus(self):
         return False
@@ -255,7 +239,7 @@ class FFmpegOpusAudio(FFmpegAudio):
         variable in order for this to work.
 
     Parameters
-    ------------
+    ----------
     source: Union[:class:`str`, :class:`io.BufferedIOBase`]
         The input that ffmpeg will take and convert to Opus bytes.
         If ``pipe`` is ``True`` then this is a file-like object that is
@@ -289,21 +273,19 @@ class FFmpegOpusAudio(FFmpegAudio):
         Extra command line arguments to pass to ffmpeg after the ``-i`` flag.
 
     Raises
-    --------
+    ------
     ClientException
         The subprocess failed to be created.
     """
 
-    def __init__(self, source, *, bitrate=128, codec=None, executable="ffmpeg", pipe=False, stderr=None, before_options=None, options=None):
+    def __init__(self, source, *, bitrate=128, codec=None, executable="ffmpeg", pipe=False, stderr=None, before_options=None, options=None) -> None:
         args = []
         subprocess_kwargs = {"stdin": source if pipe else subprocess.DEVNULL, "stderr": stderr}
 
         if isinstance(before_options, str):
             args.extend(shlex.split(before_options))
 
-        args.append("-i")
-        args.append("-" if pipe else source)
-
+        args.extend(("-i", "-" if pipe else source))
         codec = "copy" if codec in ("opus", "libopus") else "libopus"
 
         args.extend(("-map_metadata", "-1", "-f", "opus", "-c:a", codec, "-ar", "48000", "-ac", "2", "-b:a", f"{bitrate}k", "-loglevel", "warning"))
@@ -318,14 +300,13 @@ class FFmpegOpusAudio(FFmpegAudio):
 
     @classmethod
     async def from_probe(cls, source, *, method=None, **kwargs):
-        """|coro|
+        """|coro|.
 
         A factory method that creates a :class:`FFmpegOpusAudio` after probing
         the input source for audio codec and bitrate information.
 
         Examples
-        ----------
-
+        --------
         Use this function to create an :class:`FFmpegOpusAudio` instance instead of the constructor: ::
 
             source = await discord.FFmpegOpusAudio.from_probe("song.webm")
@@ -348,7 +329,7 @@ class FFmpegOpusAudio(FFmpegAudio):
             voice_client.play(source)
 
         Parameters
-        ------------
+        ----------
         source
             Identical to the ``source`` parameter for the constructor.
         method: Optional[Union[:class:`str`, Callable[:class:`str`, :class:`str`]]]
@@ -362,30 +343,29 @@ class FFmpegOpusAudio(FFmpegAudio):
             excluding ``bitrate`` and ``codec``.
 
         Raises
-        --------
+        ------
         AttributeError
             Invalid probe method, must be ``'native'`` or ``'fallback'``.
         TypeError
             Invalid value for ``probe`` parameter, must be :class:`str` or a callable.
 
         Returns
-        --------
+        -------
         :class:`FFmpegOpusAudio`
             An instance of this class.
         """
-
         executable = kwargs.get("executable")
         codec, bitrate = await cls.probe(source, method=method, executable=executable)
         return cls(source, bitrate=bitrate, codec=codec, **kwargs)
 
     @classmethod
     async def probe(cls, source, *, method=None, executable=None):
-        """|coro|
+        """|coro|.
 
         Probes the input source for bitrate and codec information.
 
         Parameters
-        ------------
+        ----------
         source
             Identical to the ``source`` parameter for :class:`FFmpegOpusAudio`.
         method
@@ -394,18 +374,17 @@ class FFmpegOpusAudio(FFmpegAudio):
             Identical to the ``executable`` parameter for :class:`FFmpegOpusAudio`.
 
         Raises
-        --------
+        ------
         AttributeError
             Invalid probe method, must be ``'native'`` or ``'fallback'``.
         TypeError
             Invalid value for ``probe`` parameter, must be :class:`str` or a callable.
 
         Returns
-        ---------
+        -------
         Tuple[Optional[:class:`str`], Optional[:class:`int`]]
             A 2-tuple with the codec and bitrate of the input source.
         """
-
         method = method or "native"
         executable = executable or "ffmpeg"
         probefunc = fallback = None
@@ -413,7 +392,8 @@ class FFmpegOpusAudio(FFmpegAudio):
         if isinstance(method, str):
             probefunc = getattr(cls, "_probe_codec_" + method, None)
             if probefunc is None:
-                raise AttributeError(f"Invalid probe method '{method}'")
+                msg = f"Invalid probe method '{method}'"
+                raise AttributeError(msg)
 
             if probefunc is cls._probe_codec_native:
                 fallback = cls._probe_codec_fallback
@@ -422,7 +402,8 @@ class FFmpegOpusAudio(FFmpegAudio):
             probefunc = method
             fallback = cls._probe_codec_fallback
         else:
-            raise TypeError(f"Expected str or callable for parameter 'probe', not '{method.__class__.__name__}'")
+            msg = f"Expected str or callable for parameter 'probe', not '{method.__class__.__name__}'"
+            raise TypeError(msg)
 
         codec = bitrate = None
         loop = asyncio.get_event_loop()
@@ -470,13 +451,11 @@ class FFmpegOpusAudio(FFmpegAudio):
         output = out.decode("utf8")
         codec = bitrate = None
 
-        codec_match = re.search(r"Stream #0.*?Audio: (\w+)", output)
-        if codec_match:
-            codec = codec_match.group(1)
+        if codec_match := re.search(r"Stream #0.*?Audio: (\w+)", output):
+            codec = codec_match[1]
 
-        br_match = re.search(r"(\d+) [kK]b/s", output)
-        if br_match:
-            bitrate = max(int(br_match.group(1)), 512)
+        if br_match := re.search(r"(\d+) [kK]b/s", output):
+            bitrate = max(int(br_match[1]), 512)
 
         return codec, bitrate
 
@@ -494,7 +473,7 @@ class PCMVolumeTransformer(AudioSource):
     set to ``True``.
 
     Parameters
-    ------------
+    ----------
     original: :class:`AudioSource`
         The original AudioSource to transform.
     volume: :class:`float`
@@ -502,19 +481,21 @@ class PCMVolumeTransformer(AudioSource):
         See :attr:`volume` for more info.
 
     Raises
-    -------
+    ------
     TypeError
         Not an audio source.
     ClientException
         The audio source is opus encoded.
     """
 
-    def __init__(self, original, volume=1.0):
+    def __init__(self, original, volume=1.0) -> None:
         if not isinstance(original, AudioSource):
-            raise TypeError(f"expected AudioSource not {original.__class__.__name__}.")
+            msg = f"expected AudioSource not {original.__class__.__name__}."
+            raise TypeError(msg)
 
         if original.is_opus():
-            raise ClientException("AudioSource must not be Opus encoded.")
+            msg = "AudioSource must not be Opus encoded."
+            raise ClientException(msg)
 
         self.original = original
         self.volume = volume
@@ -539,7 +520,7 @@ class PCMVolumeTransformer(AudioSource):
 class AudioPlayer(threading.Thread):
     DELAY = OpusEncoder.FRAME_LENGTH / 1000.0
 
-    def __init__(self, source, client, *, after=None):
+    def __init__(self, source, client, *, after=None) -> None:
         threading.Thread.__init__(self)
         self.daemon = True
         self.source = source
@@ -554,7 +535,8 @@ class AudioPlayer(threading.Thread):
         self._lock = threading.Lock()
 
         if after is not None and not callable(after):
-            raise TypeError('Expected a callable for the "after" parameter.')
+            msg = 'Expected a callable for the "after" parameter.'
+            raise TypeError(msg)
 
     def _do_run(self):
         self.loops = 0

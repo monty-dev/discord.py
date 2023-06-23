@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import discord.abc
 import discord.utils
@@ -38,7 +34,7 @@ class Context(discord.abc.Messageable):
     This class implements the :class:`~discord.abc.Messageable` ABC.
 
     Attributes
-    -----------
+    ----------
     message: :class:`.Message`
         The message that triggered the command being executed.
     bot: :class:`.Bot`
@@ -79,7 +75,7 @@ class Context(discord.abc.Messageable):
         or invoked.
     """
 
-    def __init__(self, **attrs):
+    def __init__(self, **attrs) -> None:
         self.message = attrs.pop("message", None)
         self.bot = attrs.pop("bot", None)
         self.args = attrs.pop("args", [])
@@ -95,7 +91,7 @@ class Context(discord.abc.Messageable):
         self._state = self.message._state
 
     async def invoke(self, *args, **kwargs):
-        r"""|coro|
+        r"""|coro|.
 
         Calls a command with the arguments given.
 
@@ -116,7 +112,7 @@ class Context(discord.abc.Messageable):
             The first parameter passed **must** be the command being invoked.
 
         Parameters
-        -----------
+        ----------
         command: :class:`.Command`
             The command that is going to be called.
         \*args
@@ -125,15 +121,15 @@ class Context(discord.abc.Messageable):
             The keyword arguments to use.
 
         Raises
-        -------
+        ------
         TypeError
             The command argument to invoke is missing.
         """
-
         try:
             command = args[0]
         except IndexError:
-            raise TypeError("Missing command to invoke.") from None
+            msg = "Missing command to invoke."
+            raise TypeError(msg) from None
 
         arguments = []
         if command.cog is not None:
@@ -142,11 +138,10 @@ class Context(discord.abc.Messageable):
         arguments.append(self)
         arguments.extend(args[1:])
 
-        ret = await command.callback(*arguments, **kwargs)
-        return ret
+        return await command.callback(*arguments, **kwargs)
 
     async def reinvoke(self, *, call_hooks=False, restart=True):
-        """|coro|
+        """|coro|.
 
         Calls the command again.
 
@@ -162,7 +157,7 @@ class Context(discord.abc.Messageable):
             fail again.
 
         Parameters
-        ------------
+        ----------
         call_hooks: :class:`bool`
             Whether to call the before and after invoke hooks.
         restart: :class:`bool`
@@ -171,14 +166,15 @@ class Context(discord.abc.Messageable):
             The default is to start where we left off.
 
         Raises
-        -------
+        ------
         ValueError
             The context to reinvoke is not valid.
         """
         cmd = self.command
         view = self.view
         if cmd is None:
-            raise ValueError("This context is not valid.")
+            msg = "This context is not valid."
+            raise ValueError(msg)
 
         # some state to revert to when we're done
         index, previous = view.index, view.previous
@@ -218,10 +214,7 @@ class Context(discord.abc.Messageable):
     @property
     def cog(self):
         """Optional[:class:`.Cog`]: Returns the cog associated with this context's command. None if it does not exist."""
-
-        if self.command is None:
-            return None
-        return self.command.cog
+        return None if self.command is None else self.command.cog
 
     @discord.utils.cached_property
     def guild(self):
@@ -238,7 +231,7 @@ class Context(discord.abc.Messageable):
     @discord.utils.cached_property
     def author(self):
         """Union[:class:`~discord.User`, :class:`.Member`]:
-        Returns the author associated with this context's command. Shorthand for :attr:`.Message.author`
+        Returns the author associated with this context's command. Shorthand for :attr:`.Message.author`.
         """
         return self.message.author
 
@@ -256,7 +249,7 @@ class Context(discord.abc.Messageable):
         return g.voice_client if g else None
 
     async def send_help(self, *args):
-        """send_help(entity=<bot>)
+        """send_help(entity=<bot>).
 
         |coro|
 
@@ -276,12 +269,12 @@ class Context(discord.abc.Messageable):
             this returns :class:`None` on bad input or no help command.
 
         Parameters
-        ------------
+        ----------
         entity: Optional[Union[:class:`Command`, :class:`Cog`, :class:`str`]]
             The entity to show help for.
 
         Returns
-        --------
+        -------
         Any
             The result of the help command, if any.
         """
@@ -296,7 +289,7 @@ class Context(discord.abc.Messageable):
 
         cmd = cmd.copy()
         cmd.context = self
-        if len(args) == 0:
+        if not args:
             await cmd.prepare_help_command(self, None)
             mapping = cmd.get_bot_mapping()
             injected = wrap_callback(cmd.send_bot_help)

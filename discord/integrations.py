@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import datetime
 
@@ -38,7 +34,7 @@ class IntegrationAccount:
     .. versionadded:: 1.4
 
     Attributes
-    -----------
+    ----------
     id: :class:`int`
         The account ID.
     name: :class:`str`
@@ -47,11 +43,11 @@ class IntegrationAccount:
 
     __slots__ = ("id", "name")
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.id = kwargs.pop("id")
         self.name = kwargs.pop("name")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<IntegrationAccount id={self.id} name={self.name!r}>"
 
 
@@ -61,7 +57,7 @@ class Integration:
     .. versionadded:: 1.4
 
     Attributes
-    -----------
+    ----------
     id: :class:`int`
         The integration ID.
     name: :class:`str`
@@ -90,14 +86,31 @@ class Integration:
         When the integration was last synced.
     """
 
-    __slots__ = ("id", "_state", "guild", "name", "enabled", "type", "syncing", "role", "expire_behaviour", "expire_behavior", "expire_grace_period", "synced_at", "user", "account", "enable_emoticons", "_role_id")
+    __slots__ = (
+        "id",
+        "_state",
+        "guild",
+        "name",
+        "enabled",
+        "type",
+        "syncing",
+        "role",
+        "expire_behaviour",
+        "expire_behavior",
+        "expire_grace_period",
+        "synced_at",
+        "user",
+        "account",
+        "enable_emoticons",
+        "_role_id",
+    )
 
-    def __init__(self, *, data, guild):
+    def __init__(self, *, data, guild) -> None:
         self.guild = guild
         self._state = guild._state
         self._from_data(data)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Integration id={self.id} name={self.name!r} type={self.type!r}>"
 
     def _from_data(self, integ):
@@ -118,7 +131,7 @@ class Integration:
         self.account = IntegrationAccount(**integ["account"])
 
     async def edit(self, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the integration.
 
@@ -126,7 +139,7 @@ class Integration:
         do this.
 
         Parameters
-        -----------
+        ----------
         expire_behaviour: :class:`ExpireBehaviour`
             The behaviour when an integration subscription lapses. Aliased to ``expire_behavior`` as well.
         expire_grace_period: :class:`int`
@@ -135,7 +148,7 @@ class Integration:
             Where emoticons should be synced for this integration (currently twitch only).
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permission to edit the integration.
         HTTPException
@@ -149,14 +162,12 @@ class Integration:
             expire_behaviour = fields.get("expire_behavior", self.expire_behaviour)
 
         if not isinstance(expire_behaviour, ExpireBehaviour):
-            raise InvalidArgument("expire_behaviour field must be of type ExpireBehaviour")
+            msg = "expire_behaviour field must be of type ExpireBehaviour"
+            raise InvalidArgument(msg)
 
         expire_grace_period = fields.get("expire_grace_period", self.expire_grace_period)
 
-        payload = {
-            "expire_behavior": expire_behaviour.value,
-            "expire_grace_period": expire_grace_period,
-        }
+        payload = {"expire_behavior": expire_behaviour.value, "expire_grace_period": expire_grace_period}
 
         enable_emoticons = fields.get("enable_emoticons")
 
@@ -171,7 +182,7 @@ class Integration:
         self.enable_emoticons = enable_emoticons
 
     async def sync(self):
-        """|coro|
+        """|coro|.
 
         Syncs the integration.
 
@@ -179,7 +190,7 @@ class Integration:
         do this.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permission to sync the integration.
         HTTPException
@@ -189,7 +200,7 @@ class Integration:
         self.synced_at = datetime.datetime.utcnow()
 
     async def delete(self):
-        """|coro|
+        """|coro|.
 
         Deletes the integration.
 
@@ -197,7 +208,7 @@ class Integration:
         do this.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permission to delete the integration.
         HTTPException

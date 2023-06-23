@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import array
 import ctypes
@@ -232,7 +228,7 @@ class OpusError(DiscordException):
         The error code returned.
     """
 
-    def __init__(self, code):
+    def __init__(self, code) -> None:
         self.code = code
         msg = _lib.opus_strerror(self.code).decode("utf-8")
         log.info('"%s" has happened', msg)
@@ -241,8 +237,6 @@ class OpusError(DiscordException):
 
 class OpusNotLoaded(DiscordException):
     """An exception that is thrown for when libopus is not loaded."""
-
-    pass
 
 
 class _OpusStruct:
@@ -257,13 +251,13 @@ class _OpusStruct:
     @staticmethod
     def get_opus_version() -> str:
         if not is_loaded() and not _load_default():
-            raise OpusNotLoaded()
+            raise OpusNotLoaded
 
         return _lib.opus_get_version_string().decode("utf-8")
 
 
 class Encoder(_OpusStruct):
-    def __init__(self, application=APPLICATION_AUDIO):
+    def __init__(self, application=APPLICATION_AUDIO) -> None:
         _OpusStruct.get_opus_version()
 
         self.application = application
@@ -274,7 +268,7 @@ class Encoder(_OpusStruct):
         self.set_bandwidth("full")
         self.set_signal_type("auto")
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "_state"):
             _lib.opus_encoder_destroy(self._state)
             self._state = None
@@ -320,12 +314,12 @@ class Encoder(_OpusStruct):
 
 
 class Decoder(_OpusStruct):
-    def __init__(self):
+    def __init__(self) -> None:
         _OpusStruct.get_opus_version()
 
         self._state = self._create_state()
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "_state"):
             _lib.opus_decoder_destroy(self._state)
             self._state = None
@@ -336,17 +330,17 @@ class Decoder(_OpusStruct):
 
     @staticmethod
     def packet_get_nb_frames(data):
-        """Gets the number of frames in an Opus packet"""
+        """Gets the number of frames in an Opus packet."""
         return _lib.opus_packet_get_nb_frames(data, len(data))
 
     @staticmethod
     def packet_get_nb_channels(data):
-        """Gets the number of channels in an Opus packet"""
+        """Gets the number of channels in an Opus packet."""
         return _lib.opus_packet_get_nb_channels(data)
 
     @classmethod
     def packet_get_samples_per_frame(cls, data):
-        """Gets the number of samples per frame from an Opus packet"""
+        """Gets the number of samples per frame from an Opus packet."""
         return _lib.opus_packet_get_samples_per_frame(data, cls.SAMPLING_RATE)
 
     def _set_gain(self, adjustment):
@@ -363,7 +357,6 @@ class Decoder(_OpusStruct):
 
     def set_gain(self, dB):
         """Sets the decoder gain in dB, from -128 to 128."""
-
         dB_Q8 = max(-32768, min(32767, round(dB * 256)))  # dB * 2^n where n is 8 (Q8)
         return self._set_gain(dB_Q8)
 
@@ -373,14 +366,14 @@ class Decoder(_OpusStruct):
 
     def _get_last_packet_duration(self):
         """Gets the duration (in samples) of the last packet successfully decoded or concealed."""
-
         ret = ctypes.c_int32()
         _lib.opus_decoder_ctl(self._state, CTL_LAST_PACKET_DURATION, ctypes.byref(ret))
         return ret.value
 
     def decode(self, data, *, fec=False):
         if data is None and fec:
-            raise OpusError("Invalid arguments: FEC cannot be used with null data")
+            msg = "Invalid arguments: FEC cannot be used with null data"
+            raise OpusError(msg)
 
         if data is None:
             frame_size = self._get_last_packet_duration() or self.SAMPLES_PER_FRAME

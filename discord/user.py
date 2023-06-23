@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from collections import namedtuple
 
@@ -30,14 +26,7 @@ import discord.abc
 
 from .asset import Asset
 from .colour import Colour
-from .enums import (
-    DefaultAvatar,
-    HypeSquadHouse,
-    PremiumType,
-    RelationshipType,
-    try_enum,
-    UserFlags,
-)
+from .enums import DefaultAvatar, HypeSquadHouse, PremiumType, RelationshipType, UserFlags, try_enum
 from .errors import ClientException
 from .flags import PublicUserFlags
 from .utils import _bytes_to_base64_data, deprecated, parse_time, snowflake_time
@@ -94,13 +83,17 @@ _BaseUser = discord.abc.User
 
 
 class BaseUser(_BaseUser):
-    __slots__ = ("name", "id", "discriminator", "avatar", "bot", "system", "_public_flags", "_state")
+    __slots__ = ("name", "id", "discriminator", "avatar", "bot", "system", "_public_flags", "_state", "global_name")
 
-    def __init__(self, *, state, data):
+    def __init__(self, *, state, data) -> None:
         self._state = state
+        self.global_name = None
         self._update(data)
 
-    def __str__(self):
+    def __repr__(self) -> str:
+        return f"<BaseUser id={self.id} name={self.name!r} global_name={self.global_name!r} bot={self.bot} system={self.system}>"
+
+    def __str__(self) -> str:
         return f"{self.name}#{self.discriminator}"
 
     def __eq__(self, other):
@@ -114,6 +107,7 @@ class BaseUser(_BaseUser):
 
     def _update(self, data):
         self.name = data["username"]
+        self.global_name = data.get("global_name")
         self.id = int(data["id"])
         self.discriminator = data["discriminator"]
         self.avatar = data["avatar"]
@@ -125,6 +119,7 @@ class BaseUser(_BaseUser):
     def _copy(cls, user):
         self = cls.__new__(cls)  # bypass __init__
 
+        self.global_name = user.global_name
         self.name = user.name
         self.id = user.id
         self.discriminator = user.discriminator
@@ -136,7 +131,14 @@ class BaseUser(_BaseUser):
         return self
 
     def _to_minimal_user_json(self):
-        return {"username": self.name, "id": self.id, "avatar": self.avatar, "discriminator": self.discriminator, "bot": self.bot}
+        return {
+            "username": self.name,
+            "id": self.id,
+            "avatar": self.avatar,
+            "discriminator": self.discriminator,
+            "global_name": self.global_name,
+            "bot": self.bot,
+        }
 
     @property
     def public_flags(self):
@@ -170,7 +172,7 @@ class BaseUser(_BaseUser):
         between 16 and 4096.
 
         Parameters
-        -----------
+        ----------
         format: Optional[:class:`str`]
             The format to attempt to convert the avatar to.
             If the format is ``None``, then it is automatically
@@ -189,7 +191,7 @@ class BaseUser(_BaseUser):
             invalid ``size``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -238,7 +240,7 @@ class BaseUser(_BaseUser):
             channel.permissions_for(self)
 
         Parameters
-        -----------
+        ----------
         channel: :class:`abc.GuildChannel`
             The channel to check your permissions for.
         """
@@ -248,7 +250,8 @@ class BaseUser(_BaseUser):
     def created_at(self):
         """:class:`datetime.datetime`: Returns the user's creation time in UTC.
 
-        This is when the user's Discord account was created."""
+        This is when the user's Discord account was created.
+        """
         return snowflake_time(self.id)
 
     @property
@@ -259,13 +262,13 @@ class BaseUser(_BaseUser):
         if they have a guild specific nickname then that
         is returned instead.
         """
-        return self.name
+        return self.global_name or self.name
 
     def mentioned_in(self, message):
         """Checks if the user is mentioned in the specified message.
 
         Parameters
-        -----------
+        ----------
         message: :class:`Message`
             The message to check if you're mentioned in.
 
@@ -274,7 +277,6 @@ class BaseUser(_BaseUser):
         :class:`bool`
             Indicates if the user is mentioned in the message.
         """
-
         if message.mention_everyone:
             return True
 
@@ -303,7 +305,7 @@ class ClientUser(BaseUser):
             Returns the user's name with discriminator.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The user's username.
     id: :class:`int`
@@ -343,12 +345,12 @@ class ClientUser(BaseUser):
 
     __slots__ = BaseUser.__slots__ + ("email", "locale", "_flags", "verified", "mfa_enabled", "premium", "premium_type", "_relationships", "__weakref__")
 
-    def __init__(self, *, state, data):
+    def __init__(self, *, state, data) -> None:
         super().__init__(state=state, data=data)
         self._relationships = {}
 
-    def __repr__(self):
-        return f"<ClientUser id={self.id} name={self.name!r} discriminator={self.discriminator!r} bot={self.bot} verified={self.verified} mfa_enabled={self.mfa_enabled}>"
+    def __repr__(self) -> str:
+        return f"<ClientUser id={self.id} name={self.name!r} global_name={self.global_name!r} bot={self.bot} verified={self.verified} mfa_enabled={self.mfa_enabled}>"
 
     def _update(self, data):
         super()._update(data)
@@ -372,12 +374,12 @@ class ClientUser(BaseUser):
             This can only be used by non-bot accounts.
 
         Parameters
-        -----------
+        ----------
         user_id: :class:`int`
             The user ID to check if we have a relationship with them.
 
         Returns
-        --------
+        -------
         Optional[:class:`Relationship`]
             The relationship if available or ``None``.
         """
@@ -420,7 +422,7 @@ class ClientUser(BaseUser):
         return [r.user for r in self._relationships.values() if r.type is RelationshipType.blocked]
 
     async def edit(self, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the current profile of the client.
 
@@ -441,7 +443,7 @@ class ClientUser(BaseUser):
             The only image formats supported for uploading is JPEG and PNG.
 
         Parameters
-        -----------
+        ----------
         password: :class:`str`
             The current password for the client's account.
             Only applicable to user accounts.
@@ -471,21 +473,17 @@ class ClientUser(BaseUser):
             Password is required for non-bot accounts.
             House field was not a HypeSquadHouse.
         """
-
         try:
             avatar_bytes = fields["avatar"]
         except KeyError:
             avatar = self.avatar
         else:
-            if avatar_bytes is not None:
-                avatar = _bytes_to_base64_data(avatar_bytes)
-            else:
-                avatar = None
-
+            avatar = None if avatar_bytes is None else _bytes_to_base64_data(avatar_bytes)
         not_bot_account = not self.bot
         password = fields.get("password")
         if not_bot_account and password is None:
-            raise ClientException("Password is required for non-bot accounts.")
+            msg = "Password is required for non-bot accounts."
+            raise ClientException(msg)
 
         args = {"password": password, "username": fields.get("username", self.name), "avatar": avatar}
 
@@ -502,7 +500,8 @@ class ClientUser(BaseUser):
             if house is None:
                 await http.leave_hypesquad_house()
             elif not isinstance(house, HypeSquadHouse):
-                raise ClientException("`house` parameter was not a HypeSquadHouse")
+                msg = "`house` parameter was not a HypeSquadHouse"
+                raise ClientException(msg)
             else:
                 value = house.value
 
@@ -520,7 +519,7 @@ class ClientUser(BaseUser):
 
     @deprecated()
     async def create_group(self, *recipients):
-        r"""|coro|
+        r"""|coro|.
 
         Creates a group direct message with the recipients
         provided. These recipients must be have a relationship
@@ -533,13 +532,13 @@ class ClientUser(BaseUser):
             This can only be used by non-bot accounts.
 
         Parameters
-        -----------
+        ----------
         \*recipients: :class:`User`
             An argument :class:`list` of :class:`User` to have in
             your group.
 
         Raises
-        -------
+        ------
         HTTPException
             Failed to create the group direct message.
         ClientException
@@ -551,11 +550,11 @@ class ClientUser(BaseUser):
         :class:`GroupChannel`
             The new group channel.
         """
-
         from .channel import GroupChannel
 
         if len(recipients) < 2:
-            raise ClientException("You must have two or more recipients to create a group.")
+            msg = "You must have two or more recipients to create a group."
+            raise ClientException(msg)
 
         users = [str(u.id) for u in recipients]
         data = await self._state.http.start_group(self.id, users)
@@ -563,7 +562,7 @@ class ClientUser(BaseUser):
 
     @deprecated()
     async def edit_settings(self, **kwargs):
-        """|coro|
+        """|coro|.
 
         Edits the client user's settings.
 
@@ -574,7 +573,7 @@ class ClientUser(BaseUser):
             This can only be used by non-bot accounts.
 
         Parameters
-        -------
+        ----------
         afk_timeout: :class:`int`
             How long (in seconds) the user needs to be AFK until Discord
             sends push notifications to your mobile device.
@@ -629,7 +628,7 @@ class ClientUser(BaseUser):
             The timezone offset to use.
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the settings failed.
         Forbidden
@@ -642,37 +641,30 @@ class ClientUser(BaseUser):
         """
         payload = {}
 
-        content_filter = kwargs.pop("explicit_content_filter", None)
-        if content_filter:
-            payload.update({"explicit_content_filter": content_filter.value})
+        if content_filter := kwargs.pop("explicit_content_filter", None):
+            payload["explicit_content_filter"] = content_filter.value
 
-        friend_flags = kwargs.pop("friend_source_flags", None)
-        if friend_flags:
+        if friend_flags := kwargs.pop("friend_source_flags", None):
             dicts = [{}, {"mutual_guilds": True}, {"mutual_friends": True}, {"mutual_guilds": True, "mutual_friends": True}, {"all": True}]
-            payload.update({"friend_source_flags": dicts[friend_flags.value]})
+            payload["friend_source_flags"] = dicts[friend_flags.value]
 
-        guild_positions = kwargs.pop("guild_positions", None)
-        if guild_positions:
+        if guild_positions := kwargs.pop("guild_positions", None):
             guild_positions = [str(x.id) for x in guild_positions]
-            payload.update({"guild_positions": guild_positions})
+            payload["guild_positions"] = guild_positions
 
-        restricted_guilds = kwargs.pop("restricted_guilds", None)
-        if restricted_guilds:
+        if restricted_guilds := kwargs.pop("restricted_guilds", None):
             restricted_guilds = [str(x.id) for x in restricted_guilds]
-            payload.update({"restricted_guilds": restricted_guilds})
+            payload["restricted_guilds"] = restricted_guilds
 
-        status = kwargs.pop("status", None)
-        if status:
-            payload.update({"status": status.value})
+        if status := kwargs.pop("status", None):
+            payload["status"] = status.value
 
-        theme = kwargs.pop("theme", None)
-        if theme:
-            payload.update({"theme": theme.value})
+        if theme := kwargs.pop("theme", None):
+            payload["theme"] = theme.value
 
-        payload.update(kwargs)
+        payload |= kwargs
 
-        data = await self._state.http.edit_settings(**payload)
-        return data
+        return await self._state.http.edit_settings(**payload)
 
 
 class User(BaseUser, discord.abc.Messageable):
@@ -697,7 +689,7 @@ class User(BaseUser, discord.abc.Messageable):
             Returns the user's name with discriminator.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The user's username.
     id: :class:`int`
@@ -714,12 +706,11 @@ class User(BaseUser, discord.abc.Messageable):
 
     __slots__ = BaseUser.__slots__ + ("__weakref__",)
 
-    def __repr__(self):
-        return f"<User id={self.id} name={self.name!r} discriminator={self.discriminator!r} bot={self.bot}>"
+    def __repr__(self) -> str:
+        return f"<User id={self.id} name={self.name!r} global_name={self.global_name!r} bot={self.bot}>"
 
     async def _get_channel(self):
-        ch = await self.create_dm()
-        return ch
+        return await self.create_dm()
 
     @property
     def dm_channel(self):
@@ -743,7 +734,7 @@ class User(BaseUser, discord.abc.Messageable):
         return [guild for guild in self._state._guilds.values() if guild.get_member(self.id)]
 
     async def create_dm(self):
-        """|coro|
+        """|coro|.
 
         Creates a :class:`DMChannel` with this user.
 
@@ -777,7 +768,7 @@ class User(BaseUser, discord.abc.Messageable):
 
     @deprecated()
     async def mutual_friends(self):
-        """|coro|
+        """|coro|.
 
         Gets all mutual friends of this user.
 
@@ -788,7 +779,7 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
 
         Raises
-        -------
+        ------
         Forbidden
             Not allowed to get mutual friends of this user.
         HTTPException
@@ -814,9 +805,7 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
         """
         r = self.relationship
-        if r is None:
-            return False
-        return r.type is RelationshipType.friend
+        return False if r is None else r.type is RelationshipType.friend
 
     @deprecated()
     def is_blocked(self):
@@ -829,13 +818,11 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
         """
         r = self.relationship
-        if r is None:
-            return False
-        return r.type is RelationshipType.blocked
+        return False if r is None else r.type is RelationshipType.blocked
 
     @deprecated()
     async def block(self):
-        """|coro|
+        """|coro|.
 
         Blocks the user.
 
@@ -846,18 +833,17 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
 
         Raises
-        -------
+        ------
         Forbidden
             Not allowed to block this user.
         HTTPException
             Blocking the user failed.
         """
-
         await self._state.http.add_relationship(self.id, type=RelationshipType.blocked.value)
 
     @deprecated()
     async def unblock(self):
-        """|coro|
+        """|coro|.
 
         Unblocks the user.
 
@@ -868,7 +854,7 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
 
         Raises
-        -------
+        ------
         Forbidden
             Not allowed to unblock this user.
         HTTPException
@@ -878,7 +864,7 @@ class User(BaseUser, discord.abc.Messageable):
 
     @deprecated()
     async def remove_friend(self):
-        """|coro|
+        """|coro|.
 
         Removes the user as a friend.
 
@@ -889,7 +875,7 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
 
         Raises
-        -------
+        ------
         Forbidden
             Not allowed to remove this user as a friend.
         HTTPException
@@ -899,7 +885,7 @@ class User(BaseUser, discord.abc.Messageable):
 
     @deprecated()
     async def send_friend_request(self):
-        """|coro|
+        """|coro|.
 
         Sends the user a friend request.
 
@@ -910,7 +896,7 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
 
         Raises
-        -------
+        ------
         Forbidden
             Not allowed to send a friend request to the user.
         HTTPException
@@ -920,7 +906,7 @@ class User(BaseUser, discord.abc.Messageable):
 
     @deprecated()
     async def profile(self):
-        """|coro|
+        """|coro|.
 
         Gets the user's profile.
 
@@ -931,18 +917,17 @@ class User(BaseUser, discord.abc.Messageable):
             This can only be used by non-bot accounts.
 
         Raises
-        -------
+        ------
         Forbidden
             Not allowed to fetch profiles.
         HTTPException
             Fetching the profile failed.
 
         Returns
-        --------
+        -------
         :class:`Profile`
             The profile of the user.
         """
-
         state = self._state
         data = await state.http.get_user_profile(self.id)
 
@@ -951,4 +936,10 @@ class User(BaseUser, discord.abc.Messageable):
 
         since = data.get("premium_since")
         mutual_guilds = list(filter(None, map(transform, data.get("mutual_guilds", []))))
-        return Profile(flags=data["user"].get("flags", 0), premium_since=parse_time(since), mutual_guilds=mutual_guilds, user=self, connected_accounts=data["connected_accounts"])
+        return Profile(
+            flags=data["user"].get("flags", 0),
+            premium_since=parse_time(since),
+            mutual_guilds=mutual_guilds,
+            user=self,
+            connected_accounts=data["connected_accounts"],
+        )

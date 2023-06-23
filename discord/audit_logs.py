@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from . import enums, utils
 from .colour import Colour
@@ -63,15 +59,11 @@ def _transform_channel(entry, data):
 
 
 def _transform_owner_id(entry, data):
-    if data is None:
-        return None
-    return entry._get_member(int(data))
+    return None if data is None else entry._get_member(int(data))
 
 
 def _transform_inviter_id(entry, data):
-    if data is None:
-        return None
-    return entry._get_member(int(data))
+    return None if data is None else entry._get_member(int(data))
 
 
 def _transform_overwrites(entry, data):
@@ -97,13 +89,13 @@ def _transform_overwrites(entry, data):
 
 
 class AuditLogDiff:
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.__dict__)
 
     def __iter__(self):
         return iter(self.__dict__.items())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         values = " ".join("%s=%r" % item for item in self.__dict__.items())
         return f"<AuditLogDiff {values}>"
 
@@ -131,7 +123,7 @@ class AuditLogChanges:
         "default_message_notifications": ("default_notifications", _transform_default_notifications),
     }
 
-    def __init__(self, entry, data):
+    def __init__(self, entry, data) -> None:
         self.before = AuditLogDiff()
         self.after = AuditLogDiff()
 
@@ -177,7 +169,7 @@ class AuditLogChanges:
             self.after.color = self.after.colour
             self.before.color = self.before.colour
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<AuditLogChanges before=%r after=%r>" % (self.before, self.after)
 
     def _handle_role(self, first, second, entry, elem):
@@ -223,7 +215,7 @@ class AuditLogEntry(Hashable):
         Audit log entries are now comparable and hashable.
 
     Attributes
-    -----------
+    ----------
     action: :class:`AuditLogAction`
         The action that was done.
     user: :class:`abc.User`
@@ -243,7 +235,7 @@ class AuditLogEntry(Hashable):
         which actions have this field filled out.
     """
 
-    def __init__(self, *, users, data, guild):
+    def __init__(self, *, users, data, guild) -> None:
         self._state = guild._state
         self.guild = guild
         self._users = users
@@ -301,7 +293,7 @@ class AuditLogEntry(Hashable):
     def _get_member(self, user_id):
         return self.guild.get_member(user_id) or self._users.get(user_id)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<AuditLogEntry id={self.id} action={self.action} user={self.user!r}>"
 
     @utils.cached_property
@@ -345,25 +337,29 @@ class AuditLogEntry(Hashable):
 
     def _convert_target_channel(self, target_id):
         ch = self.guild.get_channel(target_id)
-        if ch is None:
-            return Object(id=target_id)
-        return ch
+        return Object(id=target_id) if ch is None else ch
 
     def _convert_target_user(self, target_id):
         return self._get_member(target_id)
 
     def _convert_target_role(self, target_id):
         role = self.guild.get_role(target_id)
-        if role is None:
-            return Object(id=target_id)
-        return role
+        return Object(id=target_id) if role is None else role
 
     def _convert_target_invite(self, target_id):
         # invites have target_id set to null
         # so figure out which change has the full invite data
         changeset = self.before if self.action is enums.AuditLogAction.invite_delete else self.after
 
-        fake_payload = {"max_age": changeset.max_age, "max_uses": changeset.max_uses, "code": changeset.code, "temporary": changeset.temporary, "channel": changeset.channel, "uses": changeset.uses, "guild": self.guild}
+        fake_payload = {
+            "max_age": changeset.max_age,
+            "max_uses": changeset.max_uses,
+            "code": changeset.code,
+            "temporary": changeset.temporary,
+            "channel": changeset.channel,
+            "uses": changeset.uses,
+            "guild": self.guild,
+        }
 
         obj = Invite(state=self._state, data=fake_payload)
         try:

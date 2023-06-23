@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from . import utils
 from .asset import Asset
@@ -33,9 +29,8 @@ from .user import User
 class AppInfo:
     """Represents the application info for the bot provided by Discord.
 
-
     Attributes
-    -------------
+    ----------
     id: :class:`int`
         The application ID.
     name: :class:`str`
@@ -97,9 +92,26 @@ class AppInfo:
         .. versionadded:: 1.3
     """
 
-    __slots__ = ("_state", "description", "id", "name", "rpc_origins", "bot_public", "bot_require_code_grant", "owner", "icon", "summary", "verify_key", "team", "guild_id", "primary_sku_id", "slug", "cover_image")
+    __slots__ = (
+        "_state",
+        "description",
+        "id",
+        "name",
+        "rpc_origins",
+        "bot_public",
+        "bot_require_code_grant",
+        "owner",
+        "icon",
+        "summary",
+        "verify_key",
+        "team",
+        "guild_id",
+        "primary_sku_id",
+        "slug",
+        "cover_image",
+    )
 
-    def __init__(self, state, data):
+    def __init__(self, state, data) -> None:
         self._state = state
 
         self.id = int(data["id"])
@@ -123,7 +135,7 @@ class AppInfo:
         self.slug = data.get("slug")
         self.cover_image = data.get("cover_image")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.id} name={self.name!r} description={self.description!r} public={self.bot_public} owner={self.owner!r}>"
 
     @property
@@ -146,7 +158,7 @@ class AppInfo:
         .. versionadded:: 1.6
 
         Parameters
-        -----------
+        ----------
         format: :class:`str`
             The format to attempt to convert the icon to. Defaults to 'webp'.
         size: :class:`int`
@@ -158,7 +170,7 @@ class AppInfo:
             Bad image format passed to ``format`` or invalid ``size``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -185,7 +197,7 @@ class AppInfo:
         .. versionadded:: 1.6
 
         Parameters
-        -----------
+        ----------
         format: :class:`str`
             The format to attempt to convert the image to. Defaults to 'webp'.
         size: :class:`int`
@@ -197,7 +209,7 @@ class AppInfo:
             Bad image format passed to ``format`` or invalid ``size``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -206,7 +218,7 @@ class AppInfo:
     @property
     def guild(self):
         """Optional[:class:`Guild`]: If this application is a game sold on Discord,
-        this field will be the guild to which it has been linked
+        this field will be the guild to which it has been linked.
 
         .. versionadded:: 1.3
         """

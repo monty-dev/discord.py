@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from . import utils
 from .asset import Asset
@@ -36,7 +32,7 @@ class Team:
     """Represents an application team for a bot provided by Discord.
 
     Attributes
-    -------------
+    ----------
     id: :class:`int`
         The team ID.
     name: :class:`str`
@@ -53,7 +49,7 @@ class Team:
 
     __slots__ = ("_state", "id", "name", "icon", "owner_id", "members")
 
-    def __init__(self, state, data):
+    def __init__(self, state, data) -> None:
         self._state = state
 
         self.id = utils._get_as_snowflake(data, "id")
@@ -62,7 +58,7 @@ class Team:
         self.owner_id = utils._get_as_snowflake(data, "owner_user_id")
         self.members = [TeamMember(self, self._state, member) for member in data["members"]]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.id} name={self.name}>"
 
     @property
@@ -83,7 +79,7 @@ class Team:
         .. versionadded:: 2.0
 
         Parameters
-        -----------
+        ----------
         format: :class:`str`
             The format to attempt to convert the icon to. Defaults to 'webp'.
         size: :class:`int`
@@ -95,7 +91,7 @@ class Team:
             Bad image format passed to ``format`` or invalid ``size``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -131,7 +127,7 @@ class TeamMember(BaseUser):
     .. versionadded:: 1.3
 
     Attributes
-    -------------
+    ----------
     name: :class:`str`
         The team member's username.
     id: :class:`int`
@@ -150,11 +146,11 @@ class TeamMember(BaseUser):
 
     __slots__ = BaseUser.__slots__ + ("team", "membership_state", "permissions")
 
-    def __init__(self, team, state, data):
+    def __init__(self, team, state, data) -> None:
         self.team = team
         self.membership_state = try_enum(TeamMembershipState, data["membership_state"])
         self.permissions = data["permissions"]
         super().__init__(state=state, data=data["user"])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.id} name={self.name!r} discriminator={self.discriminator!r} membership_state={self.membership_state!r}>"

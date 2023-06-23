@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import inspect
 import re
@@ -81,7 +77,7 @@ class Converter:
     """
 
     async def convert(self, ctx, argument):
-        """|coro|
+        """|coro|.
 
         The method to override to do conversion logic.
 
@@ -90,24 +86,25 @@ class Converter:
         properly propagate to the error handlers.
 
         Parameters
-        -----------
+        ----------
         ctx: :class:`.Context`
             The invocation context that the argument is being used in.
         argument: :class:`str`
             The argument that is being converted.
 
         Raises
-        -------
+        ------
         :exc:`.CommandError`
             A generic exception occurred when converting the argument.
         :exc:`.BadArgument`
             The converter failed to convert the argument.
         """
-        raise NotImplementedError("Derived classes need to implement this.")
+        msg = "Derived classes need to implement this."
+        raise NotImplementedError(msg)
 
 
 class IDConverter(Converter):
-    def __init__(self):
+    def __init__(self) -> None:
         self._id_regex = re.compile(r"([0-9]{15,20})$")
         super().__init__()
 
@@ -164,9 +161,7 @@ class MemberConverter(IDConverter):
 
         # If we're not being rate limited then we can use the websocket to actually query
         members = await guild.query_members(limit=1, user_ids=[user_id], cache=cache)
-        if not members:
-            return None
-        return members[0]
+        return members[0] if members else None
 
     async def convert(self, ctx, argument):
         bot = ctx.bot
@@ -249,12 +244,17 @@ class UserConverter(IDConverter):
         if len(arg) > 5 and arg[-5] == "#":
             discrim = arg[-4:]
             name = arg[:-5]
-            predicate = lambda u: u.name == name and u.discriminator == discrim
+
+            def predicate(u):
+                return u.name == name and u.discriminator == discrim
+
             result = discord.utils.find(predicate, state._users.values())
             if result is not None:
                 return result
 
-        predicate = lambda u: u.name == arg
+        def predicate(u):
+            return u.name == arg
+
         result = discord.utils.find(predicate, state._users.values())
 
         if result is None:
@@ -277,7 +277,9 @@ class PartialMessageConverter(Converter):
 
     def _get_id_matches(self, argument):
         id_regex = re.compile(r"(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$")
-        link_regex = re.compile(r"https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/" r"(?:[0-9]{15,20}|@me)" r"/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$")
+        link_regex = re.compile(
+            r"https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/(?:[0-9]{15,20}|@me)/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$",
+        )
         match = id_regex.match(argument) or link_regex.match(argument)
         if not match:
             raise MessageNotFound(argument)
@@ -309,18 +311,17 @@ class MessageConverter(PartialMessageConverter):
 
     async def convert(self, ctx, argument):
         message_id, channel_id = self._get_id_matches(argument)
-        message = ctx.bot._connection._get_message(message_id)
-        if message:
+        if message := ctx.bot._connection._get_message(message_id):
             return message
         channel = ctx.bot.get_channel(channel_id) if channel_id else ctx.channel
         if not channel:
             raise ChannelNotFound(channel_id)
         try:
             return await channel.fetch_message(message_id)
-        except discord.NotFound:
-            raise MessageNotFound(argument)
-        except discord.Forbidden:
-            raise ChannelNotReadable(channel)
+        except discord.NotFound as e:
+            raise MessageNotFound(argument) from e
+        except discord.Forbidden as e:
+            raise ChannelNotReadable(channel) from e
 
 
 class TextChannelConverter(IDConverter):
@@ -582,8 +583,8 @@ class ColourConverter(Converter):
             value = int(arg, base=16)
             if not (0 <= value <= 0xFFFFFF):
                 raise BadColourArgument(argument)
-        except ValueError:
-            raise BadColourArgument(argument)
+        except ValueError as e:
+            raise BadColourArgument(argument) from e
         else:
             return discord.Color(value=value)
 
@@ -613,7 +614,7 @@ class ColourConverter(Converter):
         if argument[0] == "#":
             return self.parse_hex_number(argument[1:])
 
-        if argument[0:2] == "0x":
+        if argument[:2] == "0x":
             rest = argument[2:]
             # Legacy backwards compatible syntax
             if rest.startswith("#"):
@@ -621,7 +622,7 @@ class ColourConverter(Converter):
             return self.parse_hex_number(rest)
 
         arg = argument.lower()
-        if arg[0:3] == "rgb":
+        if arg[:3] == "rgb":
             return self.parse_rgb(arg)
 
         arg = arg.replace(" ", "_")
@@ -653,10 +654,9 @@ class RoleConverter(IDConverter):
     async def convert(self, ctx, argument):
         guild = ctx.guild
         if not guild:
-            raise NoPrivateMessage()
+            raise NoPrivateMessage
 
-        match = self._get_id_match(argument) or re.match(r"<@&([0-9]+)>$", argument)
-        if match:
+        if match := self._get_id_match(argument) or re.match(r"<@&([0-9]+)>$", argument):
             result = guild.get_role(int(match.group(1)))
         else:
             result = discord.utils.get(guild._roles.values(), name=argument)
@@ -684,10 +684,9 @@ class InviteConverter(Converter):
 
     async def convert(self, ctx, argument):
         try:
-            invite = await ctx.bot.fetch_invite(argument)
-            return invite
+            return await ctx.bot.fetch_invite(argument)
         except Exception as exc:
-            raise BadInviteArgument() from exc
+            raise BadInviteArgument from exc
 
 
 class GuildConverter(IDConverter):
@@ -712,8 +711,8 @@ class GuildConverter(IDConverter):
         if result is None:
             result = discord.utils.get(ctx.bot.guilds, name=argument)
 
-            if result is None:
-                raise GuildNotFound(argument)
+        if result is None:
+            raise GuildNotFound(argument)
         return result
 
 
@@ -772,12 +771,10 @@ class PartialEmojiConverter(Converter):
     """
 
     async def convert(self, ctx, argument):
-        match = re.match(r"<(a?):([a-zA-Z0-9\_]+):([0-9]+)>$", argument)
-
-        if match:
-            emoji_animated = bool(match.group(1))
-            emoji_name = match.group(2)
-            emoji_id = int(match.group(3))
+        if match := re.match(r"<(a?):([a-zA-Z0-9\_]+):([0-9]+)>$", argument):
+            emoji_animated = bool(match[1])
+            emoji_name = match[2]
+            emoji_id = int(match[3])
 
             return discord.PartialEmoji.with_state(ctx.bot._connection, animated=emoji_animated, name=emoji_name, id=emoji_id)
 
@@ -791,7 +788,7 @@ class clean_content(Converter):
     This behaves similarly to :attr:`~discord.Message.clean_content`.
 
     Attributes
-    ------------
+    ----------
     fix_channel_mentions: :class:`bool`
         Whether to clean channel mentions.
     use_nicknames: :class:`bool`
@@ -804,7 +801,7 @@ class clean_content(Converter):
         .. versionadded:: 1.7
     """
 
-    def __init__(self, *, fix_channel_mentions=False, use_nicknames=True, escape_markdown=False, remove_markdown=False):
+    def __init__(self, *, fix_channel_mentions=False, use_nicknames=True, escape_markdown=False, remove_markdown=False) -> None:
         self.fix_channel_mentions = fix_channel_mentions
         self.use_nicknames = use_nicknames
         self.escape_markdown = escape_markdown
@@ -864,21 +861,24 @@ class clean_content(Converter):
 class _Greedy:
     __slots__ = ("converter",)
 
-    def __init__(self, *, converter=None):
+    def __init__(self, *, converter=None) -> None:
         self.converter = converter
 
     def __getitem__(self, params):
         if not isinstance(params, tuple):
             params = (params,)
         if len(params) != 1:
-            raise TypeError("Greedy[...] only takes a single argument")
+            msg = "Greedy[...] only takes a single argument"
+            raise TypeError(msg)
         converter = params[0]
 
         if not (callable(converter) or isinstance(converter, Converter) or hasattr(converter, "__origin__")):
-            raise TypeError("Greedy[...] expects a type or a Converter instance.")
+            msg = "Greedy[...] expects a type or a Converter instance."
+            raise TypeError(msg)
 
         if converter is str or converter is type(None) or converter is _Greedy:
-            raise TypeError(f"Greedy[{converter.__name__}] is invalid.")
+            msg = f"Greedy[{converter.__name__}] is invalid."
+            raise TypeError(msg)
 
         if getattr(converter, "__origin__", None) is typing.Union and type(None) in converter.__args__:
             raise TypeError("Greedy[%r] is invalid." % converter)

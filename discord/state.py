@@ -1,42 +1,38 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-from loguru import logger as log2
 import asyncio
 import contextlib
 import copy
 import datetime
-import gc
 import inspect
 import itertools
 import logging
 import os
 import warnings
 import weakref
-from collections import deque, OrderedDict
+from collections import OrderedDict, deque
+
+from loguru import logger as log2
 
 from . import utils
 from .activity import BaseActivity
@@ -58,7 +54,7 @@ from .user import ClientUser, User
 
 
 class ChunkRequest:
-    def __init__(self, guild_id, loop, resolver, *, cache=True):
+    def __init__(self, guild_id, loop, resolver, *, cache=True) -> None:
         self.guild_id = guild_id
         self.resolver = resolver
         self.loop = loop
@@ -109,7 +105,7 @@ async def logging_coroutine(coroutine, *, info):
 
 
 class ConnectionState:
-    def __init__(self, *, dispatch, handlers, hooks, syncer, http, loop, **options):
+    def __init__(self, *, dispatch, handlers, hooks, syncer, http, loop, **options) -> None:
         self.loop = loop
         self.http = http
         self.max_messages = options.get("max_messages", 1000)
@@ -126,13 +122,15 @@ class ConnectionState:
         self.heartbeat_timeout = options.get("heartbeat_timeout", 60.0)
         self.guild_ready_timeout = options.get("guild_ready_timeout", 2.0)
         if self.guild_ready_timeout < 0:
-            raise ValueError("guild_ready_timeout cannot be negative")
+            msg = "guild_ready_timeout cannot be negative"
+            raise ValueError(msg)
 
         self.guild_subscriptions = options.get("guild_subscriptions", True)
         allowed_mentions = options.get("allowed_mentions")
 
         if allowed_mentions is not None and not isinstance(allowed_mentions, AllowedMentions):
-            raise TypeError("allowed_mentions parameter must be AllowedMentions")
+            msg = "allowed_mentions parameter must be AllowedMentions"
+            raise TypeError(msg)
 
         self.allowed_mentions = allowed_mentions
         self._chunk_requests = {}  # Dict[Union[int, str], ChunkRequest]
@@ -140,7 +138,8 @@ class ConnectionState:
         activity = options.get("activity")
         if activity:
             if not isinstance(activity, BaseActivity):
-                raise TypeError("activity parameter must derive from BaseActivity.")
+                msg = "activity parameter must derive from BaseActivity."
+                raise TypeError(msg)
 
             activity = activity.to_dict()
 
@@ -201,17 +200,14 @@ class ConnectionState:
         self._calls = {}
         self._guilds = {}
         self._voice_clients = {}
-
         # LRU of max size 128
         self._private_channels = OrderedDict()
         # extra dict to look up private channels by user id
         self._private_channels_by_user = {}
         self._messages = self.max_messages and deque(maxlen=self.max_messages)
-
         # In cases of large deallocations the GC should be called explicitly
         # To free the memory more immediately, especially true when it comes
         # to reconnect loops which cause mass allocations and deallocations.
-        gc.collect()
 
     def process_chunk_requests(self, guild_id, nonce, members, complete):
         removed = []
@@ -311,7 +307,6 @@ class ConnectionState:
 
         # Much like clear(), if we have a massive deallocation
         # then it's better to explicitly call the GC
-        gc.collect()
 
     @property
     def emojis(self):
@@ -390,7 +385,8 @@ class ConnectionState:
         guild_id = guild.id
         ws = self._get_websocket(guild_id)
         if ws is None:
-            raise RuntimeError("Somehow do not have a websocket for this guild_id")
+            msg = "Somehow do not have a websocket for this guild_id"
+            raise RuntimeError(msg)
 
         request = ChunkRequest(guild.id, self.loop, self._get_guild, cache=cache)
         self._chunk_requests[request.nonce] = request
@@ -437,11 +433,8 @@ class ConnectionState:
                         self.dispatch("guild_join", guild)
 
             # remove the state
-            try:
+            with contextlib.suppress(AttributeError):
                 del self._ready_state
-            except AttributeError:
-                pass  # already been deleted somehow
-
             # call GUILD_SYNC after we're done chunking
             if not self.is_bot:
                 log.info("Requesting GUILD_SYNC for %s guilds", len(self.guilds))
@@ -745,21 +738,15 @@ class ConnectionState:
         if self.member_cache_flags.joined:
             guild._add_member(member)
 
-        try:
+        with contextlib.suppress(AttributeError):
             guild._member_count += 1
-        except AttributeError:
-            pass
-
         self.dispatch("member_join", member)
 
     def parse_guild_member_remove(self, data):
         guild = self._get_guild(int(data["guild_id"]))
         if guild is not None:
-            try:
+            with contextlib.suppress(AttributeError):
                 guild._member_count -= 1
-            except AttributeError:
-                pass
-
             user_id = int(data["user"]["id"])
             member = guild.get_member(user_id)
             if member is not None:
@@ -803,7 +790,7 @@ class ConnectionState:
         before_emojis = guild.emojis
         for emoji in before_emojis:
             self._emojis.pop(emoji.id, None)
-        guild.emojis = tuple(map(lambda d: self.store_emoji(guild, d), data["emojis"]))
+        guild.emojis = tuple((self.store_emoji(guild, d) for d in data["emojis"]))
         self.dispatch("guild_emojis_update", guild, before_emojis, guild.emojis)
 
     def _get_create_guild(self, data):
@@ -1118,7 +1105,7 @@ class ConnectionState:
 
 
 class AutoShardedConnectionState(ConnectionState):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._ready_task = None
         self.shard_ids = ()
@@ -1227,7 +1214,6 @@ class AutoShardedConnectionState(ConnectionState):
         # implicitly via clear() but in the auto sharded client clearing
         # the cache would have the consequence of clearing data on other
         # shards as well.
-        gc.collect()
 
         if self._ready_task is None:
             self._ready_task = asyncio.ensure_future(self._delay_ready(), loop=self.loop)

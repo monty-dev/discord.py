@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import struct
 
@@ -32,8 +28,6 @@ from .errors import DiscordException
 class OggError(DiscordException):
     """An exception that is thrown for Ogg stream parsing errors."""
 
-    pass
-
 
 # https://tools.ietf.org/html/rfc3533
 # https://tools.ietf.org/html/rfc7845
@@ -42,7 +36,7 @@ class OggError(DiscordException):
 class OggPage:
     _header = struct.Struct("<xBQIIIB")
 
-    def __init__(self, stream):
+    def __init__(self, stream) -> None:
         try:
             header = stream.read(struct.calcsize(self._header.format))
 
@@ -52,7 +46,8 @@ class OggPage:
             bodylen = sum(struct.unpack("B" * self.segnum, self.segtable))
             self.data = stream.read(bodylen)
         except Exception:
-            raise OggError("bad data stream") from None
+            msg = "bad data stream"
+            raise OggError(msg) from None
 
     def iter_packets(self):
         packetlen = offset = 0
@@ -74,7 +69,7 @@ class OggPage:
 
 
 class OggStream:
-    def __init__(self, stream):
+    def __init__(self, stream) -> None:
         self.stream = stream
 
     def _next_page(self):
@@ -84,13 +79,12 @@ class OggStream:
         elif not head:
             return None
         else:
-            raise OggError("invalid header magic")
+            msg = "invalid header magic"
+            raise OggError(msg)
 
     def _iter_pages(self):
-        page = self._next_page()
-        while page:
+        while page := self._next_page():
             yield page
-            page = self._next_page()
 
     def iter_packets(self):
         partial = b""

@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from . import utils
 from .asset import Asset
@@ -59,7 +55,7 @@ class PartialEmoji(_EmojiTag):
             Returns the emoji rendered for discord.
 
     Attributes
-    -----------
+    ----------
     name: Optional[:class:`str`]
         The custom emoji name, if applicable, or the unicode codepoint
         of the non-custom emoji. This can be ``None`` if the emoji
@@ -72,7 +68,7 @@ class PartialEmoji(_EmojiTag):
 
     __slots__ = ("animated", "name", "id", "_state")
 
-    def __init__(self, *, name, animated=False, id=None):
+    def __init__(self, *, name, animated=False, id=None) -> None:
         self.animated = animated
         self.name = name
         self.id = id
@@ -96,23 +92,21 @@ class PartialEmoji(_EmojiTag):
         self._state = state
         return self
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.id is None:
             return self.name
         if self.animated:
             return f"<a:{self.name}:{self.id}>"
         return f"<:{self.name}:{self.id}>"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} animated={self.animated} name={self.name!r} id={self.id}>"
 
     def __eq__(self, other):
         if self.is_unicode_emoji():
             return isinstance(other, PartialEmoji) and self.name == other.name
 
-        if isinstance(other, _EmojiTag):
-            return self.id == other.id
-        return False
+        return self.id == other.id if isinstance(other, _EmojiTag) else False
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -129,9 +123,7 @@ class PartialEmoji(_EmojiTag):
         return self.id is None
 
     def _as_reaction(self):
-        if self.id is None:
-            return self.name
-        return f"{self.name}:{self.id}"
+        return self.name if self.id is None else f"{self.name}:{self.id}"
 
     @property
     def created_at(self):
@@ -139,10 +131,7 @@ class PartialEmoji(_EmojiTag):
 
         .. versionadded:: 1.6
         """
-        if self.is_unicode_emoji():
-            return None
-
-        return utils.snowflake_time(self.id)
+        return None if self.is_unicode_emoji() else utils.snowflake_time(self.id)
 
     @property
     def url(self):
@@ -162,7 +151,7 @@ class PartialEmoji(_EmojiTag):
         .. versionadded:: 1.7
 
         Parameters
-        -----------
+        ----------
         format: Optional[:class:`str`]
             The format to attempt to convert the emojis to.
             If the format is ``None``, then it is automatically
@@ -173,12 +162,12 @@ class PartialEmoji(_EmojiTag):
             Defaults to 'png'
 
         Raises
-        -------
+        ------
         InvalidArgument
             Bad image format passed to ``format`` or ``static_format``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """

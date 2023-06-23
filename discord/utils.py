@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import array
 import asyncio
@@ -49,7 +45,7 @@ MAX_ASYNCIO_SECONDS = 3456000
 
 
 class cached_property:
-    def __init__(self, function):
+    def __init__(self, function) -> None:
         self.function = function
         self.__doc__ = getattr(function, "__doc__")
 
@@ -64,7 +60,7 @@ class cached_property:
 
 
 class CachedSlotProperty:
-    def __init__(self, name, function):
+    def __init__(self, name, function) -> None:
         self.name = name
         self.function = function
         self.__doc__ = getattr(function, "__doc__")
@@ -91,16 +87,16 @@ def cached_slot_property(name):
 class SequenceProxy(collections.abc.Sequence):
     """Read-only proxy of a Sequence."""
 
-    def __init__(self, proxied):
+    def __init__(self, proxied) -> None:
         self.__proxied = proxied
 
     def __getitem__(self, idx):
         return self.__proxied[idx]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.__proxied)
 
-    def __contains__(self, item):
+    def __contains__(self, item) -> bool:
         return item in self.__proxied
 
     def __iter__(self):
@@ -155,7 +151,7 @@ def oauth_url(client_id, permissions=None, guild=None, redirect_uri=None, scopes
     into guilds.
 
     Parameters
-    -----------
+    ----------
     client_id: :class:`str`
         The client ID for your bot.
     permissions: :class:`~discord.Permissions`
@@ -171,7 +167,7 @@ def oauth_url(client_id, permissions=None, guild=None, redirect_uri=None, scopes
         .. versionadded:: 1.7
 
     Returns
-    --------
+    -------
     :class:`str`
         The OAuth2 URL for inviting the bot into guilds.
     """
@@ -189,16 +185,16 @@ def oauth_url(client_id, permissions=None, guild=None, redirect_uri=None, scopes
 
 
 def snowflake_time(id):
-    """
-    Parameters
-    -----------
+    """Parameters
+    ----------
     id: :class:`int`
         The snowflake ID.
 
     Returns
-    --------
+    -------
     :class:`datetime.datetime`
-        The creation date in UTC of a Discord snowflake ID."""
+    The creation date in UTC of a Discord snowflake ID.
+    """
     return datetime.datetime.utcfromtimestamp(((id >> 22) + DISCORD_EPOCH) / 1000)
 
 
@@ -209,7 +205,7 @@ def time_snowflake(datetime_obj, high=False):
     When using as the higher end of a range, use ``time_snowflake(high=True)`` + 1 to be inclusive, ``high=False`` to be exclusive
 
     Parameters
-    -----------
+    ----------
     datetime_obj: :class:`datetime.datetime`
         A timezone-naive datetime object representing UTC time.
     high: :class:`bool`
@@ -234,13 +230,12 @@ def find(predicate, seq):
     a valid entry.
 
     Parameters
-    -----------
+    ----------
     predicate
         A function that returns a boolean-like result.
     seq: iterable
         The iterable to search through.
     """
-
     return next((element for element in seq if predicate(element)), None)
 
 
@@ -260,8 +255,7 @@ def get(iterable, **attrs):
     ``None`` is returned.
 
     Examples
-    ---------
-
+    --------
     Basic usage:
 
     .. code-block:: python3
@@ -281,13 +275,12 @@ def get(iterable, **attrs):
         channel = discord.utils.get(client.get_all_channels(), guild__name='Cool', name='general')
 
     Parameters
-    -----------
+    ----------
     iterable
         An iterable to search through.
     \*\*attrs
         Keyword arguments that denote attributes to search with.
     """
-
     # global -> local
     _all = all
     attrget = attrgetter
@@ -317,7 +310,7 @@ def _get_as_snowflake(data, key):
 
 
 def _get_mime_type_for_image(data):
-    if data.startswith(b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"):
+    if data.startswith(b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a"):
         return "image/png"
     elif data[:3] == b"\xff\xd8\xff" or data[6:10] in (b"JFIF", b"Exif"):
         return "image/jpeg"
@@ -326,7 +319,8 @@ def _get_mime_type_for_image(data):
     elif data.startswith(b"RIFF") and data[8:12] == b"WEBP":
         return "image/webp"
     else:
-        raise InvalidArgument("Unsupported image type given")
+        msg = "Unsupported image type given"
+        raise InvalidArgument(msg)
 
 
 def _bytes_to_base64_data(data):
@@ -337,7 +331,7 @@ def _bytes_to_base64_data(data):
 
 
 def to_json(obj):
-    return orjson.dumps(obj).decode("UTF-8",'ignore')
+    return orjson.dumps(obj).decode("UTF-8", "ignore")
 
 
 class nullcontext(AbstractContextManager, AbstractAsyncContextManager):
@@ -351,7 +345,7 @@ class nullcontext(AbstractContextManager, AbstractAsyncContextManager):
         # Perform operation, using optional_cm if condition is True
     """
 
-    def __init__(self, enter_result=None):
+    def __init__(self, enter_result=None) -> None:
         self.enter_result = enter_result
 
     def __enter__(self):
@@ -394,13 +388,13 @@ async def sane_wait_for(futures, *, timeout):
     done, pending = await asyncio.wait(ensured, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
 
     if len(pending) != 0:
-        raise asyncio.TimeoutError()
+        raise asyncio.TimeoutError
 
     return done
 
 
 async def sleep_until(when, result=None):
-    """|coro|
+    """|coro|.
 
     Sleep until a specified time.
 
@@ -409,7 +403,7 @@ async def sleep_until(when, result=None):
     .. versionadded:: 1.3
 
     Parameters
-    -----------
+    ----------
     when: :class:`datetime.datetime`
         The timestamp in which to sleep until. If the datetime is naive then
         it is assumed to be in UTC.
@@ -475,16 +469,15 @@ def _string_width(string, *, _IS_ASCII=_IS_ASCII):
 
 
 def resolve_invite(invite):
-    """
-    Resolves an invite from a :class:`~discord.Invite`, URL or code.
+    """Resolves an invite from a :class:`~discord.Invite`, URL or code.
 
     Parameters
-    -----------
+    ----------
     invite: Union[:class:`~discord.Invite`, :class:`str`]
         The invite.
 
     Returns
-    --------
+    -------
     :class:`str`
         The invite code.
     """
@@ -497,18 +490,17 @@ def resolve_invite(invite):
 
 
 def resolve_template(code):
-    """
-    Resolves a template code from a :class:`~discord.Template`, URL or code.
+    """Resolves a template code from a :class:`~discord.Template`, URL or code.
 
     .. versionadded:: 1.4
 
     Parameters
-    -----------
+    ----------
     code: Union[:class:`~discord.Template`, :class:`str`]
         The code.
 
     Returns
-    --------
+    -------
     :class:`str`
         The template code.
     """
@@ -520,15 +512,15 @@ def resolve_template(code):
     return m[1] if (m := re.match(rx, code)) else code
 
 
-_MARKDOWN_ESCAPE_SUBREGEX = "|".join(fr"\{c}(?=([\s\S]*((?<!\{c})\{c})))" for c in ("*", "`", "_", "~", "|"))
+_MARKDOWN_ESCAPE_SUBREGEX = "|".join(rf"\{c}(?=([\s\S]*((?<!\{c})\{c})))" for c in ("*", "`", "_", "~", "|"))
 
 _MARKDOWN_ESCAPE_COMMON = r"^>(?:>>)?\s|\[.+\]\(.+\)"
 
-_MARKDOWN_ESCAPE_REGEX = re.compile(fr"(?P<markdown>{_MARKDOWN_ESCAPE_SUBREGEX}|{_MARKDOWN_ESCAPE_COMMON})", re.MULTILINE)
+_MARKDOWN_ESCAPE_REGEX = re.compile(rf"(?P<markdown>{_MARKDOWN_ESCAPE_SUBREGEX}|{_MARKDOWN_ESCAPE_COMMON})", re.MULTILINE)
 
 _URL_REGEX = r"(?P<url><[^: >]+:\/[^ >]+>|(?:https?|steam):\/\/[^\s<]+[^<.,:;\"\'\]\s])"
 
-_MARKDOWN_STOCK_REGEX = fr"(?P<markdown>[_\\~|\*`]|{_MARKDOWN_ESCAPE_COMMON})"
+_MARKDOWN_STOCK_REGEX = rf"(?P<markdown>[_\\~|\*`]|{_MARKDOWN_ESCAPE_COMMON})"
 
 
 def remove_markdown(text, *, ignore_links=True):
@@ -541,7 +533,7 @@ def remove_markdown(text, *, ignore_links=True):
             if the input contains ``10 * 5`` then it will be converted into ``10  5``.
 
     Parameters
-    -----------
+    ----------
     text: :class:`str`
         The text to remove markdown from.
     ignore_links: :class:`bool`
@@ -550,7 +542,7 @@ def remove_markdown(text, *, ignore_links=True):
         be left alone. Defaults to ``True``.
 
     Returns
-    --------
+    -------
     :class:`str`
         The text with the markdown special characters removed.
     """
@@ -569,7 +561,7 @@ def escape_markdown(text, *, as_needed=False, ignore_links=True):
     r"""A helper function that escapes Discord's markdown.
 
     Parameters
-    -----------
+    ----------
     text: :class:`str`
         The text to escape markdown from.
     as_needed: :class:`bool`
@@ -585,11 +577,10 @@ def escape_markdown(text, *, as_needed=False, ignore_links=True):
         Defaults to ``True``.
 
     Returns
-    --------
+    -------
     :class:`str`
         The text with the markdown special characters escaped with a slash.
     """
-
     if not as_needed:
 
         def replacement(match):
@@ -620,12 +611,12 @@ def escape_mentions(text):
         class.
 
     Parameters
-    -----------
+    ----------
     text: :class:`str`
         The text to escape mentions from.
 
     Returns
-    --------
+    -------
     :class:`str`
         The text with the mentions removed.
     """

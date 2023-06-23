@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
-
-"""
-discord.ext.commands
-~~~~~~~~~~~~~~~~~~~~~
+"""discord.ext.commands
+~~~~~~~~~~~~~~~~~~~~~.
 
 An extension module to facilitate creation of bot commands.
 
 :copyright: (c) 2015-present Rapptz
 :license: MIT, see LICENSE for more details.
 """
+
+from __future__ import annotations
 
 from .bot import AutoShardedBot, Bot, when_mentioned, when_mentioned_or
 from .cog import *

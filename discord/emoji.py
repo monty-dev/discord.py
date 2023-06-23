@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from . import utils
 from .asset import Asset
@@ -60,7 +56,7 @@ class Emoji(_EmojiTag):
             Returns the emoji rendered for discord.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The name of the emoji.
     id: :class:`int`
@@ -82,7 +78,7 @@ class Emoji(_EmojiTag):
 
     __slots__ = ("require_colons", "animated", "managed", "id", "name", "_roles", "guild_id", "_state", "user", "available")
 
-    def __init__(self, *, guild, state, data):
+    def __init__(self, *, guild, state, data) -> None:
         self.guild_id = guild.id
         self._state = state
         self._from_data(data)
@@ -108,12 +104,12 @@ class Emoji(_EmojiTag):
     def __iter__(self):
         return self._iterator()
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.animated:
             return f"<a:{self.name}:{self.id}>"
         return f"<:{self.name}:{self.id}>"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Emoji id={self.id} name={self.name!r} animated={self.animated} managed={self.managed}>"
 
     def __eq__(self, other):
@@ -165,7 +161,7 @@ class Emoji(_EmojiTag):
         .. versionadded:: 1.6
 
         Parameters
-        -----------
+        ----------
         format: Optional[:class:`str`]
             The format to attempt to convert the emojis to.
             If the format is ``None``, then it is automatically
@@ -176,12 +172,12 @@ class Emoji(_EmojiTag):
             Defaults to 'png'
 
         Raises
-        -------
+        ------
         InvalidArgument
             Bad image format passed to ``format`` or ``static_format``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -200,7 +196,7 @@ class Emoji(_EmojiTag):
         return any(my_roles.has(role_id) for role_id in emoji_roles)
 
     async def delete(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Deletes the custom emoji.
 
@@ -208,22 +204,21 @@ class Emoji(_EmojiTag):
         do this.
 
         Parameters
-        -----------
+        ----------
         reason: Optional[:class:`str`]
             The reason for deleting this emoji. Shows up on the audit log.
 
         Raises
-        -------
+        ------
         Forbidden
             You are not allowed to delete emojis.
         HTTPException
             An error occurred deleting the emoji.
         """
-
         await self._state.http.delete_custom_emoji(self.guild.id, self.id, reason=reason)
 
     async def edit(self, *, name=None, roles=None, reason=None):
-        r"""|coro|
+        r"""|coro|.
 
         Edits the custom emoji.
 
@@ -231,7 +226,7 @@ class Emoji(_EmojiTag):
         do this.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The new emoji name.
         roles: Optional[list[:class:`Role`]]
@@ -240,13 +235,12 @@ class Emoji(_EmojiTag):
             The reason for editing this emoji. Shows up on the audit log.
 
         Raises
-        -------
+        ------
         Forbidden
             You are not allowed to edit emojis.
         HTTPException
             An error occurred editing the emoji.
         """
-
         name = name or self.name
         if roles:
             roles = [role.id for role in roles]

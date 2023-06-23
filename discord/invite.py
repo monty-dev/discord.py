@@ -1,31 +1,27 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from .asset import Asset
-from .enums import ChannelType, try_enum, VerificationLevel
+from .enums import ChannelType, VerificationLevel, try_enum
 from .mixins import Hashable
 from .object import Object
 from .utils import _get_as_snowflake, parse_time, snowflake_time
@@ -56,7 +52,7 @@ class PartialInviteChannel:
             Returns the partial channel's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The partial channel's name.
     id: :class:`int`
@@ -67,15 +63,15 @@ class PartialInviteChannel:
 
     __slots__ = ("id", "name", "type")
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.id = kwargs.pop("id")
         self.name = kwargs.pop("name")
         self.type = kwargs.pop("type")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<PartialInviteChannel id={self.id} name={self.name} type={self.type!r}>"
 
     @property
@@ -114,7 +110,7 @@ class PartialInviteGuild:
             Returns the partial guild's name.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The partial guild's name.
     id: :class:`int`
@@ -135,7 +131,7 @@ class PartialInviteGuild:
 
     __slots__ = ("_state", "features", "icon", "banner", "id", "name", "splash", "verification_level", "description")
 
-    def __init__(self, state, data, id):
+    def __init__(self, state, data, id) -> None:
         self._state = state
         self.id = id
         self.name = data["name"]
@@ -146,10 +142,10 @@ class PartialInviteGuild:
         self.verification_level = try_enum(VerificationLevel, data.get("verification_level"))
         self.description = data.get("description")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.id} name={self.name!r} features={self.features} description={self.description!r}>"
 
     @property
@@ -173,7 +169,7 @@ class PartialInviteGuild:
         """The same operation as :meth:`Guild.icon_url_as`.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -188,7 +184,7 @@ class PartialInviteGuild:
         """The same operation as :meth:`Guild.banner_url_as`.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -203,7 +199,7 @@ class PartialInviteGuild:
         """The same operation as :meth:`Guild.splash_url_as`.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -257,7 +253,7 @@ class Invite(Hashable):
     If it's not in the table above then it is available by all methods.
 
     Attributes
-    -----------
+    ----------
     max_age: :class:`int`
         How long the before the invite expires in seconds.
         A value of ``0`` indicates that it doesn't expire.
@@ -288,11 +284,25 @@ class Invite(Hashable):
         The channel the invite is for.
     """
 
-    __slots__ = ("max_age", "code", "guild", "revoked", "created_at", "uses", "temporary", "max_uses", "inviter", "channel", "_state", "approximate_member_count", "approximate_presence_count")
+    __slots__ = (
+        "max_age",
+        "code",
+        "guild",
+        "revoked",
+        "created_at",
+        "uses",
+        "temporary",
+        "max_uses",
+        "inviter",
+        "channel",
+        "_state",
+        "approximate_member_count",
+        "approximate_presence_count",
+    )
 
     BASE = "https://discord.gg"
 
-    def __init__(self, *, state, data):
+    def __init__(self, *, state, data) -> None:
         self._state = state
         self.max_age = data.get("max_age")
         self.code = data.get("code")
@@ -352,10 +362,10 @@ class Invite(Hashable):
         data["channel"] = channel
         return cls(state=state, data=data)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.url
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Invite code={self.code!r} guild={self.guild!r} online={self.approximate_presence_count} members={self.approximate_member_count}>"
 
     def __hash__(self):
@@ -372,19 +382,19 @@ class Invite(Hashable):
         return self.BASE + "/" + self.code
 
     async def delete(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Revokes the instant invite.
 
         You must have the :attr:`~Permissions.manage_channels` permission to do this.
 
         Parameters
-        -----------
+        ----------
         reason: Optional[:class:`str`]
             The reason for deleting this invite. Shows up on the audit log.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to revoke invites.
         NotFound
@@ -392,5 +402,4 @@ class Invite(Hashable):
         HTTPException
             Revoking the invite failed.
         """
-
         await self._state.http.delete_invite(self.code, reason=reason)

@@ -1,32 +1,28 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 
 class _RawReprMixin:
-    def __repr__(self):
+    def __repr__(self) -> str:
         value = " ".join("%s=%r" % (attr, getattr(self, attr)) for attr in self.__slots__)
         return f"<{self.__class__.__name__} {value}>"
 
@@ -35,7 +31,7 @@ class RawMessageDeleteEvent(_RawReprMixin):
     """Represents the event payload for a :func:`on_raw_message_delete` event.
 
     Attributes
-    ------------
+    ----------
     channel_id: :class:`int`
         The channel ID where the deletion took place.
     guild_id: Optional[:class:`int`]
@@ -48,7 +44,7 @@ class RawMessageDeleteEvent(_RawReprMixin):
 
     __slots__ = ("message_id", "channel_id", "guild_id", "cached_message")
 
-    def __init__(self, data):
+    def __init__(self, data) -> None:
         self.message_id = int(data["id"])
         self.channel_id = int(data["channel_id"])
         self.cached_message = None
@@ -62,7 +58,7 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
     """Represents the event payload for a :func:`on_raw_bulk_message_delete` event.
 
     Attributes
-    -----------
+    ----------
     message_ids: Set[:class:`int`]
         A :class:`set` of the message IDs that were deleted.
     channel_id: :class:`int`
@@ -75,7 +71,7 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
 
     __slots__ = ("message_ids", "channel_id", "guild_id", "cached_messages")
 
-    def __init__(self, data):
+    def __init__(self, data) -> None:
         self.message_ids = {int(x) for x in data.get("ids", [])}
         self.channel_id = int(data["channel_id"])
         self.cached_messages = []
@@ -90,7 +86,7 @@ class RawMessageUpdateEvent(_RawReprMixin):
     """Represents the payload for a :func:`on_raw_message_edit` event.
 
     Attributes
-    -----------
+    ----------
     message_id: :class:`int`
         The message ID that got updated.
     channel_id: :class:`int`
@@ -111,7 +107,7 @@ class RawMessageUpdateEvent(_RawReprMixin):
 
     __slots__ = ("message_id", "channel_id", "guild_id", "data", "cached_message")
 
-    def __init__(self, data):
+    def __init__(self, data) -> None:
         self.message_id = int(data["id"])
         self.channel_id = int(data["channel_id"])
         self.data = data
@@ -128,7 +124,7 @@ class RawReactionActionEvent(_RawReprMixin):
     :func:`on_raw_reaction_remove` event.
 
     Attributes
-    -----------
+    ----------
     message_id: :class:`int`
         The message ID that got or lost a reaction.
     user_id: :class:`int`
@@ -154,7 +150,7 @@ class RawReactionActionEvent(_RawReprMixin):
 
     __slots__ = ("message_id", "user_id", "channel_id", "guild_id", "emoji", "event_type", "member")
 
-    def __init__(self, data, emoji, event_type):
+    def __init__(self, data, emoji, event_type) -> None:
         self.message_id = int(data["message_id"])
         self.channel_id = int(data["channel_id"])
         self.user_id = int(data["user_id"])
@@ -172,7 +168,7 @@ class RawReactionClearEvent(_RawReprMixin):
     """Represents the payload for a :func:`on_raw_reaction_clear` event.
 
     Attributes
-    -----------
+    ----------
     message_id: :class:`int`
         The message ID that got its reactions cleared.
     channel_id: :class:`int`
@@ -183,7 +179,7 @@ class RawReactionClearEvent(_RawReprMixin):
 
     __slots__ = ("message_id", "channel_id", "guild_id")
 
-    def __init__(self, data):
+    def __init__(self, data) -> None:
         self.message_id = int(data["message_id"])
         self.channel_id = int(data["channel_id"])
 
@@ -199,7 +195,7 @@ class RawReactionClearEmojiEvent(_RawReprMixin):
     .. versionadded:: 1.3
 
     Attributes
-    -----------
+    ----------
     message_id: :class:`int`
         The message ID that got its reactions cleared.
     channel_id: :class:`int`
@@ -212,7 +208,7 @@ class RawReactionClearEmojiEvent(_RawReprMixin):
 
     __slots__ = ("message_id", "channel_id", "guild_id", "emoji")
 
-    def __init__(self, data, emoji):
+    def __init__(self, data, emoji) -> None:
         self.emoji = emoji
         self.message_id = int(data["message_id"])
         self.channel_id = int(data["channel_id"])

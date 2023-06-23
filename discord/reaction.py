@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from .iterators import ReactionIterator
 
@@ -54,7 +50,7 @@ class Reaction:
             Returns the string form of the reaction's emoji.
 
     Attributes
-    -----------
+    ----------
     emoji: Union[:class:`Emoji`, :class:`PartialEmoji`, :class:`str`]
         The reaction emoji. May be a custom emoji, or a unicode emoji.
     count: :class:`int`
@@ -67,7 +63,7 @@ class Reaction:
 
     __slots__ = ("message", "count", "emoji", "me")
 
-    def __init__(self, *, message, data, emoji=None):
+    def __init__(self, *, message, data, emoji=None) -> None:
         self.message = message
         self.emoji = emoji or message._state.get_reaction_emoji(data["emoji"])
         self.count = data.get("count", 1)
@@ -82,21 +78,19 @@ class Reaction:
         return isinstance(other, self.__class__) and other.emoji == self.emoji
 
     def __ne__(self, other):
-        if isinstance(other, self.__class__):
-            return other.emoji != self.emoji
-        return True
+        return other.emoji != self.emoji if isinstance(other, self.__class__) else True
 
     def __hash__(self):
         return hash(self.emoji)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.emoji)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Reaction emoji={self.emoji!r} me={self.me} count={self.count}>"
 
     async def remove(self, user):
-        """|coro|
+        """|coro|.
 
         Remove the reaction by the provided :class:`User` from the message.
 
@@ -107,12 +101,12 @@ class Reaction:
         the :class:`abc.Snowflake` abc.
 
         Parameters
-        -----------
+        ----------
         user: :class:`abc.Snowflake`
              The user or member from which to remove the reaction.
 
         Raises
-        -------
+        ------
         HTTPException
             Removing the reaction failed.
         Forbidden
@@ -120,11 +114,10 @@ class Reaction:
         NotFound
             The user you specified, or the reaction's message was not found.
         """
-
         await self.message.remove_reaction(self.emoji, user)
 
     async def clear(self):
-        """|coro|
+        """|coro|.
 
         Clears this reaction from the message.
 
@@ -133,7 +126,7 @@ class Reaction:
         .. versionadded:: 1.3
 
         Raises
-        --------
+        ------
         HTTPException
             Clearing the reaction failed.
         Forbidden
@@ -152,8 +145,7 @@ class Reaction:
         and meet the :class:`abc.Snowflake` abc.
 
         Examples
-        ---------
-
+        --------
         Usage ::
 
             # I do not actually recommend doing this.
@@ -168,7 +160,7 @@ class Reaction:
             await channel.send('{} has won the raffle.'.format(winner))
 
         Parameters
-        ------------
+        ----------
         limit: :class:`int`
             The maximum number of results to return.
             If not provided, returns all the users who
@@ -177,19 +169,18 @@ class Reaction:
             For pagination, reactions are sorted by member.
 
         Raises
-        --------
+        ------
         HTTPException
             Getting the users for the reaction failed.
 
         Yields
-        --------
+        ------
         Union[:class:`User`, :class:`Member`]
             The member (if retrievable) or the user that has reacted
             to this message. The case where it can be a :class:`Member` is
             in a guild message context. Sometimes it can be a :class:`User`
             if the member has left the guild.
         """
-
         if self.custom_emoji:
             emoji = f"{self.emoji.name}:{self.emoji.id}"
         else:

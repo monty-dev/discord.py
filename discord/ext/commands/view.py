@@ -1,42 +1,52 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-from .errors import (
-    ExpectedClosingQuoteError,
-    InvalidEndOfQuotedStringError,
-    UnexpectedQuoteError,
-)
+from .errors import ExpectedClosingQuoteError, InvalidEndOfQuotedStringError, UnexpectedQuoteError
 
 # map from opening quotes to closing quotes
-_quotes = {'"': '"', "‘": "’", "‚": "‛", "“": "”", "„": "‟", "⹂": "⹂", "「": "」", "『": "』", "〝": "〞", "﹁": "﹂", "﹃": "﹄", "＂": "＂", "｢": "｣", "«": "»", "‹": "›", "《": "》", "〈": "〉"}
+_quotes = {
+    '"': '"',
+    "‘": "’",
+    "‚": "‛",
+    "“": "”",
+    "„": "‟",
+    "⹂": "⹂",
+    "「": "」",
+    "『": "』",
+    "〝": "〞",
+    "﹁": "﹂",
+    "﹃": "﹄",
+    "＂": "＂",
+    "｢": "｣",
+    "«": "»",
+    "‹": "›",
+    "《": "》",
+    "〈": "〉",
+}
 _all_quotes = set(_quotes.keys()) | set(_quotes.values())
 
 
 class StringView:
-    def __init__(self, buffer):
+    def __init__(self, buffer) -> None:
         self.index = 0
         self.buffer = buffer
         self.end = len(buffer)
@@ -133,19 +143,20 @@ class StringView:
                 if is_quoted:
                     # unexpected EOF
                     raise ExpectedClosingQuoteError(close_quote)
-                return "".join(result)
+                else:
+                    return "".join(result)
 
             # currently we accept strings in the format of "hello world"
             # to embed a quote inside the string you must escape it: "a \"world\""
             if current == "\\":
                 next_char = self.get()
                 if not next_char:
-                    # string ends with \ and no character after it
                     if is_quoted:
                         # if we're quoted then we're expecting a closing quote
                         raise ExpectedClosingQuoteError(close_quote)
-                    # if we aren't then we just let it through
-                    return "".join(result)
+                    else:
+                        # if we aren't then we just let it through
+                        return "".join(result)
 
                 if next_char in _escaped_quotes:
                     # escaped quote
@@ -163,12 +174,12 @@ class StringView:
             # closing quote
             if is_quoted and current == close_quote:
                 next_char = self.get()
-                valid_eof = not next_char or next_char.isspace()
-                if not valid_eof:
-                    raise InvalidEndOfQuotedStringError(next_char)
+                if valid_eof := not next_char or next_char.isspace():
+                    # we're quoted so it's okay
+                    return "".join(result)
 
-                # we're quoted so it's okay
-                return "".join(result)
+                else:
+                    raise InvalidEndOfQuotedStringError(next_char)
 
             if current.isspace() and not is_quoted:
                 # end of word found
@@ -176,5 +187,5 @@ class StringView:
 
             result.append(current)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<StringView pos: {self.index} prev: {self.previous} end: {self.end} eof: {self.eof}>"

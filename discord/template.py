@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 from .enums import VoiceRegion
 from .guild import Guild
@@ -35,11 +31,12 @@ class _FriendlyHttpAttributeErrorHelper:
     __slots__ = ()
 
     def __getattr__(self, attr):
-        raise AttributeError("PartialTemplateState does not support http methods.")
+        msg = "PartialTemplateState does not support http methods."
+        raise AttributeError(msg)
 
 
 class _PartialTemplateState:
-    def __init__(self, *, state):
+    def __init__(self, *, state) -> None:
         self.__state = state
         self.http = _FriendlyHttpAttributeErrorHelper()
 
@@ -76,7 +73,8 @@ class _PartialTemplateState:
         return []
 
     def __getattr__(self, attr):
-        raise AttributeError(f"PartialTemplateState does not support {attr!r}.")
+        msg = f"PartialTemplateState does not support {attr!r}."
+        raise AttributeError(msg)
 
 
 class Template:
@@ -85,7 +83,7 @@ class Template:
     .. versionadded:: 1.4
 
     Attributes
-    -----------
+    ----------
     code: :class:`str`
         The template code.
     uses: :class:`int`
@@ -104,7 +102,7 @@ class Template:
         The source guild.
     """
 
-    def __init__(self, *, state, data):
+    def __init__(self, *, state, data) -> None:
         self._state = state
         self._store(data)
 
@@ -131,11 +129,11 @@ class Template:
 
         self.source_guild = guild
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Template code={self.code!r} uses={self.uses} name={self.name!r} creator={self.creator!r} source_guild={self.source_guild!r}>"
 
     async def create_guild(self, name, region=None, icon=None):
-        """|coro|
+        """|coro|.
 
         Creates a :class:`.Guild` using the template.
 
@@ -175,7 +173,7 @@ class Template:
         return Guild(data=data, state=self._state)
 
     async def sync(self):
-        """|coro|
+        """|coro|.
 
         Sync the template to the guild's current state.
 
@@ -185,7 +183,7 @@ class Template:
         .. versionadded:: 1.7
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the template failed.
         Forbidden
@@ -193,12 +191,11 @@ class Template:
         NotFound
             This template does not exist.
         """
-
         data = await self._state.http.sync_template(self.source_guild.id, self.code)
         self._store(data)
 
     async def edit(self, **kwargs):
-        """|coro|
+        """|coro|.
 
         Edit the template metadata.
 
@@ -208,14 +205,14 @@ class Template:
         .. versionadded:: 1.7
 
         Parameters
-        ------------
+        ----------
         name: Optional[:class:`str`]
             The template's new name.
         description: Optional[:class:`str`]
             The template's description.
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the template failed.
         Forbidden
@@ -227,7 +224,7 @@ class Template:
         self._store(data)
 
     async def delete(self):
-        """|coro|
+        """|coro|.
 
         Delete the template.
 
@@ -237,7 +234,7 @@ class Template:
         .. versionadded:: 1.7
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the template failed.
         Forbidden

@@ -1,30 +1,25 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-import copy
 import inspect
 
 from ._types import _BaseCommand
@@ -66,7 +61,7 @@ class CogMeta(type):
                 pass
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The cog name. By default, it is the name of the class with no modification.
     description: :class:`str`
@@ -119,7 +114,8 @@ class CogMeta(type):
                     value = value.__func__
                 if isinstance(value, _BaseCommand):
                     if is_static_method:
-                        raise TypeError(f"Command in method {base}.{elem!r} must not be staticmethod.")
+                        msg = f"Command in method {base}.{elem!r} must not be staticmethod."
+                        raise TypeError(msg)
                     if elem.startswith(("cog_", "bot_")):
                         raise TypeError(no_bot_cog.format(base, elem))
                     commands[elem] = value
@@ -137,15 +133,11 @@ class CogMeta(type):
 
         listeners_as_list = []
         for listener in listeners.values():
-            for listener_name in listener.__cog_listener_names__:
-                # I use __name__ instead of just storing the value so I can inject
-                # the self attribute when the time comes to add them to the bot
-                listeners_as_list.append((listener_name, listener.__name__))
-
+            listeners_as_list.extend((listener_name, listener.__name__) for listener_name in listener.__cog_listener_names__)
         new_cls.__cog_listeners__ = listeners_as_list
         return new_cls
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args)
 
     @classmethod
@@ -196,9 +188,8 @@ class Cog(metaclass=CogMeta):
         return self
 
     def get_commands(self):
-        r"""
-        Returns
-        --------
+        r"""Returns
+        -------
         List[:class:`.Command`]
             A :class:`list` of :class:`.Command`\s that are
             defined inside this cog.
@@ -243,7 +234,7 @@ class Cog(metaclass=CogMeta):
         """Returns a :class:`list` of (name, function) listener pairs that are defined in this cog.
 
         Returns
-        --------
+        -------
         List[Tuple[:class:`str`, :ref:`coroutine <coroutine>`]]
             The listeners defined in this cog.
         """
@@ -261,27 +252,28 @@ class Cog(metaclass=CogMeta):
         This is the cog equivalent of :meth:`.Bot.listen`.
 
         Parameters
-        ------------
+        ----------
         name: :class:`str`
             The name of the event being listened to. If not provided, it
             defaults to the function's name.
 
         Raises
-        --------
+        ------
         TypeError
             The function is not a coroutine function or a string was not passed as
             the name.
         """
-
         if name is not None and not isinstance(name, str):
-            raise TypeError(f"Cog.listener expected str but received {name.__class__.__name__!r} instead.")
+            msg = f"Cog.listener expected str but received {name.__class__.__name__!r} instead."
+            raise TypeError(msg)
 
         def decorator(func):
             actual = func
             if isinstance(actual, staticmethod):
                 actual = actual.__func__
             if not inspect.iscoroutinefunction(actual):
-                raise TypeError("Listener function must be a coroutine function.")
+                msg = "Listener function must be a coroutine function."
+                raise TypeError(msg)
             actual.__cog_listener__ = True
             to_assign = name or actual.__name__
             try:
@@ -312,7 +304,6 @@ class Cog(metaclass=CogMeta):
 
         Subclasses must replace this if they want special unloading behaviour.
         """
-        pass
 
     @_cog_special_method
     def bot_check_once(self, ctx):
@@ -355,13 +346,12 @@ class Cog(metaclass=CogMeta):
         This **must** be a coroutine.
 
         Parameters
-        -----------
+        ----------
         ctx: :class:`.Context`
             The invocation context where the error happened.
         error: :class:`CommandError`
             The error that happened.
         """
-        pass
 
     @_cog_special_method
     async def cog_before_invoke(self, ctx):
@@ -372,11 +362,10 @@ class Cog(metaclass=CogMeta):
         This **must** be a coroutine.
 
         Parameters
-        -----------
+        ----------
         ctx: :class:`.Context`
             The invocation context.
         """
-        pass
 
     @_cog_special_method
     async def cog_after_invoke(self, ctx):
@@ -387,11 +376,10 @@ class Cog(metaclass=CogMeta):
         This **must** be a coroutine.
 
         Parameters
-        -----------
+        ----------
         ctx: :class:`.Context`
             The invocation context.
         """
-        pass
 
     def _inject(self, bot):
         cls = self.__class__

@@ -1,32 +1,29 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-from .flags import alias_flag_value, BaseFlags, fill_with_flags, flag_value
+from .flags import BaseFlags, alias_flag_value, fill_with_flags, flag_value
 
 __all__ = ("Permissions", "PermissionOverwrite")
+
 
 # A permission alias works like a regular flag but is marked
 # So the PermissionOverwrite knows to work with it
@@ -85,7 +82,7 @@ class Permissions(BaseFlags):
                Note that aliases are not shown.
 
     Attributes
-    -----------
+    ----------
     value: :class:`int`
         The raw value. This value is a bit array field of a 53-bit integer
         representing the currently available permissions. You should query
@@ -94,9 +91,10 @@ class Permissions(BaseFlags):
 
     __slots__ = ()
 
-    def __init__(self, permissions=0, **kwargs):
+    def __init__(self, permissions=0, **kwargs) -> None:
         if not isinstance(permissions, int):
-            raise TypeError("Expected int parameter, received %s instead." % permissions.__class__.__name__)
+            msg = f"Expected int parameter, received {permissions.__class__.__name__} instead."
+            raise TypeError(msg)
 
         self.value = permissions
         for key, value in kwargs.items():
@@ -108,15 +106,15 @@ class Permissions(BaseFlags):
         """Returns ``True`` if self has the same or fewer permissions as other."""
         if isinstance(other, Permissions):
             return (self.value & other.value) == self.value
-        else:
-            raise TypeError(f"cannot compare {self.__class__.__name__} with {other.__class__.__name__}")
+        msg = f"cannot compare {self.__class__.__name__} with {other.__class__.__name__}"
+        raise TypeError(msg)
 
     def is_superset(self, other):
         """Returns ``True`` if self has the same or more permissions as other."""
         if isinstance(other, Permissions):
             return (self.value | other.value) == self.value
-        else:
-            raise TypeError(f"cannot compare {self.__class__.__name__} with {other.__class__.__name__}")
+        msg = f"cannot compare {self.__class__.__name__} with {other.__class__.__name__}"
+        raise TypeError(msg)
 
     def is_strict_subset(self, other):
         """Returns ``True`` if the permissions on other are a strict subset of those on self."""
@@ -134,7 +132,8 @@ class Permissions(BaseFlags):
     @classmethod
     def none(cls):
         """A factory method that creates a :class:`Permissions` with all
-        permissions set to ``False``."""
+        permissions set to ``False``.
+        """
         return cls(0)
 
     @classmethod
@@ -201,7 +200,8 @@ class Permissions(BaseFlags):
     @classmethod
     def voice(cls):
         """A factory method that creates a :class:`Permissions` with all
-        "Voice" permissions from the official Discord UI set to ``True``."""
+        "Voice" permissions from the official Discord UI set to ``True``.
+        """
         return cls(0b00000011111100000000001100000000)
 
     @classmethod
@@ -239,7 +239,7 @@ class Permissions(BaseFlags):
         listed. Extraneous key/value pairs will be silently ignored.
 
         Parameters
-        ------------
+        ----------
         \*\*kwargs
             A list of key/value pairs to bulk update permissions with.
         """
@@ -289,7 +289,8 @@ class Permissions(BaseFlags):
     def manage_channels(self):
         """:class:`bool`: Returns ``True`` if a user can edit, delete, or create channels in the guild.
 
-        This also corresponds to the "Manage Channel" channel-specific override."""
+        This also corresponds to the "Manage Channel" channel-specific override.
+        """
         return 1 << 4
 
     @flag_value
@@ -530,19 +531,20 @@ class PermissionOverwrite:
            Note that aliases are not shown.
 
     Parameters
-    -----------
+    ----------
     \*\*kwargs
         Set the value of permissions by their name.
     """
 
     __slots__ = ("_values",)
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self._values = {}
 
         for key, value in kwargs.items():
             if key not in self.VALID_NAMES:
-                raise ValueError(f"no permission called {key}.")
+                msg = f"no permission called {key}."
+                raise ValueError(msg)
 
             setattr(self, key, value)
 
@@ -551,7 +553,8 @@ class PermissionOverwrite:
 
     def _set(self, key, value):
         if value not in (True, None, False):
-            raise TypeError(f"Expected bool or NoneType, received {value.__class__.__name__}")
+            msg = f"Expected bool or NoneType, received {value.__class__.__name__}"
+            raise TypeError(msg)
 
         if value is None:
             self._values.pop(key, None)
@@ -560,7 +563,6 @@ class PermissionOverwrite:
 
     def pair(self):
         """Tuple[:class:`Permissions`, :class:`Permissions`]: Returns the (allow, deny) pair from this overwrite."""
-
         allow = Permissions.none()
         deny = Permissions.none()
 
@@ -607,7 +609,7 @@ class PermissionOverwrite:
         listed. Extraneous key/value pairs will be silently ignored.
 
         Parameters
-        ------------
+        ----------
         \*\*kwargs
             A list of key/value pairs to bulk update with.
         """

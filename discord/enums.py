@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import types
 from collections import namedtuple
@@ -105,39 +101,40 @@ class EnumMeta(type):
         value_cls._actual_enum_cls_ = actual_cls
         return actual_cls
 
-    def __iter__(cls):
+    def __iter__(self):
         return (cls._enum_member_map_[name] for name in cls._enum_member_names_)
 
-    def __reversed__(cls):
+    def __reversed__(self):
         return (cls._enum_member_map_[name] for name in reversed(cls._enum_member_names_))
 
-    def __len__(cls):
-        return len(cls._enum_member_names_)
+    def __len__(self) -> int:
+        return len(self._enum_member_names_)
 
-    def __repr__(cls):
-        return "<enum %r>" % cls.__name__
+    def __repr__(self) -> str:
+        return "<enum %r>" % self.__name__
 
     @property
     def __members__(cls):
         return types.MappingProxyType(cls._enum_member_map_)
 
-    def __call__(cls, value):
+    def __call__(self, value):
         try:
-            return cls._enum_value_map_[value]
-        except (KeyError, TypeError):
-            raise ValueError("%r is not a valid %s" % (value, cls.__name__))
+            return self._enum_value_map_[value]
+        except (KeyError, TypeError) as e:
+            raise ValueError("%r is not a valid %s" % (value, self.__name__)) from e
 
-    def __getitem__(cls, key):
-        return cls._enum_member_map_[key]
+    def __getitem__(self, key):
+        return self._enum_member_map_[key]
 
-    def __setattr__(cls, name, value):
-        raise TypeError("Enums are immutable.")
+    def __setattr__(self, name, value) -> None:
+        msg = "Enums are immutable."
+        raise TypeError(msg)
 
-    def __delattr__(cls, attr):
-        raise TypeError("Enums are immutable")
+    def __delattr__(self, attr) -> None:
+        msg = "Enums are immutable"
+        raise TypeError(msg)
 
-    def __instancecheck__(self, instance):
-        # isinstance(x, Y)
+    def __instancecheck__(self, instance) -> bool:
         # -> __instancecheck__(Y, x)
         try:
             return instance._actual_enum_cls_ is self
@@ -164,7 +161,7 @@ class ChannelType(Enum):
     store = 6
     stage_voice = 13
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -214,7 +211,7 @@ class VoiceRegion(Enum):
     vip_us_west = "vip-us-west"
     vip_amsterdam = "vip-amsterdam"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
@@ -224,10 +221,10 @@ class SpeakingState(Enum):
     soundshare = 2
     priority = 4
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __int__(self):
+    def __int__(self) -> int:
         return self.value
 
 
@@ -241,7 +238,7 @@ class VerificationLevel(Enum):
     double_table_flip = 4
     very_high = 4
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -250,7 +247,7 @@ class ContentFilter(Enum):
     no_role = 1
     all_members = 2
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -281,7 +278,7 @@ class Status(Enum):
     do_not_disturb = "dnd"
     invisible = "invisible"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
@@ -293,7 +290,7 @@ class DefaultAvatar(Enum):
     orange = 3
     red = 4
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -448,7 +445,7 @@ class ActivityType(Enum):
     custom = 4
     competing = 5
 
-    def __int__(self):
+    def __int__(self) -> int:
         return self.value
 
 
@@ -492,7 +489,6 @@ def try_enum(cls, val):
 
     If it fails it returns the value instead.
     """
-
     try:
         return cls._enum_value_map_[val]
     except (KeyError, TypeError, AttributeError):

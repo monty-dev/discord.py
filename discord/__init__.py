@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
-
-"""
-Discord API Wrapper
-~~~~~~~~~~~~~~~~~~~
+"""Discord API Wrapper
+~~~~~~~~~~~~~~~~~~~.
 
 A basic wrapper for the Discord API.
 
@@ -11,11 +8,13 @@ A basic wrapper for the Discord API.
 
 """
 
+from __future__ import annotations
+
 __title__ = "discord"
 __author__ = "Rapptz"
 __license__ = "MIT"
 __copyright__ = "Copyright 2015-present Rapptz"
-__version__ = "1.7.3"
+__version__ = "1.8.3"
 
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 

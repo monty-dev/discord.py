@@ -1,33 +1,29 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import datetime
 
 from . import utils
-from .enums import try_enum, VoiceRegion
+from .enums import VoiceRegion, try_enum
 from .member import VoiceState
 
 
@@ -40,7 +36,7 @@ class CallMessage:
     .. deprecated:: 1.7
 
     Attributes
-    -----------
+    ----------
     ended_timestamp: Optional[:class:`datetime.datetime`]
         A naive UTC datetime object that represents the time that the call has ended.
     participants: List[:class:`User`]
@@ -49,7 +45,7 @@ class CallMessage:
         The message associated with this call message.
     """
 
-    def __init__(self, message, **kwargs):
+    def __init__(self, message, **kwargs) -> None:
         self.message = message
         self.ended_timestamp = utils.parse_time(kwargs.get("ended_timestamp"))
         self.participants = kwargs.get("participants")
@@ -80,7 +76,7 @@ class CallMessage:
         .. deprecated:: 1.7
 
         Returns
-        ---------
+        -------
         :class:`datetime.timedelta`
             The timedelta object representing the duration.
         """
@@ -98,7 +94,7 @@ class GroupCall:
     .. deprecated:: 1.7
 
     Attributes
-    -----------
+    ----------
     call: :class:`CallMessage`
         The call message associated with this group call.
     unavailable: :class:`bool`
@@ -109,7 +105,7 @@ class GroupCall:
         The guild region the group call is being hosted on.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.call = kwargs.get("call")
         self.unavailable = kwargs.get("unavailable")
         self._voice_states = {}
@@ -165,14 +161,13 @@ class GroupCall:
         .. deprecated:: 1.7
 
         Parameters
-        ------------
+        ----------
         user: :class:`User`
             The user to retrieve the voice state for.
 
         Returns
-        --------
+        -------
         Optional[:class:`VoiceState`]
             The voice state associated with this user.
         """
-
         return self._voice_states.get(user.id)

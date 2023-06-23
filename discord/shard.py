@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import itertools
@@ -30,23 +26,16 @@ import logging
 
 import aiohttp
 
-from .state import AutoShardedConnectionState
-from .client import Client
-from .backoff import ExponentialBackoff
-from .gateway import *
-from .errors import (
-    ClientException,
-    InvalidArgument,
-    HTTPException,
-    GatewayNotFound,
-    ConnectionClosed,
-    PrivilegedIntentsRequired,
-)
-
 from . import utils
+from .backoff import ExponentialBackoff
+from .client import Client
 from .enums import Status
+from .errors import ClientException, ConnectionClosed, GatewayNotFound, HTTPException, InvalidArgument, PrivilegedIntentsRequired
+from .gateway import *
+from .state import AutoShardedConnectionState
 
 log = logging.getLogger(__name__)
+
 
 class EventType:
     close = 0
@@ -56,10 +45,11 @@ class EventType:
     terminate = 4
     clean_close = 5
 
-class EventItem:
-    __slots__ = ('type', 'shard', 'error')
 
-    def __init__(self, etype, shard, error):
+class EventItem:
+    __slots__ = ("type", "shard", "error")
+
+    def __init__(self, etype, shard, error) -> None:
         self.type = etype
         self.shard = shard
         self.error = error
@@ -77,8 +67,9 @@ class EventItem:
     def __hash__(self):
         return hash(self.type)
 
+
 class Shard:
-    def __init__(self, ws, client, queue_put):
+    def __init__(self, ws, client, queue_put) -> None:
         self.ws = ws
         self._client = client
         self._dispatch = client.dispatch
@@ -88,14 +79,7 @@ class Shard:
         self._reconnect = client._reconnect
         self._backoff = ExponentialBackoff()
         self._task = None
-        self._handled_exceptions = (
-            OSError,
-            HTTPException,
-            GatewayNotFound,
-            ConnectionClosed,
-            aiohttp.ClientError,
-            asyncio.TimeoutError,
-        )
+        self._handled_exceptions = (OSError, HTTPException, GatewayNotFound, ConnectionClosed, aiohttp.ClientError, asyncio.TimeoutError)
 
     @property
     def id(self):
@@ -114,11 +98,11 @@ class Shard:
 
     async def disconnect(self):
         await self.close()
-        self._dispatch('shard_disconnect', self.id)
+        self._dispatch("shard_disconnect", self.id)
 
     async def _handle_disconnect(self, e):
-        self._dispatch('disconnect')
-        self._dispatch('shard_disconnect', self.id)
+        self._dispatch("disconnect")
+        self._dispatch("shard_disconnect", self.id)
         if not self._reconnect:
             self._queue_put(EventItem(EventType.close, self, e))
             return
@@ -141,7 +125,7 @@ class Shard:
                 return
 
         retry = self._backoff.delay()
-        log.error('Attempting a reconnect for shard ID %s in %.2fs', self.id, retry, exc_info=e)
+        log.error("Attempting a reconnect for shard ID %s in %.2fs", self.id, retry, exc_info=e)
         await asyncio.sleep(retry)
         self._queue_put(EventItem(EventType.reconnect, self, e))
 
@@ -164,12 +148,11 @@ class Shard:
 
     async def reidentify(self, exc):
         self._cancel_task()
-        self._dispatch('disconnect')
-        self._dispatch('shard_disconnect', self.id)
-        log.info('Got a request to %s the websocket at Shard ID %s.', exc.op, self.id)
+        self._dispatch("disconnect")
+        self._dispatch("shard_disconnect", self.id)
+        log.info("Got a request to %s the websocket at Shard ID %s.", exc.op, self.id)
         try:
-            coro = DiscordWebSocket.from_client(self._client, resume=exc.resume, shard_id=self.id,
-                                                session=self.ws.session_id, sequence=self.ws.sequence)
+            coro = DiscordWebSocket.from_client(self._client, resume=exc.resume, shard_id=self.id, session=self.ws.session_id, sequence=self.ws.sequence)
             self.ws = await asyncio.wait_for(coro, timeout=60.0)
         except self._handled_exceptions as e:
             await self._handle_disconnect(e)
@@ -194,6 +177,7 @@ class Shard:
         else:
             self.launch()
 
+
 class ShardInfo:
     """A class that gives information and control over a specific shard.
 
@@ -203,16 +187,16 @@ class ShardInfo:
     .. versionadded:: 1.4
 
     Attributes
-    ------------
+    ----------
     id: :class:`int`
         The shard ID for this shard.
     shard_count: Optional[:class:`int`]
         The shard count for this cluster. If this is ``None`` then the bot has not started yet.
     """
 
-    __slots__ = ('_parent', 'id', 'shard_count')
+    __slots__ = ("_parent", "id", "shard_count")
 
-    def __init__(self, parent, shard_count):
+    def __init__(self, parent, shard_count) -> None:
         self._parent = parent
         self.id = parent.id
         self.shard_count = shard_count
@@ -222,7 +206,7 @@ class ShardInfo:
         return not self._parent.ws.open
 
     async def disconnect(self):
-        """|coro|
+        """|coro|.
 
         Disconnects a shard. When this is called, the shard connection will no
         longer be open.
@@ -235,7 +219,7 @@ class ShardInfo:
         await self._parent.disconnect()
 
     async def reconnect(self):
-        """|coro|
+        """|coro|.
 
         Disconnects and then connects the shard again.
         """
@@ -244,7 +228,7 @@ class ShardInfo:
         await self._parent.reconnect()
 
     async def connect(self):
-        """|coro|
+        """|coro|.
 
         Connects a shard. If the shard is already connected this does nothing.
         """
@@ -268,6 +252,7 @@ class ShardInfo:
         """
         return self._parent.ws.is_ratelimited()
 
+
 class AutoShardedClient(Client):
     """A client similar to :class:`Client` except it handles the complications
     of sharding for the user into a more manageable and transparent single
@@ -290,20 +275,23 @@ class AutoShardedClient(Client):
     0 to ``shard_count - 1``.
 
     Attributes
-    ------------
+    ----------
     shard_ids: Optional[List[:class:`int`]]
         An optional list of shard_ids to launch the shards with.
     """
-    def __init__(self, *args, loop=None, **kwargs):
-        kwargs.pop('shard_id', None)
-        self.shard_ids = kwargs.pop('shard_ids', None)
+
+    def __init__(self, *args, loop=None, **kwargs) -> None:
+        kwargs.pop("shard_id", None)
+        self.shard_ids = kwargs.pop("shard_ids", None)
         super().__init__(*args, loop=loop, **kwargs)
 
         if self.shard_ids is not None:
             if self.shard_count is None:
-                raise ClientException('When passing manual shard_ids, you must provide a shard_count.')
+                msg = "When passing manual shard_ids, you must provide a shard_count."
+                raise ClientException(msg)
             elif not isinstance(self.shard_ids, (list, tuple)):
-                raise ClientException('shard_ids parameter must be a list or a tuple.')
+                msg = "shard_ids parameter must be a list or a tuple."
+                raise ClientException(msg)
 
         # instead of a single websocket, we have multiple
         # the key is the shard_id
@@ -318,9 +306,15 @@ class AutoShardedClient(Client):
         return self.__shards[shard_id].ws
 
     def _get_state(self, **options):
-        return AutoShardedConnectionState(dispatch=self.dispatch,
-                                          handlers=self._handlers, syncer=self._syncer,
-                                          hooks=self._hooks, http=self.http, loop=self.loop, **options)
+        return AutoShardedConnectionState(
+            dispatch=self.dispatch,
+            handlers=self._handlers,
+            syncer=self._syncer,
+            hooks=self._hooks,
+            http=self.http,
+            loop=self.loop,
+            **options,
+        )
 
     @property
     def latency(self):
@@ -331,7 +325,7 @@ class AutoShardedClient(Client):
         :attr:`latencies` property. Returns ``nan`` if there are no shards ready.
         """
         if not self.__shards:
-            return float('nan')
+            return float("nan")
         return sum(latency for _, latency in self.latencies) / len(self.__shards)
 
     @property
@@ -354,11 +348,11 @@ class AutoShardedClient(Client):
     @property
     def shards(self):
         """Mapping[int, :class:`ShardInfo`]: Returns a mapping of shard IDs to their respective info object."""
-        return { shard_id: ShardInfo(parent, self.shard_count) for shard_id, parent in self.__shards.items() }
+        return {shard_id: ShardInfo(parent, self.shard_count) for shard_id, parent in self.__shards.items()}
 
-    @utils.deprecated('Guild.chunk')
+    @utils.deprecated("Guild.chunk")
     async def request_offline_members(self, *guilds):
-        r"""|coro|
+        r"""|coro|.
 
         Requests previously offline members from the guild to be filled up
         into the :attr:`Guild.members` cache. This function is usually not
@@ -375,17 +369,18 @@ class AutoShardedClient(Client):
             This method is deprecated. Use :meth:`Guild.chunk` instead.
 
         Parameters
-        -----------
+        ----------
         \*guilds: :class:`Guild`
             An argument list of guilds to request offline members for.
 
         Raises
-        -------
+        ------
         InvalidArgument
             If any guild is unavailable in the collection.
         """
         if any(g.unavailable for g in guilds):
-            raise InvalidArgument('An unavailable or non-large guild was passed.')
+            msg = "An unavailable or non-large guild was passed."
+            raise InvalidArgument(msg)
 
         _guilds = sorted(guilds, key=lambda g: g.shard_id)
         for shard_id, sub_guilds in itertools.groupby(_guilds, key=lambda g: g.shard_id):
@@ -397,7 +392,7 @@ class AutoShardedClient(Client):
             coro = DiscordWebSocket.from_client(self, initial=initial, gateway=gateway, shard_id=shard_id)
             ws = await asyncio.wait_for(coro, timeout=180.0)
         except Exception:
-            log.exception('Failed to connect for shard_id: %s. Retrying...', shard_id)
+            log.exception("Failed to connect for shard_id: %s. Retrying...", shard_id)
             await asyncio.sleep(5.0)
             return await self.launch_shard(gateway, shard_id)
 
@@ -430,11 +425,8 @@ class AutoShardedClient(Client):
             item = await self.__queue.get()
             if item.type == EventType.close:
                 await self.close()
-                if isinstance(item.error, ConnectionClosed):
-                    if item.error.code != 1000:
-                        raise item.error
-                    if item.error.code == 4014:
-                        raise PrivilegedIntentsRequired(item.shard.id) from None
+                if isinstance(item.error, ConnectionClosed) and item.error.code != 1000:
+                    raise item.error
                 return
             elif item.type in (EventType.identify, EventType.resume):
                 await item.shard.reidentify(item.error)
@@ -447,7 +439,7 @@ class AutoShardedClient(Client):
                 return
 
     async def close(self):
-        """|coro|
+        """|coro|.
 
         Closes the connection to Discord.
         """
@@ -462,15 +454,14 @@ class AutoShardedClient(Client):
             except Exception:
                 pass
 
-        to_close = [asyncio.ensure_future(shard.close(), loop=self.loop) for shard in self.__shards.values()]
-        if to_close:
+        if to_close := [asyncio.ensure_future(shard.close(), loop=self.loop) for shard in self.__shards.values()]:
             await asyncio.wait(to_close)
 
         await self.http.close()
         self.__queue.put_nowait(EventItem(EventType.clean_close, None, None))
 
     async def change_presence(self, *, activity=None, status=None, afk=False, shard_id=None):
-        """|coro|
+        """|coro|.
 
         Changes the client's presence.
 
@@ -500,12 +491,11 @@ class AutoShardedClient(Client):
         InvalidArgument
             If the ``activity`` parameter is not of proper type.
         """
-
         if status is None:
-            status = 'online'
+            status = "online"
             status_enum = Status.online
         elif status is Status.offline:
-            status = 'invisible'
+            status = "invisible"
             status_enum = Status.offline
         else:
             status_enum = status

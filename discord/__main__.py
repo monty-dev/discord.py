@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import argparse
 import platform
@@ -30,19 +26,18 @@ import sys
 from pathlib import Path
 
 import aiohttp
-import discord
 import pkg_resources
+
+import discord
 
 
 def show_version():
-    entries = []
+    entries = [f"- Python v{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}-{sys.version_info.releaselevel}"]
 
-    entries.append(f"- Python v{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}-{sys.version_info.releaselevel}")
     version_info = discord.version_info
     entries.append(f"- discord.py v{version_info.major}.{version_info.minor}.{version_info.micro}-{version_info.releaselevel}")
     if version_info.releaselevel != "final":
-        pkg = pkg_resources.get_distribution("discord.py")
-        if pkg:
+        if pkg := pkg_resources.get_distribution("discord.py"):
             entries.append(f"    - discord.py pkg_resources: v{pkg.version}")
 
     entries.append(f"- aiohttp v{aiohttp.__version__}")
@@ -176,7 +171,7 @@ _base_table = {
 }
 
 # NUL (0) and 1-31 are disallowed
-_base_table.update((chr(i), None) for i in range(32))
+_base_table |= ((chr(i), None) for i in range(32))
 
 translation_table = str.maketrans(_base_table)
 
@@ -186,7 +181,30 @@ def to_path(parser, name, *, replace_spaces=False):
         return name
 
     if sys.platform == "win32":
-        forbidden = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9")
+        forbidden = (
+            "CON",
+            "PRN",
+            "AUX",
+            "NUL",
+            "COM1",
+            "COM2",
+            "COM3",
+            "COM4",
+            "COM5",
+            "COM6",
+            "COM7",
+            "COM8",
+            "COM9",
+            "LPT1",
+            "LPT2",
+            "LPT3",
+            "LPT4",
+            "LPT5",
+            "LPT6",
+            "LPT7",
+            "LPT8",
+            "LPT9",
+        )
         if len(name) <= 4 and name.upper() in forbidden:
             parser.error("invalid directory name given, use a different one")
 
@@ -223,7 +241,7 @@ def newbot(parser, args):
 
     try:
         with open(str(new_directory / "bot.py"), "w", encoding="utf-8") as fp:
-            base = "Bot" if not args.sharded else "AutoShardedBot"
+            base = "AutoShardedBot" if args.sharded else "Bot"
             fp.write(bot_template.format(base=base, prefix=args.prefix))
     except OSError as exc:
         parser.error(f"could not create bot file ({exc})")

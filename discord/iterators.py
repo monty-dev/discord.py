@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import datetime
@@ -65,7 +61,8 @@ class _AsyncIterator:
 
     def chunk(self, max_size):
         if max_size <= 0:
-            raise ValueError("async iterator chunk sizes must be greater than 0.")
+            msg = "async iterator chunk sizes must be greater than 0."
+            raise ValueError(msg)
         return _ChunkedAsyncIterator(self, max_size)
 
     def map(self, func):
@@ -90,8 +87,8 @@ class _AsyncIterator:
     async def __anext__(self):
         try:
             msg = await self.next()
-        except NoMoreItems:
-            raise StopAsyncIteration()
+        except NoMoreItems as e:
+            raise StopAsyncIteration from e
         else:
             return msg
 
@@ -101,7 +98,7 @@ def _identity(x):
 
 
 class _ChunkedAsyncIterator(_AsyncIterator):
-    def __init__(self, iterator, max_size):
+    def __init__(self, iterator, max_size) -> None:
         self.iterator = iterator
         self.max_size = max_size
 
@@ -122,7 +119,7 @@ class _ChunkedAsyncIterator(_AsyncIterator):
 
 
 class _MappedAsyncIterator(_AsyncIterator):
-    def __init__(self, iterator, func):
+    def __init__(self, iterator, func) -> None:
         self.iterator = iterator
         self.func = func
 
@@ -133,7 +130,7 @@ class _MappedAsyncIterator(_AsyncIterator):
 
 
 class _FilteredAsyncIterator(_AsyncIterator):
-    def __init__(self, iterator, predicate):
+    def __init__(self, iterator, predicate) -> None:
         self.iterator = iterator
 
         if predicate is None:
@@ -153,7 +150,7 @@ class _FilteredAsyncIterator(_AsyncIterator):
 
 
 class ReactionIterator(_AsyncIterator):
-    def __init__(self, message, emoji, limit=100, after=None):
+    def __init__(self, message, emoji, limit=100, after=None) -> None:
         self.message = message
         self.limit = limit
         self.after = after
@@ -171,15 +168,15 @@ class ReactionIterator(_AsyncIterator):
 
         try:
             return self.users.get_nowait()
-        except asyncio.QueueEmpty:
-            raise NoMoreItems()
+        except asyncio.QueueEmpty as e:
+            raise NoMoreItems from e
 
     async def fill_users(self):
         # this is a hack because >circular imports<
         from .user import User
 
         if self.limit > 0:
-            retrieve = self.limit if self.limit <= 100 else 100
+            retrieve = min(self.limit, 100)
 
             after = self.after.id if self.after else None
             data = await self.getter(self.channel_id, self.message.id, self.emoji, retrieve, after=after)
@@ -218,7 +215,7 @@ class HistoryIterator(_AsyncIterator):
     messages endpoint.
 
     Parameters
-    -----------
+    ----------
     messageable: :class:`abc.Messageable`
         Messageable class to retrieve message history from.
     limit: :class:`int`
@@ -235,7 +232,7 @@ class HistoryIterator(_AsyncIterator):
         ``True`` if `after` is specified, otherwise ``False``.
     """
 
-    def __init__(self, messageable, limit, before=None, after=None, around=None, oldest_first=None):
+    def __init__(self, messageable, limit, before=None, after=None, around=None, oldest_first=None) -> None:
         if isinstance(before, datetime.datetime):
             before = Object(id=time_snowflake(before, high=False))
         if isinstance(after, datetime.datetime):
@@ -243,11 +240,7 @@ class HistoryIterator(_AsyncIterator):
         if isinstance(around, datetime.datetime):
             around = Object(id=time_snowflake(around))
 
-        if oldest_first is None:
-            self.reverse = after is not None
-        else:
-            self.reverse = oldest_first
-
+        self.reverse = after is not None if oldest_first is None else oldest_first
         self.messageable = messageable
         self.limit = limit
         self.before = before
@@ -262,9 +255,11 @@ class HistoryIterator(_AsyncIterator):
 
         if self.around:
             if self.limit is None:
-                raise ValueError("history does not support around with limit=None")
+                msg = "history does not support around with limit=None"
+                raise ValueError(msg)
             if self.limit > 101:
-                raise ValueError("history max limit 101 when specifying around parameter")
+                msg = "history max limit 101 when specifying around parameter"
+                raise ValueError(msg)
             elif self.limit == 101:
                 self.limit = 100  # Thanks discord
 
@@ -275,15 +270,14 @@ class HistoryIterator(_AsyncIterator):
                 self._filter = lambda m: int(m["id"]) < self.before.id
             elif self.after:
                 self._filter = lambda m: self.after.id < int(m["id"])
+        elif self.reverse:
+            self._retrieve_messages = self._retrieve_messages_after_strategy
+            if self.before:
+                self._filter = lambda m: int(m["id"]) < self.before.id
         else:
-            if self.reverse:
-                self._retrieve_messages = self._retrieve_messages_after_strategy
-                if self.before:
-                    self._filter = lambda m: int(m["id"]) < self.before.id
-            else:
-                self._retrieve_messages = self._retrieve_messages_before_strategy
-                if self.after and self.after != OLDEST_OBJECT:
-                    self._filter = lambda m: int(m["id"]) > self.after.id
+            self._retrieve_messages = self._retrieve_messages_before_strategy
+            if self.after and self.after != OLDEST_OBJECT:
+                self._filter = lambda m: int(m["id"]) > self.after.id
 
     async def next(self):
         if self.messages.empty():
@@ -291,15 +285,12 @@ class HistoryIterator(_AsyncIterator):
 
         try:
             return self.messages.get_nowait()
-        except asyncio.QueueEmpty:
-            raise NoMoreItems()
+        except asyncio.QueueEmpty as e:
+            raise NoMoreItems from e
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 100:
-            r = 100
-        else:
-            r = l
+        r = 100 if l is None or l > 100 else l
         self.retrieve = r
         return r > 0
 
@@ -319,8 +310,7 @@ class HistoryIterator(_AsyncIterator):
             if self._filter:
                 data = filter(self._filter, data)
 
-            for element in data:
-                result.append(self.state.create_message(channel=channel, data=element))
+            result.extend(self.state.create_message(channel=channel, data=element) for element in data)
         return result
 
     async def fill_messages(self):
@@ -345,7 +335,6 @@ class HistoryIterator(_AsyncIterator):
 
     async def _retrieve_messages(self, retrieve):
         """Retrieve messages and update next parameters."""
-        pass
 
     async def _retrieve_messages_before_strategy(self, retrieve):
         """Retrieve messages using before parameter."""
@@ -378,17 +367,13 @@ class HistoryIterator(_AsyncIterator):
 
 
 class AuditLogIterator(_AsyncIterator):
-    def __init__(self, guild, limit=None, before=None, after=None, oldest_first=None, user_id=None, action_type=None):
+    def __init__(self, guild, limit=None, before=None, after=None, oldest_first=None, user_id=None, action_type=None) -> None:
         if isinstance(before, datetime.datetime):
             before = Object(id=time_snowflake(before, high=False))
         if isinstance(after, datetime.datetime):
             after = Object(id=time_snowflake(after, high=True))
 
-        if oldest_first is None:
-            self.reverse = after is not None
-        else:
-            self.reverse = oldest_first
-
+        self.reverse = after is not None if oldest_first is None else oldest_first
         self.guild = guild
         self.loop = guild._state.loop
         self.request = guild._state.http.get_audit_logs
@@ -440,15 +425,12 @@ class AuditLogIterator(_AsyncIterator):
 
         try:
             return self.entries.get_nowait()
-        except asyncio.QueueEmpty:
-            raise NoMoreItems()
+        except asyncio.QueueEmpty as e:
+            raise NoMoreItems from e
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 100:
-            r = 100
-        else:
-            r = l
+        r = 100 if l is None or l > 100 else l
         self.retrieve = r
         return r > 0
 
@@ -495,7 +477,7 @@ class GuildIterator(_AsyncIterator):
     guilds endpoint.
 
     Parameters
-    -----------
+    ----------
     bot: :class:`discord.Client`
         The client to retrieve the guilds from.
     limit: :class:`int`
@@ -506,7 +488,7 @@ class GuildIterator(_AsyncIterator):
         Object after which all guilds must be.
     """
 
-    def __init__(self, bot, limit, before=None, after=None):
+    def __init__(self, bot, limit, before=None, after=None) -> None:
         if isinstance(before, datetime.datetime):
             before = Object(id=time_snowflake(before, high=False))
         if isinstance(after, datetime.datetime):
@@ -537,15 +519,12 @@ class GuildIterator(_AsyncIterator):
 
         try:
             return self.guilds.get_nowait()
-        except asyncio.QueueEmpty:
-            raise NoMoreItems()
+        except asyncio.QueueEmpty as e:
+            raise NoMoreItems from e
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 100:
-            r = 100
-        else:
-            r = l
+        r = 100 if l is None or l > 100 else l
         self.retrieve = r
         return r > 0
 
@@ -564,8 +543,7 @@ class GuildIterator(_AsyncIterator):
             if self._filter:
                 data = filter(self._filter, data)
 
-            for element in data:
-                result.append(self.create_guild(element))
+            result.extend(self.create_guild(element) for element in data)
         return result
 
     async def fill_guilds(self):
@@ -582,7 +560,6 @@ class GuildIterator(_AsyncIterator):
 
     async def _retrieve_guilds(self, retrieve):
         """Retrieve guilds and update next parameters."""
-        pass
 
     async def _retrieve_guilds_before_strategy(self, retrieve):
         """Retrieve guilds using before parameter."""
@@ -606,7 +583,7 @@ class GuildIterator(_AsyncIterator):
 
 
 class MemberIterator(_AsyncIterator):
-    def __init__(self, guild, limit=1000, after=None):
+    def __init__(self, guild, limit=1000, after=None) -> None:
         if isinstance(after, datetime.datetime):
             after = Object(id=time_snowflake(after, high=True))
 
@@ -624,33 +601,31 @@ class MemberIterator(_AsyncIterator):
 
         try:
             return self.members.get_nowait()
-        except asyncio.QueueEmpty:
-            raise NoMoreItems()
+        except asyncio.QueueEmpty as e:
+            raise NoMoreItems from e
 
     def _get_retrieve(self):
         l = self.limit
-        if l is None or l > 1000:
-            r = 1000
-        else:
-            r = l
+        r = 1000 if l is None or l > 1000 else l
         self.retrieve = r
         return r > 0
 
     async def fill_members(self):
-        if self._get_retrieve():
-            after = self.after.id if self.after else None
-            data = await self.get_members(self.guild.id, self.retrieve, after)
-            if not data:
-                # no data, terminate
-                return
+        if not self._get_retrieve():
+            return
+        after = self.after.id if self.after else None
+        data = await self.get_members(self.guild.id, self.retrieve, after)
+        if not data:
+            # no data, terminate
+            return
 
-            if len(data) < 1000:
-                self.limit = 0  # terminate loop
+        if len(data) < 1000:
+            self.limit = 0  # terminate loop
 
-            self.after = Object(id=int(data[-1]["user"]["id"]))
+        self.after = Object(id=int(data[-1]["user"]["id"]))
 
-            for element in reversed(data):
-                await self.members.put(self.create_member(element))
+        for element in reversed(data):
+            await self.members.put(self.create_member(element))
 
     def create_member(self, data):
         from .member import Member

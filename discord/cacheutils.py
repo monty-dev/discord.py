@@ -61,21 +61,23 @@ Learn more about `caching algorithms on Wikipedia
 
 """
 
-# TODO: TimedLRI
-# TODO: support 0 max_size?
-
+from __future__ import annotations
 
 import heapq
 import itertools
 import weakref
 from operator import attrgetter
 
+# TODO: TimedLRI
+# TODO: support 0 max_size?
+
+
 try:
     from threading import RLock
 except Exception:
 
     class RLock(object):
-        "Dummy reentrant lock for builds without threads"
+        "Dummy reentrant lock for builds without threads."
 
         def __enter__(self):
             pass
@@ -127,7 +129,7 @@ class LRI(dict):
     (3, 1, 1)
     """
 
-    def __init__(self, max_size=DEFAULT_MAX_SIZE, values=None, on_miss=None):
+    def __init__(self, max_size=DEFAULT_MAX_SIZE, values=None, on_miss=None) -> None:
         if max_size <= 0:
             raise ValueError("expected max_size > 0, not %r" % max_size)
         self.hit_count = self.miss_count = self.soft_miss_count = 0
@@ -136,7 +138,7 @@ class LRI(dict):
         self._init_ll()
 
         if on_miss is not None and not callable(on_miss):
-            raise TypeError("expected on_miss to be a callable" " (or None), not %r" % on_miss)
+            raise TypeError("expected on_miss to be a callable (or None), not %r" % on_miss)
         self.on_miss = on_miss
 
         if values:
@@ -161,10 +163,9 @@ class LRI(dict):
 
     def _print_ll(self):
         print("***")
-        for (key, val) in self._get_flattened_ll():
+        for key, val in self._get_flattened_ll():
             print(key, val)
         print("***")
-        return
 
     def _get_flattened_ll(self):
         flattened_list = []
@@ -228,7 +229,7 @@ class LRI(dict):
         link[PREV][NEXT] = link[NEXT]
         link[NEXT][PREV] = link[PREV]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         with self._lock:
             try:
                 link = self._get_link_and_move_to_front_of_ll(key)
@@ -263,7 +264,7 @@ class LRI(dict):
             self.soft_miss_count += 1
             return default
 
-    def __delitem__(self, key):
+    def __delitem__(self, key) -> None:
         with self._lock:
             super(LRI, self).__delitem__(key)
             self._remove_from_ll(key)
@@ -333,7 +334,7 @@ class LRI(dict):
     def __ne__(self, other):
         return not (self == other)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cn = self.__class__.__name__
         val_map = super(LRI, self).__repr__()
         return "%s(max_size=%r, on_miss=%r, values=%s)" % (cn, self.max_size, self.on_miss, val_map)
@@ -344,6 +345,7 @@ class LRU(LRI):
     *Least-Recently Used* caching strategy.
 
     Args:
+    ----
         max_size (int): Max number of items to cache. Defaults to ``128``.
         values (iterable): Initial values for the cache. Defaults to ``None``.
         on_miss (callable): a callable which accepts a single argument, the
@@ -400,14 +402,14 @@ class _HashedKey(list):
 
     __slots__ = "hash_value"
 
-    def __init__(self, key):
+    def __init__(self, key) -> None:
         self[:] = key
         self.hash_value = hash(tuple(key))
 
     def __hash__(self):
         return self.hash_value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({list.__repr__(self)})"
 
 
@@ -429,9 +431,6 @@ def make_cache_key(args, kwargs, typed=False, kwarg_mark=_KWARG_MARK, fasttypes=
 
     .. _hashable: https://docs.python.org/2/glossary.html#term-hashable
     """
-
-    # key = [func_name] if func_name else []
-    # key.extend(args)
     key = list(args)
     if kwargs:
         sorted_items = sorted(kwargs.items())
@@ -455,12 +454,12 @@ class CachedFunction(object):
     class are used to wrap functions in caching logic.
     """
 
-    def __init__(self, func, cache, scoped=True, typed=False, key=None):
+    def __init__(self, func, cache, scoped=True, typed=False, key=None) -> None:
         self.func = func
         if callable(cache):
             self.get_cache = cache
         elif not (callable(getattr(cache, "__getitem__", None)) and callable(getattr(cache, "__setitem__", None))):
-            raise TypeError("expected cache to be a dict-like object," " or callable returning a dict-like object, not %r" % cache)
+            raise TypeError("expected cache to be a dict-like object, or callable returning a dict-like object, not %r" % cache)
         else:
 
             def _get_cache():
@@ -480,7 +479,7 @@ class CachedFunction(object):
             ret = cache[key] = self.func(*args, **kwargs)
         return ret
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cn = self.__class__.__name__
         if self.typed or not self.scoped:
             return "%s(func=%r, scoped=%r, typed=%r)" % (cn, self.func, self.scoped, self.typed)
@@ -492,7 +491,7 @@ class CachedMethod(object):
     :func:`cachedmethod` to wrap methods in caching logic.
     """
 
-    def __init__(self, func, cache, scoped=True, typed=False, key=None):
+    def __init__(self, func, cache, scoped=True, typed=False, key=None) -> None:
         self.func = func
         self.__isabstractmethod__ = getattr(func, "__isabstractmethod__", False)
         if isinstance(cache, basestring):
@@ -500,7 +499,7 @@ class CachedMethod(object):
         elif callable(cache):
             self.get_cache = cache
         elif not (callable(getattr(cache, "__getitem__", None)) and callable(getattr(cache, "__setitem__", None))):
-            raise TypeError("expected cache to be an attribute name," " dict-like object, or callable returning" " a dict-like object, not %r" % cache)
+            raise TypeError("expected cache to be an attribute name, dict-like object, or callable returning a dict-like object, not %r" % cache)
         else:
 
             def _get_cache(obj):
@@ -533,7 +532,7 @@ class CachedMethod(object):
             ret = cache[key] = self.func(*args, **kwargs)
         return ret
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cn = self.__class__.__name__
         args = (cn, self.func, self.scoped, self.typed)
         if self.bound_to is not None:
@@ -547,6 +546,7 @@ def cached(cache, scoped=True, typed=False, key=None):
     that the function wrapped should take only `hashable`_ arguments.
 
     Args:
+    ----
         cache (Mapping): Any :class:`dict`-like object suitable for
             use as a cache. Instances of the :class:`LRU` and
             :class:`LRI` are good choices, but a plain :class:`dict`
@@ -588,6 +588,7 @@ def cachedmethod(cache, scoped=True, typed=False, key=None):
     *cache* object.
 
     Args:
+    ----
         cache (str/Mapping/callable): Can be the name of an attribute
             on the instance, any Mapping/:class:`dict`-like object, or
             a callable which returns a Mapping.
@@ -637,7 +638,7 @@ class cachedproperty(object):
     manipulating the object's ``__dict__``.
     """
 
-    def __init__(self, func):
+    def __init__(self, func) -> None:
         self.__doc__ = getattr(func, "__doc__")
         self.__isabstractmethod__ = getattr(func, "__isabstractmethod__", False)
         self.func = func
@@ -648,7 +649,7 @@ class cachedproperty(object):
         value = obj.__dict__[self.func.__name__] = self.func(obj)
         return value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cn = self.__class__.__name__
         return f"<{cn} func={self.func}>"
 
@@ -698,7 +699,7 @@ class ThresholdCounter(object):
     """
 
     # TODO: hit_count/miss_count?
-    def __init__(self, threshold=0.001):
+    def __init__(self, threshold=0.001) -> None:
         if not 0 < threshold < 1:
             raise ValueError("expected threshold between 0 and 1, not: %r" % threshold)
 
@@ -725,9 +726,8 @@ class ThresholdCounter(object):
             self._count_map[key] = [1, self._cur_bucket - 1]
 
         if self.total % self._thresh_count == 0:
-            self._count_map = dict([(k, v) for k, v in self._count_map.items() if sum(v) > self._cur_bucket])
+            self._count_map = {k: v for k, v in self._count_map.items() if sum(v) > self._cur_bucket}
             self._cur_bucket += 1
-        return
 
     def elements(self):
         """Return an iterator of all the common elements tracked by the
@@ -743,15 +743,13 @@ class ThresholdCounter(object):
         if n <= 0:
             return []
         ret = sorted(self.iteritems(), key=lambda x: x[1], reverse=True)
-        if n is None or n >= len(ret):
-            return ret
-        return ret[:n]
+        return ret if n is None or n >= len(ret) else ret[:n]
 
     def get_common_count(self):
         """Get the sum of counts for keys exceeding the configured data
         threshold.
         """
-        return sum([count for count, _ in self._count_map.values()])
+        return sum(count for count, _ in self._count_map.values())
 
     def get_uncommon_count(self):
         """Get the sum of counts for keys that were culled because the
@@ -773,10 +771,10 @@ class ThresholdCounter(object):
     def __getitem__(self, key):
         return self._count_map[key][0]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._count_map)
 
-    def __contains__(self, key):
+    def __contains__(self, key) -> bool:
         return key in self._count_map
 
     def iterkeys(self):
@@ -818,7 +816,7 @@ class ThresholdCounter(object):
         if iterable is not None:
             if callable(getattr(iterable, "iteritems", None)):
                 for key, count in iterable.iteritems():
-                    for i in xrange(count):
+                    for _ in xrange(count):
                         self.add(key)
             else:
                 for key in iterable:
@@ -828,8 +826,7 @@ class ThresholdCounter(object):
 
 
 class MinIDMap(object):
-    """
-    Assigns arbitrary weakref-able objects the smallest possible unique
+    """Assigns arbitrary weakref-able objects the smallest possible unique
     integer IDs, such that no two objects have the same ID at the same
     time.
 
@@ -838,7 +835,7 @@ class MinIDMap(object):
     Based on https://gist.github.com/kurtbrose/25b48114de216a5e55df
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.mapping = weakref.WeakKeyDictionary()
         self.ref_map = {}
         self.free = []
@@ -849,10 +846,7 @@ class MinIDMap(object):
         except KeyError:
             pass
 
-        if self.free:  # if there are any free IDs, use the smallest
-            nxt = heapq.heappop(self.free)
-        else:  # if there are no free numbers, use the next highest ID
-            nxt = len(self.mapping)
+        nxt = heapq.heappop(self.free) if self.free else len(self.mapping)
         ref = weakref.ref(a, self._clean)
         self.mapping[a] = (nxt, ref)
         self.ref_map[ref] = nxt
@@ -869,13 +863,13 @@ class MinIDMap(object):
         heapq.heappush(self.free, self.ref_map[ref])
         del self.ref_map[ref]
 
-    def __contains__(self, a):
+    def __contains__(self, a) -> bool:
         return a in self.mapping
 
     def __iter__(self):
         return iter(self.mapping)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.mapping.__len__()
 
     def iteritems(self):

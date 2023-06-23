@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 """Some documentation to refer to:
 
@@ -75,25 +71,25 @@ class VoiceProtocol:
     .. _Lavalink: https://github.com/freyacodes/Lavalink
 
     Parameters
-    ------------
+    ----------
     client: :class:`Client`
         The client (or its subclasses) that started the connection request.
     channel: :class:`abc.Connectable`
         The voice channel that is being connected to.
     """
 
-    def __init__(self, client, channel):
+    def __init__(self, client, channel) -> None:
         self.client = client
         self.channel = channel
 
     async def on_voice_state_update(self, data):
-        """|coro|
+        """|coro|.
 
         An abstract method that is called when the client's voice state
         has changed. This corresponds to ``VOICE_STATE_UPDATE``.
 
         Parameters
-        ------------
+        ----------
         data: :class:`dict`
             The raw `voice state payload`__.
 
@@ -104,13 +100,13 @@ class VoiceProtocol:
         raise NotImplementedError
 
     async def on_voice_server_update(self, data):
-        """|coro|
+        """|coro|.
 
         An abstract method that is called when initially connecting to voice.
         This corresponds to ``VOICE_SERVER_UPDATE``.
 
         Parameters
-        ------------
+        ----------
         data: :class:`dict`
             The raw `voice server update payload`__.
 
@@ -121,7 +117,7 @@ class VoiceProtocol:
         raise NotImplementedError
 
     async def connect(self, *, timeout, reconnect):
-        """|coro|
+        """|coro|.
 
         An abstract method called when the client initiates the connection request.
 
@@ -135,7 +131,7 @@ class VoiceProtocol:
         The order that these two are called is unspecified.
 
         Parameters
-        ------------
+        ----------
         timeout: :class:`float`
             The timeout for the connection.
         reconnect: :class:`bool`
@@ -144,14 +140,14 @@ class VoiceProtocol:
         raise NotImplementedError
 
     async def disconnect(self, *, force):
-        """|coro|
+        """|coro|.
 
         An abstract method called when the client terminates the connection.
 
         See :meth:`cleanup`.
 
         Parameters
-        ------------
+        ----------
         force: :class:`bool`
             Whether the disconnection was forced.
         """
@@ -177,15 +173,15 @@ class VoiceClient(VoiceProtocol):
     You do not create these, you typically get them from
     e.g. :meth:`VoiceChannel.connect`.
 
-    Warning
-    --------
+    Warning:
+    -------
     In order to use PCM based AudioSources, you must have the opus library
     installed on your system and loaded through :func:`opus.load_opus`.
     Otherwise, your AudioSources must be opus encoded (e.g. using :class:`FFmpegOpusAudio`)
     or the library will not be able to transmit audio.
 
-    Attributes
-    -----------
+    Attributes:
+    ----------
     session_id: :class:`str`
         The voice connection session ID.
     token: :class:`str`
@@ -198,9 +194,10 @@ class VoiceClient(VoiceProtocol):
         The event loop that the voice client is running on.
     """
 
-    def __init__(self, client, channel):
+    def __init__(self, client, channel) -> None:
         if not has_nacl:
-            raise RuntimeError("PyNaCl library needed in order to use voice")
+            msg = "PyNaCl library needed in order to use voice"
+            raise RuntimeError(msg)
 
         super().__init__(client, channel)
         state = client._connection
@@ -349,14 +346,12 @@ class VoiceClient(VoiceProtocol):
                 self.ws = await self.connect_websocket()
                 break
             except (ConnectionClosed, asyncio.TimeoutError):
-                if reconnect:
-                    log.exception("Failed to connect to voice... Retrying...")
-                    await asyncio.sleep(1 + i * 2.0)
-                    await self.voice_disconnect()
-                    continue
-                else:
+                if not reconnect:
                     raise
 
+                log.exception("Failed to connect to voice... Retrying...")
+                await asyncio.sleep(1 + i * 2.0)
+                await self.voice_disconnect()
         if self._runner is None:
             self._runner = self.loop.create_task(self.poll_voice_ws(reconnect))
 
@@ -392,7 +387,7 @@ class VoiceClient(VoiceProtocol):
         .. versionadded:: 1.4
         """
         ws = self.ws
-        return float("inf") if not ws else ws.latency
+        return ws.latency if ws else float("inf")
 
     @property
     def average_latency(self):
@@ -401,7 +396,7 @@ class VoiceClient(VoiceProtocol):
         .. versionadded:: 1.4
         """
         ws = self.ws
-        return float("inf") if not ws else ws.average_latency
+        return ws.average_latency if ws else float("inf")
 
     async def poll_voice_ws(self, reconnect):
         backoff = ExponentialBackoff()
@@ -421,13 +416,12 @@ class VoiceClient(VoiceProtocol):
                     if exc.code == 4014:
                         log.info("Disconnected from voice by force... potentially reconnecting.")
                         successful = await self.potential_reconnect()
-                        if not successful:
-                            log.info("Reconnect was unsuccessful, disconnecting from voice normally...")
-                            await self.disconnect()
-                            break
-                        else:
+                        if successful:
                             continue
 
+                        log.info("Reconnect was unsuccessful, disconnecting from voice normally...")
+                        await self.disconnect()
+                        break
                 if not reconnect:
                     await self.disconnect()
                     raise
@@ -445,7 +439,7 @@ class VoiceClient(VoiceProtocol):
                     continue
 
     async def disconnect(self, *, force=False):
-        """|coro|
+        """|coro|.
 
         Disconnects this voice client from voice.
         """
@@ -466,12 +460,12 @@ class VoiceClient(VoiceProtocol):
                 self.socket.close()
 
     async def move_to(self, channel):
-        """|coro|
+        """|coro|.
 
         Moves you to a different voice channel.
 
         Parameters
-        -----------
+        ----------
         channel: :class:`abc.Snowflake`
             The channel to move to. Must be a voice channel.
         """
@@ -529,7 +523,7 @@ class VoiceClient(VoiceProtocol):
         passed, any caught exception will be displayed as if it were raised.
 
         Parameters
-        -----------
+        ----------
         source: :class:`AudioSource`
             The audio source we're reading from.
         after: Callable[[:class:`Exception`], Any]
@@ -538,7 +532,7 @@ class VoiceClient(VoiceProtocol):
             denotes an optional exception that was raised during playing.
 
         Raises
-        -------
+        ------
         ClientException
             Already playing audio or not connected.
         TypeError
@@ -546,15 +540,17 @@ class VoiceClient(VoiceProtocol):
         OpusNotLoaded
             Source is not opus encoded and opus is not loaded.
         """
-
         if not self.is_connected():
-            raise ClientException("Not connected to voice.")
+            msg = "Not connected to voice."
+            raise ClientException(msg)
 
         if self.is_playing():
-            raise ClientException("Already playing audio.")
+            msg = "Already playing audio."
+            raise ClientException(msg)
 
         if not isinstance(source, AudioSource):
-            raise TypeError(f"source must an AudioSource not {source.__class__.__name__}")
+            msg = f"source must an AudioSource not {source.__class__.__name__}"
+            raise TypeError(msg)
 
         if not self.encoder and not source.is_opus():
             self.encoder = opus.Encoder()
@@ -597,10 +593,12 @@ class VoiceClient(VoiceProtocol):
     @source.setter
     def source(self, value):
         if not isinstance(value, AudioSource):
-            raise TypeError(f"expected AudioSource not {value.__class__.__name__}.")
+            msg = f"expected AudioSource not {value.__class__.__name__}."
+            raise TypeError(msg)
 
         if self._player is None:
-            raise ValueError("Not playing anything.")
+            msg = "Not playing anything."
+            raise ValueError(msg)
 
         self._player._set_source(value)
 
@@ -617,13 +615,12 @@ class VoiceClient(VoiceProtocol):
             Indicates if ``data`` should be encoded into Opus.
 
         Raises
-        -------
+        ------
         ClientException
             You are not connected.
         opus.OpusError
             Encoding the data failed.
         """
-
         self.checked_add("sequence", 1, 65535)
         if encode:
             encoded_data = self.encoder.encode(data, self.encoder.SAMPLES_PER_FRAME)

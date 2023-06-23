@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -35,14 +31,8 @@ import orjson
 
 from . import utils
 from .asset import Asset
-from .enums import try_enum, WebhookType
-from .errors import (
-    DiscordServerError,
-    Forbidden,
-    HTTPException,
-    InvalidArgument,
-    NotFound,
-)
+from .enums import WebhookType, try_enum
+from .errors import DiscordServerError, Forbidden, HTTPException, InvalidArgument, NotFound
 from .message import Message
 from .mixins import Hashable
 from .user import BaseUser, User
@@ -56,7 +46,7 @@ class WebhookAdapter:
     """Base class for all webhook adapters.
 
     Attributes
-    ------------
+    ----------
     webhook: :class:`Webhook`
         The webhook that owns this adapter.
     """
@@ -78,7 +68,7 @@ class WebhookAdapter:
         Subclasses must implement this.
 
         Parameters
-        -----------
+        ----------
         verb: :class:`str`
             The HTTP verb to use for the request.
         url: :class:`str`
@@ -92,7 +82,7 @@ class WebhookAdapter:
         payload: Optional[:class:`dict`]
             The JSON to send with the request, if any.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def delete_webhook(self, *, reason=None):
         return self.request("DELETE", self._request_url, reason=reason)
@@ -116,13 +106,13 @@ class WebhookAdapter:
         Subclasses must implement this.
 
         Parameters
-        ------------
+        ----------
         data
             The data that was returned from the request.
         wait: :class:`bool`
             Whether the webhook execution was asked to wait or not.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def _wrap_coroutine_and_cleanup(self, coro, cleanup):
         try:
@@ -177,12 +167,12 @@ class AsyncWebhookAdapter(WebhookAdapter):
         You are responsible for cleaning up the client session.
 
     Parameters
-    -----------
+    ----------
     session: :class:`aiohttp.ClientSession`
         The session to use to send requests.
     """
 
-    def __init__(self, session):
+    def __init__(self, session) -> None:
         self.session = session
         self.loop = asyncio.get_event_loop()
 
@@ -275,7 +265,7 @@ class RequestsWebhookAdapter(WebhookAdapter):
     Only versions of :doc:`req:index` higher than 2.13.0 are supported.
 
     Parameters
-    -----------
+    ----------
     session: Optional[`requests.Session <http://docs.python-requests.org/en/latest/api/#requests.Session>`_]
         The requests session to use for sending requests. If not given then
         each request will create a new session. Note if a session is given,
@@ -287,7 +277,7 @@ class RequestsWebhookAdapter(WebhookAdapter):
         ``False`` then this will raise an :exc:`HTTPException` instead.
     """
 
-    def __init__(self, session=None, *, sleep=True):
+    def __init__(self, session=None, *, sleep=True) -> None:
         import requests
 
         self.session = session or requests
@@ -337,18 +327,17 @@ class RequestsWebhookAdapter(WebhookAdapter):
 
             # we are being rate limited
             if r.status == 429:
-                if self.sleep:
-                    if not r.headers.get("Via"):
-                        # Banned by Cloudflare more than likely.
-                        raise HTTPException(r, data)
-
-                    retry_after = response["retry_after"] / 1000.0
-                    log.warning("Webhook ID %s is rate limited. Retrying in %.2f seconds", _id, retry_after)
-                    time.sleep(retry_after)
-                    continue
-                else:
+                if not self.sleep:
                     raise HTTPException(r, response)
 
+                if not r.headers.get("Via"):
+                    # Banned by Cloudflare more than likely.
+                    raise HTTPException(r, data)
+
+                retry_after = response["retry_after"] / 1000.0
+                log.warning("Webhook ID %s is rate limited. Retrying in %.2f seconds", _id, retry_after)
+                time.sleep(retry_after)
+                continue
             if self.sleep and r.status in (500, 502):
                 time.sleep(1 + tries * 2)
                 continue
@@ -379,20 +368,17 @@ class _FriendlyHttpAttributeErrorHelper:
     __slots__ = ()
 
     def __getattr__(self, attr):
-        raise AttributeError("PartialWebhookState does not support http methods.")
+        msg = "PartialWebhookState does not support http methods."
+        raise AttributeError(msg)
 
 
 class _PartialWebhookState:
     __slots__ = ("loop", "parent", "_webhook")
 
-    def __init__(self, adapter, webhook, parent):
+    def __init__(self, adapter, webhook, parent) -> None:
         self._webhook = webhook
 
-        if isinstance(parent, self.__class__):
-            self.parent = None
-        else:
-            self.parent = parent
-
+        self.parent = None if isinstance(parent, self.__class__) else parent
         # Fetch the loop from the adapter if it's there
         try:
             self.loop = adapter.loop
@@ -422,7 +408,8 @@ class _PartialWebhookState:
         if self.parent is not None:
             return getattr(self.parent, attr)
 
-        raise AttributeError(f"PartialWebhookState does not support {attr!r}.")
+        msg = f"PartialWebhookState does not support {attr!r}."
+        raise AttributeError(msg)
 
 
 class WebhookMessage(Message):
@@ -438,7 +425,7 @@ class WebhookMessage(Message):
     """
 
     def edit(self, **fields):
-        """|maybecoro|
+        """|maybecoro|.
 
         Edits the message.
 
@@ -447,7 +434,7 @@ class WebhookMessage(Message):
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         content: Optional[:class:`str`]
             The content to edit the message with or ``None`` to clear it.
         embeds: List[:class:`Embed`]
@@ -460,7 +447,7 @@ class WebhookMessage(Message):
             See :meth:`.abc.Messageable.send` for more information.
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the message failed.
         Forbidden
@@ -488,12 +475,12 @@ class WebhookMessage(Message):
         return await asyncio.sleep(0)
 
     def delete(self, *, delay=None):
-        """|coro|
+        """|coro|.
 
         Deletes the message.
 
         Parameters
-        -----------
+        ----------
         delay: Optional[:class:`float`]
             If provided, the number of seconds to wait before deleting the message.
             If this is a coroutine, the waiting is done in the background and deletion failures
@@ -508,7 +495,6 @@ class WebhookMessage(Message):
         HTTPException
             Deleting the message failed.
         """
-
         if delay is not None:
             if self._state._webhook._adapter.is_async():
                 return self._delete_delay_async(delay)
@@ -577,7 +563,7 @@ class Webhook(Hashable):
         Webhooks are now comparable and hashable.
 
     Attributes
-    ------------
+    ----------
     id: :class:`int`
         The webhook's ID
     type: :class:`WebhookType`
@@ -603,7 +589,7 @@ class Webhook(Hashable):
 
     __slots__ = ("id", "type", "guild_id", "channel_id", "user", "name", "avatar", "token", "_state", "_adapter")
 
-    def __init__(self, data, *, adapter, state=None):
+    def __init__(self, data, *, adapter, state=None) -> None:
         self.id = int(data["id"])
         self.type = try_enum(WebhookType, int(data["type"]))
         self.channel_id = utils._get_as_snowflake(data, "channel_id")
@@ -623,7 +609,7 @@ class Webhook(Hashable):
         else:
             self.user = User(state=state, data=user)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<Webhook id=%r>" % self.id
 
     @property
@@ -636,7 +622,7 @@ class Webhook(Hashable):
         """Creates a partial :class:`Webhook`.
 
         Parameters
-        -----------
+        ----------
         id: :class:`int`
             The ID of the webhook.
         token: :class:`str`
@@ -647,14 +633,14 @@ class Webhook(Hashable):
             :class:`RequestsWebhookAdapter` for :doc:`req:index`.
 
         Returns
-        --------
+        -------
         :class:`Webhook`
             A partial :class:`Webhook`.
             A partial webhook is just a webhook object with an ID and a token.
         """
-
         if not isinstance(adapter, WebhookAdapter):
-            raise TypeError("adapter must be a subclass of WebhookAdapter")
+            msg = "adapter must be a subclass of WebhookAdapter"
+            raise TypeError(msg)
 
         data = {"id": id, "type": 1, "token": token}
 
@@ -665,7 +651,7 @@ class Webhook(Hashable):
         """Creates a partial :class:`Webhook` from a webhook URL.
 
         Parameters
-        ------------
+        ----------
         url: :class:`str`
             The URL of the webhook.
         adapter: :class:`WebhookAdapter`
@@ -674,20 +660,20 @@ class Webhook(Hashable):
             :class:`RequestsWebhookAdapter` for :doc:`req:index`.
 
         Raises
-        -------
+        ------
         InvalidArgument
             The URL is invalid.
 
         Returns
-        --------
+        -------
         :class:`Webhook`
             A partial :class:`Webhook`.
             A partial webhook is just a webhook object with an ID and a token.
         """
-
         m = re.search(r"discord(?:app)?.com/api/webhooks/(?P<id>[0-9]{17,20})/(?P<token>[A-Za-z0-9\.\-\_]{60,68})", url)
         if m is None:
-            raise InvalidArgument("Invalid webhook URL given.")
+            msg = "Invalid webhook URL given."
+            raise InvalidArgument(msg)
         data = m.groupdict()
         data["type"] = 1
         return cls(data, adapter=adapter)
@@ -756,7 +742,7 @@ class Webhook(Hashable):
         The size must be a power of 2 between 16 and 1024.
 
         Parameters
-        -----------
+        ----------
         format: Optional[:class:`str`]
             The format to attempt to convert the avatar to.
             If the format is ``None``, then it is equivalent to png.
@@ -769,7 +755,7 @@ class Webhook(Hashable):
             Bad image format passed to ``format`` or invalid ``size``.
 
         Returns
-        --------
+        -------
         :class:`Asset`
             The resulting CDN asset.
         """
@@ -778,18 +764,20 @@ class Webhook(Hashable):
             return Asset(self._state, "/embed/avatars/0.png")
 
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 1024")
+            msg = "size must be a power of 2 between 16 and 1024"
+            raise InvalidArgument(msg)
 
         format = format or "png"
 
         if format not in ("png", "jpg", "jpeg"):
-            raise InvalidArgument("format must be one of 'png', 'jpg', or 'jpeg'.")
+            msg = "format must be one of 'png', 'jpg', or 'jpeg'."
+            raise InvalidArgument(msg)
 
         url = f"/avatars/{self.id}/{self.avatar}.{format}?size={size}"
         return Asset(self._state, url)
 
     def delete(self, *, reason=None):
-        """|maybecoro|
+        """|maybecoro|.
 
         Deletes this Webhook.
 
@@ -797,14 +785,14 @@ class Webhook(Hashable):
         not a coroutine.
 
         Parameters
-        ------------
+        ----------
         reason: Optional[:class:`str`]
             The reason for deleting this webhook. Shows up on the audit log.
 
             .. versionadded:: 1.4
 
         Raises
-        -------
+        ------
         HTTPException
             Deleting the webhook failed.
         NotFound
@@ -815,12 +803,13 @@ class Webhook(Hashable):
             This webhook does not have a token associated with it.
         """
         if self.token is None:
-            raise InvalidArgument("This webhook does not have a token associated with it")
+            msg = "This webhook does not have a token associated with it"
+            raise InvalidArgument(msg)
 
         return self._adapter.delete_webhook(reason=reason)
 
     def edit(self, *, reason=None, **kwargs):
-        """|maybecoro|
+        """|maybecoro|.
 
         Edits this Webhook.
 
@@ -828,7 +817,7 @@ class Webhook(Hashable):
         not a coroutine.
 
         Parameters
-        ------------
+        ----------
         name: Optional[:class:`str`]
             The webhook's new default name.
         avatar: Optional[:class:`bytes`]
@@ -839,7 +828,7 @@ class Webhook(Hashable):
             .. versionadded:: 1.4
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the webhook failed.
         NotFound
@@ -848,7 +837,8 @@ class Webhook(Hashable):
             This webhook does not have a token associated with it.
         """
         if self.token is None:
-            raise InvalidArgument("This webhook does not have a token associated with it")
+            msg = "This webhook does not have a token associated with it"
+            raise InvalidArgument(msg)
 
         payload = {}
 
@@ -857,11 +847,7 @@ class Webhook(Hashable):
         except KeyError:
             pass
         else:
-            if name is not None:
-                payload["name"] = str(name)
-            else:
-                payload["name"] = None
-
+            payload["name"] = str(name) if name is not None else None
         try:
             avatar = kwargs["avatar"]
         except KeyError:
@@ -874,8 +860,21 @@ class Webhook(Hashable):
 
         return self._adapter.edit_webhook(reason=reason, **payload)
 
-    def send(self, content=None, *, wait=False, username=None, avatar_url=None, tts=False, file=None, files=None, embed=None, embeds=None, allowed_mentions=None):
-        """|maybecoro|
+    def send(
+        self,
+        content=None,
+        *,
+        wait=False,
+        username=None,
+        avatar_url=None,
+        tts=False,
+        file=None,
+        files=None,
+        embed=None,
+        embeds=None,
+        allowed_mentions=None,
+    ):
+        """|maybecoro|.
 
         Sends a message using the webhook.
 
@@ -892,7 +891,7 @@ class Webhook(Hashable):
         ``embeds`` parameter, which must be a :class:`list` of :class:`Embed` objects to send.
 
         Parameters
-        ------------
+        ----------
         content: :class:`str`
             The content of the message to send.
         wait: :class:`bool`
@@ -924,7 +923,7 @@ class Webhook(Hashable):
             .. versionadded:: 1.4
 
         Raises
-        --------
+        ------
         HTTPException
             Sending the message failed.
         NotFound
@@ -937,22 +936,25 @@ class Webhook(Hashable):
             this webhook.
 
         Returns
-        ---------
+        -------
         Optional[:class:`WebhookMessage`]
             The message that was sent.
         """
-
         payload = {}
         if self.token is None:
-            raise InvalidArgument("This webhook does not have a token associated with it")
+            msg = "This webhook does not have a token associated with it"
+            raise InvalidArgument(msg)
         if files is not None and file is not None:
-            raise InvalidArgument("Cannot mix file and files keyword arguments.")
+            msg = "Cannot mix file and files keyword arguments."
+            raise InvalidArgument(msg)
         if embeds is not None and embed is not None:
-            raise InvalidArgument("Cannot mix embed and embeds keyword arguments.")
+            msg = "Cannot mix embed and embeds keyword arguments."
+            raise InvalidArgument(msg)
 
         if embeds is not None:
             if len(embeds) > 10:
-                raise InvalidArgument("embeds has a maximum of 10 elements.")
+                msg = "embeds has a maximum of 10 elements."
+                raise InvalidArgument(msg)
             payload["embeds"] = [e.to_dict() for e in embeds]
 
         if embed is not None:
@@ -984,7 +986,7 @@ class Webhook(Hashable):
         return self.send(*args, **kwargs)
 
     def edit_message(self, message_id, **fields):
-        """|maybecoro|
+        """|maybecoro|.
 
         Edits a message owned by this webhook.
 
@@ -994,7 +996,7 @@ class Webhook(Hashable):
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         message_id: :class:`int`
             The message ID to edit.
         content: Optional[:class:`str`]
@@ -1009,7 +1011,7 @@ class Webhook(Hashable):
             See :meth:`.abc.Messageable.send` for more information.
 
         Raises
-        -------
+        ------
         HTTPException
             Editing the message failed.
         Forbidden
@@ -1019,11 +1021,11 @@ class Webhook(Hashable):
             ``embeds`` was invalid or there was no token associated with
             this webhook.
         """
-
         payload = {}
 
         if self.token is None:
-            raise InvalidArgument("This webhook does not have a token associated with it")
+            msg = "This webhook does not have a token associated with it"
+            raise InvalidArgument(msg)
 
         try:
             content = fields["content"]
@@ -1042,7 +1044,8 @@ class Webhook(Hashable):
             pass
         else:
             if embeds is None or len(embeds) > 10:
-                raise InvalidArgument("embeds has a maximum of 10 elements")
+                msg = "embeds has a maximum of 10 elements"
+                raise InvalidArgument(msg)
             payload["embeds"] = [e.to_dict() for e in embeds]
 
         try:
@@ -1051,13 +1054,10 @@ class Webhook(Hashable):
             pass
         else:
             if "embeds" in payload:
-                raise InvalidArgument("Cannot mix embed and embeds keyword arguments")
+                msg = "Cannot mix embed and embeds keyword arguments"
+                raise InvalidArgument(msg)
 
-            if embed is None:
-                payload["embeds"] = []
-            else:
-                payload["embeds"] = [embed.to_dict()]
-
+            payload["embeds"] = [] if embed is None else [embed.to_dict()]
         allowed_mentions = fields.pop("allowed_mentions", None)
         previous_mentions = getattr(self._state, "allowed_mentions", None)
 
@@ -1072,7 +1072,7 @@ class Webhook(Hashable):
         return self._adapter.edit_webhook_message(message_id, payload=payload)
 
     def delete_message(self, message_id):
-        """|maybecoro|
+        """|maybecoro|.
 
         Deletes a message owned by this webhook.
 
@@ -1082,12 +1082,12 @@ class Webhook(Hashable):
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         message_id: :class:`int`
             The message ID to delete.
 
         Raises
-        -------
+        ------
         HTTPException
             Deleting the message failed.
         Forbidden

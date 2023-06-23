@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import datetime
 
@@ -101,7 +97,7 @@ class BaseActivity:
 
     __slots__ = ("_created_at",)
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self._created_at = kwargs.pop("created_at", None)
 
     @property
@@ -127,7 +123,7 @@ class Activity(BaseActivity):
     - :class:`Streaming`
 
     Attributes
-    ------------
+    ----------
     application_id: :class:`int`
         The application ID of the game.
     name: :class:`str`
@@ -166,9 +162,24 @@ class Activity(BaseActivity):
         The emoji that belongs to this activity.
     """
 
-    __slots__ = ("state", "details", "_created_at", "timestamps", "assets", "party", "flags", "sync_id", "session_id", "type", "name", "url", "application_id", "emoji")
+    __slots__ = (
+        "state",
+        "details",
+        "_created_at",
+        "timestamps",
+        "assets",
+        "party",
+        "flags",
+        "sync_id",
+        "session_id",
+        "type",
+        "name",
+        "url",
+        "application_id",
+        "emoji",
+    )
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.state = kwargs.pop("state", None)
         self.details = kwargs.pop("details", None)
@@ -183,12 +194,9 @@ class Activity(BaseActivity):
         self.session_id = kwargs.pop("session_id", None)
         self.type = try_enum(ActivityType, kwargs.pop("type", -1))
         emoji = kwargs.pop("emoji", None)
-        if emoji is not None:
-            self.emoji = PartialEmoji.from_dict(emoji)
-        else:
-            self.emoji = None
+        self.emoji = PartialEmoji.from_dict(emoji) if emoji is not None else None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         attrs = ("type", "name", "url", "details", "application_id", "session_id", "emoji")
         mapped = " ".join("%s=%r" % (attr, getattr(self, attr)) for attr in attrs)
         return f"<Activity {mapped}>"
@@ -286,7 +294,7 @@ class Game(BaseActivity):
             Returns the game's name.
 
     Parameters
-    -----------
+    ----------
     name: :class:`str`
         The game's name.
     start: Optional[:class:`datetime.datetime`]
@@ -295,14 +303,14 @@ class Game(BaseActivity):
         A naive UTC timestamp representing when the game ends. Keyword-only parameter. Ignored for bots.
 
     Attributes
-    -----------
+    ----------
     name: :class:`str`
         The game's name.
     """
 
     __slots__ = ("name", "_end", "_start")
 
-    def __init__(self, name, **extra):
+    def __init__(self, name, **extra) -> None:
         super().__init__(**extra)
         self.name = name
 
@@ -345,10 +353,10 @@ class Game(BaseActivity):
             return datetime.datetime.utcfromtimestamp(self._end / 1000)
         return None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Game name={self.name!r}>"
 
     def to_dict(self):
@@ -395,7 +403,7 @@ class Streaming(BaseActivity):
             Returns the stream's name.
 
     Attributes
-    -----------
+    ----------
     platform: :class:`str`
         Where the user is streaming from (ie. YouTube, Twitch).
 
@@ -418,7 +426,7 @@ class Streaming(BaseActivity):
 
     __slots__ = ("platform", "name", "game", "url", "details", "assets")
 
-    def __init__(self, *, name, url, **extra):
+    def __init__(self, *, name, url, **extra) -> None:
         super().__init__(**extra)
         self.platform = name
         self.name = extra.pop("details", name)
@@ -435,10 +443,10 @@ class Streaming(BaseActivity):
         """
         return ActivityType.streaming
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Streaming name={self.name!r}>"
 
     @property
@@ -448,7 +456,6 @@ class Streaming(BaseActivity):
         This corresponds to the ``large_image`` key of the :attr:`Streaming.assets`
         dictionary if it starts with ``twitch:``. Typically set by the Discord client.
         """
-
         try:
             name = self.assets["large_image"]
         except KeyError:
@@ -497,7 +504,7 @@ class Spotify:
 
     __slots__ = ("_state", "_details", "_timestamps", "_assets", "_party", "_sync_id", "_session_id", "_created_at")
 
-    def __init__(self, **data):
+    def __init__(self, **data) -> None:
         self._state = data.pop("state", None)
         self._details = data.pop("details", None)
         self._timestamps = data.pop("timestamps", {})
@@ -528,14 +535,16 @@ class Spotify:
     def colour(self):
         """:class:`Colour`: Returns the Spotify integration colour, as a :class:`Colour`.
 
-        There is an alias for this named :attr:`color`"""
+        There is an alias for this named :attr:`color`
+        """
         return Colour(0x1DB954)
 
     @property
     def color(self):
         """:class:`Colour`: Returns the Spotify integration colour, as a :class:`Colour`.
 
-        There is an alias for this named :attr:`colour`"""
+        There is an alias for this named :attr:`colour`
+        """
         return self.colour
 
     def to_dict(self):
@@ -565,10 +574,10 @@ class Spotify:
     def __hash__(self):
         return hash(self._session_id)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Spotify"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Spotify title={self.title!r} artist={self.artist!r} track_id={self.track_id!r}>"
 
     @property
@@ -654,7 +663,7 @@ class CustomActivity(BaseActivity):
     .. versionadded:: 1.3
 
     Attributes
-    -----------
+    ----------
     name: Optional[:class:`str`]
         The custom activity's name.
     emoji: Optional[:class:`PartialEmoji`]
@@ -663,7 +672,7 @@ class CustomActivity(BaseActivity):
 
     __slots__ = ("name", "emoji", "state")
 
-    def __init__(self, name, *, emoji=None, **extra):
+    def __init__(self, name, *, emoji=None, **extra) -> None:
         super().__init__(**extra)
         self.name = name
         self.state = extra.pop("state", None)
@@ -679,7 +688,8 @@ class CustomActivity(BaseActivity):
         elif isinstance(emoji, PartialEmoji):
             self.emoji = emoji
         else:
-            raise TypeError(f"Expected str, PartialEmoji, or None, received {type(emoji)!r} instead.")
+            msg = f"Expected str, PartialEmoji, or None, received {type(emoji)!r} instead."
+            raise TypeError(msg)
 
     @property
     def type(self):
@@ -708,15 +718,12 @@ class CustomActivity(BaseActivity):
     def __hash__(self):
         return hash((self.name, str(self.emoji)))
 
-    def __str__(self):
-        if self.emoji:
-            if self.name:
-                return f"{self.emoji} {self.name}"
-            return str(self.emoji)
-        else:
+    def __str__(self) -> str:
+        if not self.emoji:
             return str(self.name)
+        return f"{self.emoji} {self.name}" if self.name else str(self.emoji)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<CustomActivity name={self.name!r} emoji={self.emoji!r}>"
 
 
@@ -737,9 +744,7 @@ def create_activity(data):
         else:
             return CustomActivity(name=name, **data)
     elif game_type is ActivityType.streaming:
-        if "url" in data:
-            return Streaming(**data)
-        return Activity(**data)
+        return Streaming(**data) if "url" in data else Activity(**data)
     elif game_type is ActivityType.listening and "sync_id" in data and "session_id" in data:
         return Spotify(**data)
     return Activity(**data)

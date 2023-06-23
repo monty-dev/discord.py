@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import time
@@ -70,7 +66,7 @@ class BucketType(Enum):
 class Cooldown:
     __slots__ = ("rate", "per", "type", "_window", "_tokens", "_last")
 
-    def __init__(self, rate, per, type):
+    def __init__(self, rate, per, type) -> None:
         self.rate = int(rate)
         self.per = float(per)
         self.type = type
@@ -79,26 +75,20 @@ class Cooldown:
         self._last = 0.0
 
         if not callable(self.type):
-            raise TypeError("Cooldown type must be a BucketType or callable")
+            msg = "Cooldown type must be a BucketType or callable"
+            raise TypeError(msg)
 
     def get_tokens(self, current=None):
         if not current:
             current = time.time()
 
-        tokens = self._tokens
-
-        if current > self._window + self.per:
-            tokens = self.rate
-        return tokens
+        return self.rate if current > self._window + self.per else self._tokens
 
     def get_retry_after(self, current=None):
         current = current or time.time()
         tokens = self.get_tokens(current)
 
-        if tokens == 0:
-            return self.per - (current - self._window)
-
-        return 0.0
+        return self.per - (current - self._window) if tokens == 0 else 0.0
 
     def update_rate_limit(self, current=None):
         current = current or time.time()
@@ -129,12 +119,12 @@ class Cooldown:
     def copy(self):
         return Cooldown(self.rate, self.per, self.type)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Cooldown rate: {self.rate} per: {self.per} window: {self._window} tokens: {self._tokens}>"
 
 
 class CooldownMapping:
-    def __init__(self, original):
+    def __init__(self, original) -> None:
         self._cache = {}
         self._cooldown = original
 
@@ -197,12 +187,12 @@ class _Semaphore:
 
     __slots__ = ("value", "loop", "_waiters")
 
-    def __init__(self, number):
+    def __init__(self, number) -> None:
         self.value = number
         self.loop = asyncio.get_event_loop()
         self._waiters = deque()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<_Semaphore value={self.value} waiters={len(self._waiters)}>"
 
     def locked(self):
@@ -245,14 +235,15 @@ class _Semaphore:
 class MaxConcurrency:
     __slots__ = ("number", "per", "wait", "_mapping")
 
-    def __init__(self, number, *, per, wait):
+    def __init__(self, number, *, per, wait) -> None:
         self._mapping = {}
         self.per = per
         self.number = number
         self.wait = wait
 
         if number <= 0:
-            raise ValueError("max_concurrency 'number' cannot be less than 1")
+            msg = "max_concurrency 'number' cannot be less than 1"
+            raise ValueError(msg)
 
         if not isinstance(per, BucketType):
             raise TypeError("max_concurrency 'per' must be of type BucketType not %r" % type(per))
@@ -260,7 +251,7 @@ class MaxConcurrency:
     def copy(self):
         return self.__class__(self.number, per=self.per, wait=self.wait)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<MaxConcurrency per={self.per!r} number={self.number} wait={self.wait}>"
 
     def get_key(self, message):

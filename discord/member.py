@@ -1,33 +1,27 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.tter
 
 import datetime
 import inspect
 import itertools
-import sys
 from operator import attrgetter
 
 import discord.abc
@@ -36,7 +30,6 @@ from . import utils
 from .activity import create_activity
 from .colour import Colour
 from .enums import Status, try_enum
-from .errors import ClientException
 from .object import Object
 from .permissions import Permissions
 from .user import BaseUser, User
@@ -46,7 +39,7 @@ class VoiceState:
     """Represents a Discord user's voice state.
 
     Attributes
-    ------------
+    ----------
     deaf: :class:`bool`
         Indicates if the user is currently deafened by the guild.
     mute: :class:`bool`
@@ -87,7 +80,7 @@ class VoiceState:
 
     __slots__ = ("session_id", "deaf", "mute", "self_mute", "self_stream", "self_video", "self_deaf", "afk", "channel", "requested_to_speak_at", "suppress")
 
-    def __init__(self, *, data, channel=None):
+    def __init__(self, *, data, channel=None) -> None:
         self.session_id = data.get("session_id")
         self._update(data, channel)
 
@@ -103,7 +96,7 @@ class VoiceState:
         self.requested_to_speak_at = utils.parse_time(data.get("request_to_speak_timestamp"))
         self.channel = channel
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         attrs = [
             ("self_mute", self.self_mute),
             ("self_deaf", self.self_deaf),
@@ -112,7 +105,7 @@ class VoiceState:
             ("requested_to_speak_at", self.requested_to_speak_at),
             ("channel", self.channel),
         ]
-        return "<%s %s>" % (self.__class__.__name__, " ".join("%s=%r" % t for t in attrs))
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
 
 
 def flatten_user(cls):
@@ -213,9 +206,21 @@ class Member(discord.abc.Messageable, _BaseUser):
         Nitro boost on the guild, if available. This could be ``None``.
     """
 
-    __slots__ = ("_roles", "joined_at", "premium_since", "_client_status", "activities", "guild", "pending", "nick", "_user", "_state", "communication_disabled_until")
+    __slots__ = (
+        "_roles",
+        "joined_at",
+        "premium_since",
+        "_client_status",
+        "activities",
+        "guild",
+        "pending",
+        "nick",
+        "_user",
+        "_state",
+        "communication_disabled_until",
+    )
 
-    def __init__(self, *, data, guild, state):
+    def __init__(self, *, data, guild, state) -> None:
         self._state = state
         self._user = state.store_user(data["user"])
         self.guild = guild
@@ -229,10 +234,10 @@ class Member(discord.abc.Messageable, _BaseUser):
         self.communication_disabled_until = data.get("communication_disabled_until", None)
         self.pending = data.get("pending", False)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self._user)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Member id={self._user.id} name={self._user.name!r} discriminator={self._user.discriminator!r} bot={self._user.bot} nick={self.nick!r} guild={self.guild!r}>"
 
     def __eq__(self, other):
@@ -273,8 +278,8 @@ class Member(discord.abc.Messageable, _BaseUser):
     def _from_presence_update(cls, *, data, guild, state):
         clone = cls(data=data, guild=guild, state=state)
         to_return = cls(data=data, guild=guild, state=state)
-        to_return._client_status = {sys.intern(key): sys.intern(value) for key, value in data.get("client_status", {}).items()}
-        to_return._client_status[None] = sys.intern(data["status"])
+        to_return._client_status = dict(data.get("client_status", {}).items())
+        to_return._client_status[None] = data["status"]
         return to_return, clone
 
     @classmethod
@@ -298,8 +303,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         return self
 
     async def _get_channel(self):
-        ch = await self.create_dm()
-        return ch
+        return await self.create_dm()
 
     def _update_roles(self, data):
         self._roles = utils.SnowflakeList(map(int, data["roles"]))
@@ -323,12 +327,10 @@ class Member(discord.abc.Messageable, _BaseUser):
 
     def _presence_update(self, data, user):
         self.activities = tuple(map(create_activity, data.get("activities", [])))
-        self._client_status = {sys.intern(key): sys.intern(value) for key, value in data.get("client_status", {}).items()}
-        self._client_status[None] = sys.intern(data["status"])
+        self._client_status = dict(data.get("client_status", {}).items())
+        self._client_status[None] = data["status"]
 
-        if len(user) > 1:
-            return self._update_inner_user(user)
-        return False
+        return self._update_inner_user(user) if len(user) > 1 else False
 
     def _update_inner_user(self, user):
         u = self._user
@@ -386,7 +388,6 @@ class Member(discord.abc.Messageable, _BaseUser):
 
         There is an alias for this named :attr:`color`.
         """
-
         roles = self.roles[1:]  # remove @everyone
 
         # highest order of the colour is the one that gets rendered.
@@ -418,8 +419,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         result = []
         g = self.guild
         for role_id in self._roles:
-            role = g.get_role(role_id)
-            if role:
+            if role := g.get_role(role_id):
                 result.append(role)
         result.append(g.default_role)
         result.sort()
@@ -428,9 +428,7 @@ class Member(discord.abc.Messageable, _BaseUser):
     @property
     def mention(self):
         """:class:`str`: Returns a string that allows you to mention the member."""
-        if self.nick:
-            return f"<@!{self.id}>"
-        return f"<@{self.id}>"
+        return f"<@!{self.id}>" if self.nick else f"<@{self.id}>"
 
     @property
     def display_name(self):
@@ -440,7 +438,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         if they have a guild specific nickname then that
         is returned instead.
         """
-        return self.nick or self.name
+        return self.nick or self.global_name or self.name
 
     @property
     def activity(self):
@@ -464,7 +462,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         """Checks if the member is mentioned in the specified message.
 
         Parameters
-        -----------
+        ----------
         message: :class:`Message`
             The message to check if you're mentioned in.
 
@@ -491,7 +489,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             channel.permissions_for(self)
 
         Parameters
-        -----------
+        ----------
         channel: :class:`abc.GuildChannel`
             The channel to check your permissions for.
 
@@ -528,7 +526,6 @@ class Member(discord.abc.Messageable, _BaseUser):
         This does take into consideration guild ownership and the
         administrator implication.
         """
-
         if self.guild.owner_id == self.id:
             return Permissions.all()
 
@@ -536,10 +533,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         for r in self.roles:
             base.value |= r.permissions.value
 
-        if base.administrator:
-            return Permissions.all()
-
-        return base
+        return Permissions.all() if base.administrator else base
 
     @property
     def voice(self):
@@ -547,28 +541,28 @@ class Member(discord.abc.Messageable, _BaseUser):
         return self.guild._voice_state_for(self._user.id)
 
     async def ban(self, **kwargs):
-        """|coro|
+        """|coro|.
 
         Bans this member. Equivalent to :meth:`Guild.ban`.
         """
         await self.guild.ban(self, **kwargs)
 
     async def unban(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Unbans this member. Equivalent to :meth:`Guild.unban`.
         """
         await self.guild.unban(self, reason=reason)
 
     async def kick(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Kicks this member. Equivalent to :meth:`Guild.kick`.
         """
         await self.guild.kick(self, reason=reason)
 
     async def edit(self, *, reason=None, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the member's data.
 
@@ -594,7 +588,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             Can now pass ``None`` to ``voice_channel`` to kick a member from voice.
 
         Parameters
-        -----------
+        ----------
         nick: Optional[:class:`str`]
             The member's new nickname. Use ``None`` to remove the nickname.
         mute: :class:`bool`
@@ -615,7 +609,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             The reason for editing this member. Shows up on the audit log.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have the proper permissions to the action requested.
         HTTPException
@@ -680,7 +674,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         # TODO: wait for WS event for modify-in-place behaviour
 
     async def request_to_speak(self):
-        """|coro|
+        """|coro|.
 
         Request to speak in the connected channel.
 
@@ -694,7 +688,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         .. versionadded:: 1.7
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have the proper permissions to the action requested.
         HTTPException
@@ -709,7 +703,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             await self._state.http.edit_my_voice_state(self.guild.id, payload)
 
     async def move_to(self, channel, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Moves a member to a new voice channel (they must be connected first).
 
@@ -722,7 +716,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             Can now pass ``None`` to kick a member from voice.
 
         Parameters
-        -----------
+        ----------
         channel: Optional[:class:`VoiceChannel`]
             The new voice channel to move the member to.
             Pass ``None`` to kick them from voice.
@@ -732,7 +726,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         await self.edit(voice_channel=channel, reason=reason)
 
     async def add_roles(self, *roles, reason=None, atomic=True):
-        r"""|coro|
+        r"""|coro|.
 
         Gives the member a number of :class:`Role`\s.
 
@@ -741,7 +735,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         of roles than the highest role of the member.
 
         Parameters
-        -----------
+        ----------
         \*roles: :class:`abc.Snowflake`
             An argument list of :class:`abc.Snowflake` representing a :class:`Role`
             to give to the member.
@@ -753,13 +747,12 @@ class Member(discord.abc.Messageable, _BaseUser):
             state of the cache.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to add these roles.
         HTTPException
             Adding roles failed.
         """
-
         if not atomic:
             new_roles = utils._unique(Object(id=r.id) for s in (self.roles[1:], roles) for r in s)
             await self.edit(roles=new_roles, reason=reason)
@@ -771,7 +764,7 @@ class Member(discord.abc.Messageable, _BaseUser):
                 await req(guild_id, user_id, role.id, reason=reason)
 
     async def remove_roles(self, *roles, reason=None, atomic=True):
-        r"""|coro|
+        r"""|coro|.
 
         Removes :class:`Role`\s from this member.
 
@@ -780,7 +773,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         of roles than the highest role of the member.
 
         Parameters
-        -----------
+        ----------
         \*roles: :class:`abc.Snowflake`
             An argument list of :class:`abc.Snowflake` representing a :class:`Role`
             to remove from the member.
@@ -792,13 +785,12 @@ class Member(discord.abc.Messageable, _BaseUser):
             state of the cache.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to remove these roles.
         HTTPException
             Removing the roles failed.
         """
-
         if not atomic:
             new_roles = [Object(id=r.id) for r in self.roles[1:]]  # remove @everyone
             for role in roles:

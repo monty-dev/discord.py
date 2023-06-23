@@ -1,29 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import collections
@@ -57,9 +52,8 @@ def when_mentioned_or(*prefixes):
 
     These are meant to be passed into the :attr:`.Bot.command_prefix` attribute.
 
-    Example
-    --------
-
+    Example:
+    -------
     .. code-block:: python3
 
         bot = commands.Bot(command_prefix=commands.when_mentioned_or('!'))
@@ -77,8 +71,8 @@ def when_mentioned_or(*prefixes):
                 return commands.when_mentioned_or(*extras)(bot, message)
 
 
-    See Also
-    ----------
+    See Also:
+    --------
     :func:`.when_mentioned`
     """
 
@@ -95,7 +89,7 @@ def _is_submodule(parent, child):
 
 
 class _DefaultRepr:
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<default-help-command>"
 
 
@@ -103,7 +97,7 @@ _default = _DefaultRepr()
 
 
 class BotBase(GroupMixin):
-    def __init__(self, command_prefix, help_command=_default, description=None, **options):
+    def __init__(self, command_prefix, help_command=_default, description=None, **options) -> None:
         super().__init__(**options)
         self.command_prefix = command_prefix
         self.extra_events = {}
@@ -120,10 +114,12 @@ class BotBase(GroupMixin):
         self.strip_after_prefix = options.get("strip_after_prefix", False)
 
         if self.owner_id and self.owner_ids:
-            raise TypeError("Both owner_id and owner_ids are set.")
+            msg = "Both owner_id and owner_ids are set."
+            raise TypeError(msg)
 
         if self.owner_ids and not isinstance(self.owner_ids, collections.abc.Collection):
-            raise TypeError(f"owner_ids must be a collection not {self.owner_ids.__class__!r}")
+            msg = f"owner_ids must be a collection not {self.owner_ids.__class__!r}"
+            raise TypeError(msg)
 
         if options.pop("self_bot", False):
             self._skip_check = lambda x, y: x != y
@@ -153,7 +149,7 @@ class BotBase(GroupMixin):
         await super().close()
 
     async def on_command_error(self, context, exception):
-        """|coro|
+        """|coro|.
 
         The default command error handler provided by the bot.
 
@@ -192,9 +188,8 @@ class BotBase(GroupMixin):
         of type :class:`.Context` and can only raise exceptions inherited from
         :exc:`.CommandError`.
 
-        Example
-        ---------
-
+        Example:
+        -------
         .. code-block:: python3
 
             @bot.check
@@ -212,14 +207,13 @@ class BotBase(GroupMixin):
         and :meth:`.check_once`.
 
         Parameters
-        -----------
+        ----------
         func
             The function that was used as a global check.
         call_once: :class:`bool`
             If the function should only be called once per
             :meth:`.Command.invoke` call.
         """
-
         if call_once:
             self._check_once.append(func)
         else:
@@ -232,7 +226,7 @@ class BotBase(GroupMixin):
         if the function is not in the global checks.
 
         Parameters
-        -----------
+        ----------
         func
             The function to remove from the global checks.
         call_once: :class:`bool`
@@ -269,9 +263,8 @@ class BotBase(GroupMixin):
         of type :class:`.Context` and can only raise exceptions inherited from
         :exc:`.CommandError`.
 
-        Example
-        ---------
-
+        Example:
+        -------
         .. code-block:: python3
 
             @bot.check_once
@@ -291,7 +284,7 @@ class BotBase(GroupMixin):
         return await discord.utils.async_all(f(ctx) for f in data)
 
     async def is_owner(self, user):
-        """|coro|
+        """|coro|.
 
         Checks if a :class:`~discord.User` or :class:`~discord.Member` is the owner of
         this bot.
@@ -304,16 +297,15 @@ class BotBase(GroupMixin):
             :attr:`owner_ids` is not set.
 
         Parameters
-        -----------
+        ----------
         user: :class:`.abc.User`
             The user to check for.
 
         Returns
-        --------
+        -------
         :class:`bool`
             Whether the user is the owner.
         """
-
         if self.owner_id:
             return user.id == self.owner_id
         elif self.owner_ids:
@@ -344,17 +336,18 @@ class BotBase(GroupMixin):
             then the hooks are not called.
 
         Parameters
-        -----------
+        ----------
         coro: :ref:`coroutine <coroutine>`
             The coroutine to register as the pre-invoke hook.
 
         Raises
-        -------
+        ------
         TypeError
             The coroutine passed is not actually a coroutine.
         """
         if not asyncio.iscoroutinefunction(coro):
-            raise TypeError("The pre-invoke hook must be a coroutine.")
+            msg = "The pre-invoke hook must be a coroutine."
+            raise TypeError(msg)
 
         self._before_invoke = coro
         return coro
@@ -377,17 +370,18 @@ class BotBase(GroupMixin):
             This makes it ideal for clean-up scenarios.
 
         Parameters
-        -----------
+        ----------
         coro: :ref:`coroutine <coroutine>`
             The coroutine to register as the post-invoke hook.
 
         Raises
-        -------
+        ------
         TypeError
             The coroutine passed is not actually a coroutine.
         """
         if not asyncio.iscoroutinefunction(coro):
-            raise TypeError("The post-invoke hook must be a coroutine.")
+            msg = "The post-invoke hook must be a coroutine."
+            raise TypeError(msg)
 
         self._after_invoke = coro
         return coro
@@ -398,7 +392,7 @@ class BotBase(GroupMixin):
         """The non decorator alternative to :meth:`.listen`.
 
         Parameters
-        -----------
+        ----------
         func: :ref:`coroutine <coroutine>`
             The function to call.
         name: Optional[:class:`str`]
@@ -419,7 +413,8 @@ class BotBase(GroupMixin):
         name = func.__name__ if name is None else name
 
         if not asyncio.iscoroutinefunction(func):
-            raise TypeError("Listeners must be coroutines")
+            msg = "Listeners must be coroutines"
+            raise TypeError(msg)
 
         if name in self.extra_events:
             self.extra_events[name].append(func)
@@ -430,14 +425,13 @@ class BotBase(GroupMixin):
         """Removes a listener from the pool of listeners.
 
         Parameters
-        -----------
+        ----------
         func
             The function that was used as a listener to remove.
         name: :class:`str`
             The name of the event we want to remove. Defaults to
             ``func.__name__``.
         """
-
         name = func.__name__ if name is None else name
 
         if name in self.extra_events:
@@ -447,13 +441,12 @@ class BotBase(GroupMixin):
     def listen(self, name=None):
         """A decorator that registers another function as an external
         event listener. Basically this allows you to listen to multiple
-        events from different places e.g. such as :func:`.on_ready`
+        events from different places e.g. such as :func:`.on_ready`.
 
         The functions being listened to must be a :ref:`coroutine <coroutine>`.
 
-        Example
-        --------
-
+        Example:
+        -------
         .. code-block:: python3
 
             @bot.listen()
@@ -468,8 +461,8 @@ class BotBase(GroupMixin):
 
         Would print one and two in an unspecified order.
 
-        Raises
-        -------
+        Raises:
+        ------
         TypeError
             The function being listened to is not a coroutine.
         """
@@ -488,20 +481,20 @@ class BotBase(GroupMixin):
         A cog is a class that has its own event listeners and commands.
 
         Parameters
-        -----------
+        ----------
         cog: :class:`.Cog`
             The cog to register to the bot.
 
         Raises
-        -------
+        ------
         TypeError
             The cog does not inherit from :class:`.Cog`.
         CommandError
             An error happened during loading.
         """
-
         if not isinstance(cog, Cog):
-            raise TypeError("cogs must derive from Cog")
+            msg = "cogs must derive from Cog"
+            raise TypeError(msg)
 
         cog = cog._inject(self)
         self.__cogs[cog.__cog_name__] = cog
@@ -512,14 +505,14 @@ class BotBase(GroupMixin):
         If the cog is not found, ``None`` is returned instead.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The name of the cog you are requesting.
             This is equivalent to the name passed via keyword
             argument in class creation or the class name if unspecified.
 
         Returns
-        --------
+        -------
         Optional[:class:`Cog`]
             The cog that was requested. If not found, returns ``None``.
         """
@@ -534,11 +527,10 @@ class BotBase(GroupMixin):
         If no cog is found then this method has no effect.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The name of the cog to remove.
         """
-
         cog = self.__cogs.pop(name, None)
         if cog is None:
             return
@@ -593,7 +585,6 @@ class BotBase(GroupMixin):
                     del sys.modules[module]
 
     def _load_from_module_spec(self, spec, key):
-        # precondition: key not in self.__extensions
         lib = importlib.util.module_from_spec(spec)
         sys.modules[key] = lib
         try:
@@ -635,7 +626,7 @@ class BotBase(GroupMixin):
         point must have a single argument, the ``bot``.
 
         Parameters
-        ------------
+        ----------
         name: :class:`str`
             The extension name to load. It must be dot separated like
             regular Python imports if accessing a sub-module. e.g.
@@ -648,7 +639,7 @@ class BotBase(GroupMixin):
             .. versionadded:: 1.7
 
         Raises
-        --------
+        ------
         ExtensionNotFound
             The extension could not be imported.
             This is also raised if the name of the extension could not
@@ -660,7 +651,6 @@ class BotBase(GroupMixin):
         ExtensionFailed
             The extension or its setup function had an execution error.
         """
-
         name = self._resolve_name(name, package)
         if name in self.__extensions:
             raise errors.ExtensionAlreadyLoaded(name)
@@ -683,7 +673,7 @@ class BotBase(GroupMixin):
         :meth:`~.Bot.load_extension`.
 
         Parameters
-        ------------
+        ----------
         name: :class:`str`
             The extension name to unload. It must be dot separated like
             regular Python imports if accessing a sub-module. e.g.
@@ -696,14 +686,13 @@ class BotBase(GroupMixin):
             .. versionadded:: 1.7
 
         Raises
-        -------
+        ------
         ExtensionNotFound
             The name of the extension could not
             be resolved using the provided ``package`` parameter.
         ExtensionNotLoaded
             The extension was not loaded.
         """
-
         name = self._resolve_name(name, package)
         lib = self.__extensions.get(name)
         if lib is None:
@@ -721,7 +710,7 @@ class BotBase(GroupMixin):
         the bot will roll-back to the prior working state.
 
         Parameters
-        ------------
+        ----------
         name: :class:`str`
             The extension name to reload. It must be dot separated like
             regular Python imports if accessing a sub-module. e.g.
@@ -734,7 +723,7 @@ class BotBase(GroupMixin):
             .. versionadded:: 1.7
 
         Raises
-        -------
+        ------
         ExtensionNotLoaded
             The extension was not loaded.
         ExtensionNotFound
@@ -746,7 +735,6 @@ class BotBase(GroupMixin):
         ExtensionFailed
             The extension setup function had an execution error.
         """
-
         name = self._resolve_name(name, package)
         lib = self.__extensions.get(name)
         if lib is None:
@@ -786,7 +774,8 @@ class BotBase(GroupMixin):
     def help_command(self, value):
         if value is not None:
             if not isinstance(value, HelpCommand):
-                raise TypeError("help_command must be a subclass of HelpCommand")
+                msg = "help_command must be a subclass of HelpCommand"
+                raise TypeError(msg)
             if self._help_command is not None:
                 self._help_command._remove_from_bot(self)
             self._help_command = value
@@ -800,18 +789,18 @@ class BotBase(GroupMixin):
     # command processing
 
     async def get_prefix(self, message):
-        """|coro|
+        """|coro|.
 
         Retrieves the prefix the bot is listening to
         with the message as a context.
 
         Parameters
-        -----------
+        ----------
         message: :class:`discord.Message`
             The message context to get the prefix of.
 
         Returns
-        --------
+        -------
         Union[List[:class:`str`], :class:`str`]
             A list of prefixes or a single prefix that the bot is
             listening for.
@@ -829,16 +818,17 @@ class BotBase(GroupMixin):
                 if isinstance(ret, collections.abc.Iterable):
                     raise
 
-                raise TypeError(f"command_prefix must be plain string, iterable of strings, or callable returning either of these, not {ret.__class__.__name__}") from e
-
+                msg = f"command_prefix must be plain string, iterable of strings, or callable returning either of these, not {ret.__class__.__name__}"
+                raise TypeError(msg) from e
 
             if not ret:
-                raise ValueError("Iterable command_prefix must contain at least one prefix")
+                msg = "Iterable command_prefix must contain at least one prefix"
+                raise ValueError(msg)
 
         return ret
 
     async def get_context(self, message, *, cls=Context):
-        r"""|coro|
+        r"""|coro|.
 
         Returns the invocation context from the message.
 
@@ -851,7 +841,7 @@ class BotBase(GroupMixin):
         invoked under :meth:`~.Bot.invoke`.
 
         Parameters
-        -----------
+        ----------
         message: :class:`discord.Message`
             The message to get the invocation context from.
         cls
@@ -861,12 +851,11 @@ class BotBase(GroupMixin):
             interface.
 
         Returns
-        --------
+        -------
         :class:`.Context`
             The invocation context. The type of this can change via the
             ``cls`` parameter.
         """
-
         view = StringView(message.content)
         ctx = cls(prefix=None, view=view, bot=self, message=message)
 
@@ -890,14 +879,14 @@ class BotBase(GroupMixin):
 
             except TypeError as e:
                 if not isinstance(prefix, list):
-                    raise TypeError(f"get_prefix must return either a string or a list of string, not {prefix.__class__.__name__}") from e
-
+                    msg = f"get_prefix must return either a string or a list of string, not {prefix.__class__.__name__}"
+                    raise TypeError(msg) from e
 
                 # It's possible a bad command_prefix got us here.
                 for value in prefix:
                     if not isinstance(value, str):
-                        raise TypeError(f"Iterable command_prefix or list returned from get_prefix must contain only strings, not {value.__class__.__name__}") from e
-
+                        msg = f"Iterable command_prefix or list returned from get_prefix must contain only strings, not {value.__class__.__name__}"
+                        raise TypeError(msg) from e
 
                 # Getting here shouldn't happen
                 raise
@@ -912,13 +901,13 @@ class BotBase(GroupMixin):
         return ctx
 
     async def invoke(self, ctx):
-        """|coro|
+        """|coro|.
 
         Invokes the command given under the invocation context and
         handles all the internal event dispatch mechanisms.
 
         Parameters
-        -----------
+        ----------
         ctx: :class:`.Context`
             The invocation context to invoke.
         """
@@ -928,7 +917,8 @@ class BotBase(GroupMixin):
                 if await self.can_run(ctx, call_once=True):
                     await ctx.command.invoke(ctx)
                 else:
-                    raise errors.CheckFailure("The global check once functions failed.")
+                    msg = "The global check once functions failed."
+                    raise errors.CheckFailure(msg)
             except errors.CommandError as exc:
                 await ctx.command.dispatch_error(ctx, exc)
             else:
@@ -938,7 +928,7 @@ class BotBase(GroupMixin):
             self.dispatch("command_error", ctx, exc)
 
     async def process_commands(self, message):
-        """|coro|
+        """|coro|.
 
         This function processes the commands that have been registered
         to the bot and other groups. Without this coroutine, none of the
@@ -955,7 +945,7 @@ class BotBase(GroupMixin):
         call :meth:`~.Bot.get_context` or :meth:`~.Bot.invoke` if so.
 
         Parameters
-        -----------
+        ----------
         message: :class:`discord.Message`
             The message to process commands for.
         """
@@ -980,7 +970,7 @@ class Bot(BotBase, discord.Client):
     to manage commands.
 
     Attributes
-    -----------
+    ----------
     command_prefix
         The command prefix is what the message content must contain initially
         to have a command invoked. This prefix could either be a string to
@@ -1044,12 +1034,8 @@ class Bot(BotBase, discord.Client):
         .. versionadded:: 1.7
     """
 
-    pass
-
 
 class AutoShardedBot(BotBase, discord.AutoShardedClient):
     """This is similar to :class:`.Bot` except that it is inherited from
     :class:`discord.AutoShardedClient` instead.
     """
-
-    pass

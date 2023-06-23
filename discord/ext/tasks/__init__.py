@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import asyncio
 import datetime
@@ -32,6 +28,7 @@ import sys
 import traceback
 
 import aiohttp
+
 import discord
 from discord.backoff import ExponentialBackoff
 
@@ -44,7 +41,7 @@ class Loop:
     The main interface to create this is through :func:`loop`.
     """
 
-    def __init__(self, coro, seconds, hours, minutes, count, reconnect, loop):
+    def __init__(self, coro, seconds, hours, minutes, count, reconnect, loop) -> None:
         self.coro = coro
         self.reconnect = reconnect
         self.loop = loop
@@ -61,7 +58,8 @@ class Loop:
         self._stop_next_iteration = False
 
         if self.count is not None and self.count <= 0:
-            raise ValueError("count must be greater than 0 or None.")
+            msg = "count must be greater than 0 or None."
+            raise ValueError(msg)
 
         self.change_interval(seconds=seconds, minutes=minutes, hours=hours)
         self._last_iteration_failed = False
@@ -69,7 +67,8 @@ class Loop:
         self._next_iteration = None
 
         if not inspect.iscoroutinefunction(self.coro):
-            raise TypeError(f"Expected coroutine function, not {type(self.coro).__name__!r}.")
+            msg = f"Expected coroutine function, not {type(self.coro).__name__!r}."
+            raise TypeError(msg)
 
     async def _call_loop_function(self, name, *args, **kwargs):
         coro = getattr(self, "_" + name)
@@ -156,20 +155,19 @@ class Loop:
         return self._next_iteration
 
     async def __call__(self, *args, **kwargs):
-        r"""|coro|
+        r"""|coro|.
 
         Calls the internal callback that the task holds.
 
         .. versionadded:: 1.6
 
         Parameters
-        ------------
+        ----------
         \*args
             The arguments to use.
         \*\*kwargs
             The keyword arguments to use.
         """
-
         if self._injected is not None:
             args = (self._injected, *args)
 
@@ -179,25 +177,25 @@ class Loop:
         r"""Starts the internal task in the event loop.
 
         Parameters
-        ------------
+        ----------
         \*args
             The arguments to use.
         \*\*kwargs
             The keyword arguments to use.
 
         Raises
-        --------
+        ------
         RuntimeError
             A task has already been launched and is running.
 
         Returns
-        ---------
+        -------
         :class:`asyncio.Task`
             The task that has been created.
         """
-
         if self._task is not None and not self._task.done():
-            raise RuntimeError("Task is already launched and is not completed.")
+            msg = "Task is already launched and is not completed."
+            raise RuntimeError(msg)
 
         if self._injected is not None:
             args = (self._injected, *args)
@@ -246,7 +244,7 @@ class Loop:
             returned like :meth:`start`.
 
         Parameters
-        ------------
+        ----------
         \*args
             The arguments to to use.
         \*\*kwargs
@@ -272,21 +270,22 @@ class Loop:
         raises its own set of exceptions.
 
         Parameters
-        ------------
+        ----------
         \*exceptions: Type[:class:`BaseException`]
             An argument list of exception classes to handle.
 
         Raises
-        --------
+        ------
         TypeError
             An exception passed is either not a class or not inherited from :class:`BaseException`.
         """
-
         for exc in exceptions:
             if not inspect.isclass(exc):
-                raise TypeError(f"{exc!r} must be a class.")
+                msg = f"{exc!r} must be a class."
+                raise TypeError(msg)
             if not issubclass(exc, BaseException):
-                raise TypeError(f"{exc!r} must inherit from BaseException.")
+                msg = f"{exc!r} must inherit from BaseException."
+                raise TypeError(msg)
 
         self._valid_exception = (*self._valid_exception, *exceptions)
 
@@ -297,18 +296,18 @@ class Loop:
 
             This operation obviously cannot be undone!
         """
-        self._valid_exception = tuple()
+        self._valid_exception = ()
 
     def remove_exception_type(self, *exceptions):
         r"""Removes exception types from being handled during the reconnect logic.
 
         Parameters
-        ------------
+        ----------
         \*exceptions: Type[:class:`BaseException`]
             An argument list of exception classes to handle.
 
         Returns
-        ---------
+        -------
         :class:`bool`
             Whether all exceptions were successfully removed.
         """
@@ -352,18 +351,18 @@ class Loop:
         The coroutine must take no arguments (except ``self`` in a class context).
 
         Parameters
-        ------------
+        ----------
         coro: :ref:`coroutine <coroutine>`
             The coroutine to register before the loop runs.
 
         Raises
-        -------
+        ------
         TypeError
             The function was not a coroutine.
         """
-
         if not inspect.iscoroutinefunction(coro):
-            raise TypeError(f"Expected coroutine function, received {type(coro).__name__!r}.")
+            msg = f"Expected coroutine function, received {type(coro).__name__!r}."
+            raise TypeError(msg)
 
         self._before_loop = coro
         return coro
@@ -380,18 +379,18 @@ class Loop:
             whether :meth:`is_being_cancelled` is ``True`` or not.
 
         Parameters
-        ------------
+        ----------
         coro: :ref:`coroutine <coroutine>`
             The coroutine to register after the loop finishes.
 
         Raises
-        -------
+        ------
         TypeError
             The function was not a coroutine.
         """
-
         if not inspect.iscoroutinefunction(coro):
-            raise TypeError(f"Expected coroutine function, received {type(coro).__name__!r}.")
+            msg = f"Expected coroutine function, received {type(coro).__name__!r}."
+            raise TypeError(msg)
 
         self._after_loop = coro
         return coro
@@ -407,17 +406,18 @@ class Loop:
         .. versionadded:: 1.4
 
         Parameters
-        ------------
+        ----------
         coro: :ref:`coroutine <coroutine>`
             The coroutine to register in the event of an unhandled exception.
 
         Raises
-        -------
+        ------
         TypeError
             The function was not a coroutine.
         """
         if not inspect.iscoroutinefunction(coro):
-            raise TypeError(f"Expected coroutine function, received {type(coro).__name__!r}.")
+            msg = f"Expected coroutine function, received {type(coro).__name__!r}."
+            raise TypeError(msg)
 
         self._error = coro
         return coro
@@ -436,7 +436,7 @@ class Loop:
         .. versionadded:: 1.2
 
         Parameters
-        ------------
+        ----------
         seconds: :class:`float`
             The number of seconds between every iteration.
         minutes: :class:`float`
@@ -445,14 +445,14 @@ class Loop:
             The number of hours between every iteration.
 
         Raises
-        -------
+        ------
         ValueError
             An invalid value was given.
         """
-
         sleep = seconds + (minutes * 60.0) + (hours * 3600.0)
         if sleep < 0:
-            raise ValueError("Total number of seconds cannot be less than zero.")
+            msg = "Total number of seconds cannot be less than zero."
+            raise ValueError(msg)
 
         self._sleep = sleep
         self.seconds = seconds
@@ -465,7 +465,7 @@ def loop(*, seconds=0, minutes=0, hours=0, count=None, reconnect=True, loop=None
     optional reconnect logic. The decorator returns a :class:`Loop`.
 
     Parameters
-    ------------
+    ----------
     seconds: :class:`float`
         The number of seconds between every iteration.
     minutes: :class:`float`
@@ -484,7 +484,7 @@ def loop(*, seconds=0, minutes=0, hours=0, count=None, reconnect=True, loop=None
         defaults to :func:`asyncio.get_event_loop`.
 
     Raises
-    --------
+    ------
     ValueError
         An invalid value was given.
     TypeError

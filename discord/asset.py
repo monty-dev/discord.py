@@ -1,28 +1,24 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
 import io
 
@@ -67,20 +63,24 @@ class Asset:
 
     BASE = "https://cdn.discordapp.com"
 
-    def __init__(self, state, url=None):
+    def __init__(self, state, url=None) -> None:
         self._state = state
         self._url = url
 
     @classmethod
     def _from_avatar(cls, state, user, *, format=None, static_format="webp", size=1024):
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 4096")
+            msg = "size must be a power of 2 between 16 and 4096"
+            raise InvalidArgument(msg)
         if format is not None and format not in VALID_AVATAR_FORMATS:
-            raise InvalidArgument(f"format must be None or one of {VALID_AVATAR_FORMATS}")
+            msg = f"format must be None or one of {VALID_AVATAR_FORMATS}"
+            raise InvalidArgument(msg)
         if format == "gif" and not user.is_avatar_animated():
-            raise InvalidArgument("non animated avatars do not support gif format")
+            msg = "non animated avatars do not support gif format"
+            raise InvalidArgument(msg)
         if static_format not in VALID_STATIC_FORMATS:
-            raise InvalidArgument(f"static_format must be one of {VALID_STATIC_FORMATS}")
+            msg = f"static_format must be one of {VALID_STATIC_FORMATS}"
+            raise InvalidArgument(msg)
 
         if user.avatar is None:
             return user.default_avatar_url
@@ -96,9 +96,11 @@ class Asset:
             return cls(state)
 
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 4096")
+            msg = "size must be a power of 2 between 16 and 4096"
+            raise InvalidArgument(msg)
         if format not in VALID_STATIC_FORMATS:
-            raise InvalidArgument(f"format must be None or one of {VALID_STATIC_FORMATS}")
+            msg = f"format must be None or one of {VALID_STATIC_FORMATS}"
+            raise InvalidArgument(msg)
 
         url = f"/{path}-icons/{object.id}/{object.icon}.{format}?size={size}"
         return cls(state, url)
@@ -109,9 +111,11 @@ class Asset:
             return cls(state)
 
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 4096")
+            msg = "size must be a power of 2 between 16 and 4096"
+            raise InvalidArgument(msg)
         if format not in VALID_STATIC_FORMATS:
-            raise InvalidArgument(f"format must be None or one of {VALID_STATIC_FORMATS}")
+            msg = f"format must be None or one of {VALID_STATIC_FORMATS}"
+            raise InvalidArgument(msg)
 
         url = f"/app-assets/{obj.id}/store/{obj.cover_image}.{format}?size={size}"
         return cls(state, url)
@@ -119,9 +123,11 @@ class Asset:
     @classmethod
     def _from_guild_image(cls, state, id, hash, key, *, format="webp", size=1024):
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 4096")
+            msg = "size must be a power of 2 between 16 and 4096"
+            raise InvalidArgument(msg)
         if format not in VALID_STATIC_FORMATS:
-            raise InvalidArgument(f"format must be one of {VALID_STATIC_FORMATS}")
+            msg = f"format must be one of {VALID_STATIC_FORMATS}"
+            raise InvalidArgument(msg)
 
         if hash is None:
             return cls(state)
@@ -132,13 +138,17 @@ class Asset:
     @classmethod
     def _from_guild_icon(cls, state, guild, *, format=None, static_format="webp", size=1024):
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 4096")
+            msg = "size must be a power of 2 between 16 and 4096"
+            raise InvalidArgument(msg)
         if format is not None and format not in VALID_AVATAR_FORMATS:
-            raise InvalidArgument(f"format must be one of {VALID_AVATAR_FORMATS}")
+            msg = f"format must be one of {VALID_AVATAR_FORMATS}"
+            raise InvalidArgument(msg)
         if format == "gif" and not guild.is_icon_animated():
-            raise InvalidArgument("non animated guild icons do not support gif format")
+            msg = "non animated guild icons do not support gif format"
+            raise InvalidArgument(msg)
         if static_format not in VALID_STATIC_FORMATS:
-            raise InvalidArgument(f"static_format must be one of {VALID_STATIC_FORMATS}")
+            msg = f"static_format must be one of {VALID_STATIC_FORMATS}"
+            raise InvalidArgument(msg)
 
         if guild.icon is None:
             return cls(state)
@@ -151,35 +161,37 @@ class Asset:
     @classmethod
     def _from_sticker_url(cls, state, sticker, *, size=1024):
         if not utils.valid_icon_size(size):
-            raise InvalidArgument("size must be a power of 2 between 16 and 4096")
+            msg = "size must be a power of 2 between 16 and 4096"
+            raise InvalidArgument(msg)
 
         return cls(state, f"/stickers/{sticker.id}/{sticker.image}.png?size={size}")
 
     @classmethod
     def _from_emoji(cls, state, emoji, *, format=None, static_format="png"):
         if format is not None and format not in VALID_AVATAR_FORMATS:
-            raise InvalidArgument(f"format must be None or one of {VALID_AVATAR_FORMATS}")
+            msg = f"format must be None or one of {VALID_AVATAR_FORMATS}"
+            raise InvalidArgument(msg)
         if format == "gif" and not emoji.animated:
-            raise InvalidArgument("non animated emoji's do not support gif format")
+            msg = "non animated emoji's do not support gif format"
+            raise InvalidArgument(msg)
         if static_format not in VALID_STATIC_FORMATS:
-            raise InvalidArgument(f"static_format must be one of {VALID_STATIC_FORMATS}")
+            msg = f"static_format must be one of {VALID_STATIC_FORMATS}"
+            raise InvalidArgument(msg)
         if format is None:
             format = "gif" if emoji.animated else static_format
 
         return cls(state, f"/emojis/{emoji.id}.{format}")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.BASE + self._url if self._url is not None else ""
 
-    def __len__(self):
-        if self._url:
-            return len(self.BASE + self._url)
-        return 0
+    def __len__(self) -> int:
+        return len(self.BASE + self._url) if self._url else 0
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self._url is not None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Asset url={self._url!r}>"
 
     def __eq__(self, other):
@@ -192,7 +204,7 @@ class Asset:
         return hash(self._url)
 
     async def read(self):
-        """|coro|
+        """|coro|.
 
         Retrieves the content of this asset as a :class:`bytes` object.
 
@@ -219,15 +231,17 @@ class Asset:
             The content of the asset.
         """
         if not self._url:
-            raise DiscordException("Invalid asset (no URL provided)")
+            msg = "Invalid asset (no URL provided)"
+            raise DiscordException(msg)
 
         if self._state is None:
-            raise DiscordException("Invalid state (no ConnectionState provided)")
+            msg = "Invalid state (no ConnectionState provided)"
+            raise DiscordException(msg)
 
         return await self._state.http.get_from_cdn(self.BASE + self._url)
 
     async def save(self, fp, *, seek_begin=True):
-        """|coro|
+        """|coro|.
 
         Saves this asset into a file-like object.
 
@@ -248,11 +262,10 @@ class Asset:
             The asset was deleted.
 
         Returns
-        --------
+        -------
         :class:`int`
             The number of bytes written.
         """
-
         data = await self.read()
         if isinstance(fp, io.IOBase) and fp.writable():
             written = fp.write(data)

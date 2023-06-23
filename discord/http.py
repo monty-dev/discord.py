@@ -1,49 +1,34 @@
-import io
-import os
-import random
-import time
+# The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-import msgspec
-
-"""
-The MIT License (MIT)
-
-Copyright (c) 2015-present Rapptz
-
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
 import asyncio
-import contextlib
-import logging
+import random
+from collections import defaultdict
 from urllib.parse import quote as _uriquote
-from melanie import get_curl, CurlRequest
+
 import aiohttp
 import limits
 import orjson
-import pycurl
-from anyio import AsyncFile
 from loguru import logger as log
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
-from tornado.httputil import url_concat
+from melanie import AsyncHTTPClient, orjson_dumps2
 
-from . import __version__, utils
-from .cacheutils import LRU
+from . import utils
 from .errors import DiscordServerError, Forbidden, GatewayNotFound, HTTPException, LoginFailure, NotFound
 from .gateway import DiscordClientWebSocketResponse
 
@@ -66,7 +51,7 @@ class Ratelimiter:
 class Route:
     BASE = "https://discord.com/api/v7"
 
-    def __init__(self, method, path, **parameters):
+    def __init__(self, method, path, **parameters) -> None:
         self.path = path
         self.method = method
         url = self.BASE + self.path
@@ -85,7 +70,7 @@ class Route:
 
 
 class DeferrableLock(asyncio.Lock):
-    def __init__(self, bucket):
+    def __init__(self, bucket) -> None:
         self.bucket = bucket
         self.delay = 0
         self.loop = asyncio.get_running_loop()
@@ -109,11 +94,12 @@ class HTTPClient:
     SUCCESS_LOG = "{method} {url} has received {text}"
     REQUEST_LOG = "{method} {url} with {json} has returned {status}"
 
-    def __init__(self, connector=None, *, proxy=None, proxy_auth=None, loop=None, unsync_clock=True):
+    def __init__(self, connector=None, *, proxy=None, proxy_auth=None, loop=None, unsync_clock=True) -> None:
         self.connector = connector
         self.loop = loop
         self.__session = None  # filled in static_login
         self._locks = {}
+        self.typing_locks = defaultdict(asyncio.Lock)
         self.token = None
         self.ratelimiter = Ratelimiter()
         self.bot_token = False
@@ -124,8 +110,12 @@ class HTTPClient:
         self.proxy_auth = proxy_auth
         self.use_clock = False
         self.count = 0
-        self.curl = get_curl()
+
         self.user_agent = "discord.gg/melaniebot (libcurl)"
+
+    @property
+    def curl(self):
+        return AsyncHTTPClient()
 
     async def get_lock(self, bucket) -> DeferrableLock:
         async with self.control_lock:
@@ -142,9 +132,7 @@ class HTTPClient:
             "max_msg_size": 0,
             "timeout": 30.0,
             "autoclose": False,
-            "headers": {
-                "User-Agent": self.user_agent,
-            },
+            "headers": {"User-Agent": self.user_agent},
             "compress": compress,
         }
 
@@ -152,7 +140,7 @@ class HTTPClient:
 
     def recreate(self):
         if self.__session.closed:
-            self.__session = aiohttp.ClientSession(connector=self.connector, ws_response_class=DiscordClientWebSocketResponse)
+            self.__session = aiohttp.ClientSession(connector=self.connector, ws_response_class=DiscordClientWebSocketResponse, json_serialize=orjson_dumps2)
 
     async def request(self, route, *, files=None, form=None, **kwargs):
         bucket = route.bucket
@@ -179,7 +167,7 @@ class HTTPClient:
         lock = await self.get_lock(bucket)  # this needs to be done under a mutext to make
         # sure stampedes don't cause the lock to be replaced with a new one
         async with lock:
-            for tries in range(5):
+            for tries in range(6):
                 await self.global_event.wait()
                 if form:
                     form_data = aiohttp.FormData()
@@ -190,24 +178,10 @@ class HTTPClient:
                 try:
                     while not await self.ratelimiter.test():
                         await asyncio.sleep(random.uniform(0.01, 0.1))
-
-                    if not files and not form:
-                        if "params" in kwargs:
-                            url = url_concat(url, kwargs["params"])
-                        _request = CurlRequest(url, method=method, headers=headers, body=kwargs["data"] if "data" in kwargs else None)
-                        r = await self.curl.fetch(_request, raise_error=False)
-                        r.status = r.code
-                        try:
-                            data = orjson.loads(r.body)
-                        except orjson.JSONDecodeError:
-                            data = r.body.decode("UTF-8")
-                    else:
-                        async with self.__session.request(method, url, **kwargs) as r:
-                            data = await r.read()
-                            if "json" in r.content_type:
-                                data = orjson.loads(data)
-                            else:
-                                data = data.decode("UTF-8")
+                    await self.ratelimiter.hit()
+                    async with self.__session.request(method, url, **kwargs) as r:
+                        data = await r.read()
+                        data = orjson.loads(data) if "json" in r.content_type else data.decode("UTF-8")
                     remaining = r.headers.get("X-Ratelimit-Remaining")
                     self.count += 1
                     if remaining == "0" and r.status != 429:
@@ -227,7 +201,9 @@ class HTTPClient:
                             await asyncio.sleep(retry_after)
                             self.global_event.set()
                         else:
-                            log.error(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
+                            log.debug(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
+                            if not retry_after:
+                                retry_after = 0.3
                             await asyncio.shield(asyncio.sleep(retry_after))
                         continue
 
@@ -245,8 +221,8 @@ class HTTPClient:
 
                 except asyncio.CancelledError:
                     raise
-                except Exception as e:
-                    if tries < 4:
+                except Exception:
+                    if tries < 5:
                         continue
                     else:
                         raise
@@ -281,19 +257,16 @@ class HTTPClient:
     # login management
 
     async def static_login(self, token, *, bot):
-        self.__session = aiohttp.ClientSession(
-            connector=self.connector,
-            ws_response_class=DiscordClientWebSocketResponse,
-        )
+        self.__session = aiohttp.ClientSession(connector=self.connector, ws_response_class=DiscordClientWebSocketResponse, json_serialize=orjson_dumps2)
         old_token, old_bot = self.token, self.bot_token
         self._token(token, bot=bot)
-
         try:
             data = await self.request(Route("GET", "/users/@me"))
         except HTTPException as exc:
             self._token(old_token, bot=old_bot)
             if exc.response.status == 401:
-                raise LoginFailure("Improper token has been passed.") from exc
+                msg = "Improper token has been passed."
+                raise LoginFailure(msg) from exc
             raise
 
         return data
@@ -411,9 +384,7 @@ class HTTPClient:
         return self.request(r, json=fields)
 
     def add_reaction(self, channel_id, message_id, emoji):
-        r = Route(
-            "PUT", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji
-        )
+        r = Route("PUT", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji)
         return self.request(r)
 
     def remove_reaction(self, channel_id, message_id, emoji, member_id):
@@ -428,9 +399,7 @@ class HTTPClient:
         return self.request(r)
 
     def remove_own_reaction(self, channel_id, message_id, emoji):
-        r = Route(
-            "DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji
-        )
+        r = Route("DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me", channel_id=channel_id, message_id=message_id, emoji=emoji)
         return self.request(r)
 
     def get_reaction_users(self, channel_id, message_id, emoji, limit, after=None):
@@ -447,9 +416,7 @@ class HTTPClient:
         return self.request(r)
 
     def clear_single_reaction(self, channel_id, message_id, emoji):
-        r = Route(
-            "DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}", channel_id=channel_id, message_id=message_id, emoji=emoji
-        )
+        r = Route("DELETE", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}", channel_id=channel_id, message_id=message_id, emoji=emoji)
         return self.request(r)
 
     def get_message(self, channel_id, message_id):
@@ -577,18 +544,7 @@ class HTTPClient:
         return self.request(r, json=data, reason=reason)
 
     def create_channel(self, guild_id, channel_type, *, reason=None, **options):
-        valid_keys = (
-            "name",
-            "parent_id",
-            "topic",
-            "bitrate",
-            "nsfw",
-            "user_limit",
-            "position",
-            "permission_overwrites",
-            "rate_limit_per_user",
-            "rtc_region",
-        )
+        valid_keys = ("name", "parent_id", "topic", "bitrate", "nsfw", "user_limit", "position", "permission_overwrites", "rate_limit_per_user", "rtc_region")
         payload = {"type": channel_type} | {k: v for k, v in options.items() if k in valid_keys and v is not None}
 
         return self.request(Route("POST", "/guilds/{guild_id}/channels", guild_id=guild_id), json=payload, reason=reason)
@@ -901,7 +857,7 @@ class HTTPClient:
         try:
             data = await self.request(Route("GET", "/gateway"))
         except HTTPException as exc:
-            raise GatewayNotFound() from exc
+            raise GatewayNotFound from exc
         if zlib:
             value = "{0}?encoding={1}&v={2}&compress=zlib-stream"
         else:
@@ -912,7 +868,7 @@ class HTTPClient:
         try:
             data = await self.request(Route("GET", "/gateway/bot"))
         except HTTPException as exc:
-            raise GatewayNotFound() from exc
+            raise GatewayNotFound from exc
 
         if zlib:
             value = "{0}?encoding={1}&v={2}&compress=zlib-stream"
