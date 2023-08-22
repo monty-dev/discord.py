@@ -22,20 +22,9 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
 
 from loguru import logger as log
-
-if TYPE_CHECKING:
-    from discord.http import HTTPClient
-
-
-def _typing_done_callback(fut):
-    # just retrieve any exception and call it a day
-    try:
-        fut.exception()
-    except (asyncio.CancelledError, Exception):
-        pass
+from melanie.redis import get_redis
 
 
 class Typing:
@@ -44,44 +33,26 @@ class Typing:
         self.messageable = messageable
         self.typing_deadline: int = 0
 
-    async def do_typing(self):
-        try:
-            channel = self._channel
-        except AttributeError:
-            channel = await self.messageable._get_channel()
-        http: HTTPClient = channel._state.http
-        typing = http.send_typing
-        lock = http.typing_locks[channel.id]
+    async def do_typing(self, channel):
+        redis = get_redis()
+        lock = redis.get_lock(f"typing:{channel.id}:{channel._state.self_id}", timeout=300)
         self.typing_deadline = time.time() + (60 * 3)
         while True:
             if time.time() > self.typing_deadline:
                 return log.error("Typing deadline exceeded. Channel {} / {} ", channel, channel.id)
-            try:
-                async with asyncio.timeout(0.25):
-                    await lock.acquire()
-            except asyncio.TimeoutError:
-                continue
-            else:
+            if await lock.acquire(blocking_timeout=1):
                 try:
-                    await typing(channel.id)
+                    await channel._state.http.send_typing(channel.id)
                     await asyncio.sleep(4.2)
                 finally:
-                    lock.release()
-
-    def __enter__(self):
-        self.task = self.loop.create_task(self.do_typing())
-        self.task.add_done_callback(_typing_done_callback)
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        self.task.cancel()
-        asyncio.ensure_future(asyncio.gather(self.task, return_exceptions=True))
+                    await lock.release()
 
     async def __aenter__(self):
-        self._channel = channel = await self.messageable._get_channel()
-        await channel._state.http.send_typing(channel.id)
-        return self.__enter__()
+        channel = await self.messageable._get_channel()
+        self.task = asyncio.create_task(self.do_typing(channel))
+        return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        self.task.cancel()
-        asyncio.ensure_future(asyncio.gather(self.task, return_exceptions=True))
+        if self.task:
+            self.task.cancel()
+            asyncio.ensure_future(asyncio.gather(self.task, return_exceptions=True))

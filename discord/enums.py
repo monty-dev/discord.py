@@ -102,10 +102,10 @@ class EnumMeta(type):
         return actual_cls
 
     def __iter__(self):
-        return (cls._enum_member_map_[name] for name in cls._enum_member_names_)
+        return (self._enum_member_map_[name] for name in self._enum_member_names_)
 
     def __reversed__(self):
-        return (cls._enum_member_map_[name] for name in reversed(cls._enum_member_names_))
+        return (self._enum_member_map_[name] for name in reversed(self._enum_member_names_))
 
     def __len__(self) -> int:
         return len(self._enum_member_names_)
