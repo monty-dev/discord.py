@@ -27,6 +27,7 @@ import limits
 import orjson
 from loguru import logger as log
 from melanie import AsyncHTTPClient, orjson_dumps2
+import xxhash
 
 from . import utils
 from .errors import DiscordServerError, Forbidden, GatewayNotFound, HTTPException, LoginFailure, NotFound
@@ -37,15 +38,15 @@ aiohttp.hdrs.WEBSOCKET = "websocket"
 
 class Ratelimiter:
     def __init__(self) -> None:
-        self.backend = limits.storage.storage_from_string("async+memory://")
+        self.backend = limits.storage.storage_from_string("async+redis://melanie.melaniebot.net")
         self.moving_window = limits.aio.strategies.MovingWindowRateLimiter(self.backend)
         self.default_rate = limits.RateLimitItemPerSecond(60, 1)
 
-    async def hit(self):
-        return await self.moving_window.hit(self.default_rate, "global", "main")
+    async def hit(self, ident: str):
+        return await self.moving_window.hit(self.default_rate, "global", ident)
 
-    async def test(self):
-        return await self.moving_window.test(self.default_rate, "global", "main")
+    async def test(self, ident):
+        return await self.moving_window.test(self.default_rate, "global", ident)
 
 
 class Route:
@@ -110,7 +111,7 @@ class HTTPClient:
         self.proxy_auth = proxy_auth
         self.use_clock = False
         self.count = 0
-
+        self.control_key = None
         self.user_agent = "discord.gg/melaniebot (libcurl)"
 
     @property
@@ -176,53 +177,57 @@ class HTTPClient:
                     kwargs["data"] = form_data
 
                 try:
-                    while not await self.ratelimiter.test():
-                        await asyncio.sleep(random.uniform(0.01, 0.1))
-                    await self.ratelimiter.hit()
+                    async with self.control_lock:
+                        if not self.control_key:
+                            self.control_key = xxhash.xxh32_hexdigest(self.token)
+                        while not await self.ratelimiter.test(self.control_key):
+                            await asyncio.sleep(random.uniform(0.1, 0.2))
+                        await self.ratelimiter.hit(self.control_key)
                     async with self.__session.request(method, url, **kwargs) as r:
                         data = await r.read()
                         data = orjson.loads(data) if "json" in r.content_type else data.decode("UTF-8")
-                    remaining = r.headers.get("X-Ratelimit-Remaining")
-                    self.count += 1
-                    if remaining == "0" and r.status != 429:
-                        delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
-                        lock.defer_for(delta)  # Using the method 429's are almost non-existant
-                    if 300 > r.status >= 200:
-                        return data
-                    if r.status == 429:
-                        retry_after = data["retry_after"] / 1000.0
-                        if not r.headers.get("Via"):
-                            raise HTTPException(r, data)
-                        if is_global := data.get("global", False):
-                            retry_after = retry_after + 0.5
-                            self.global_event.clear()
-                            current = asyncio.current_task()
-                            log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
-                            await asyncio.sleep(retry_after)
-                            self.global_event.set()
-                        else:
-                            log.debug(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
-                            if not retry_after:
-                                retry_after = 0.3
-                            await asyncio.shield(asyncio.sleep(retry_after))
-                        continue
+                        remaining = r.headers.get("X-Ratelimit-Remaining")
+                        self.count += 1
+                        if remaining == "0" and r.status != 429:
+                            delta = utils._parse_ratelimit_header(r, use_clock=self.use_clock)
+                            lock.defer_for(delta)  # Using the method 429's are almost non-existant
+                        if 300 > r.status >= 200:
+                            return data
+                        if r.status == 429:
+                            retry_after = data["retry_after"] / 1000.0
+                            if not r.headers.get("Via"):
+                                raise HTTPException(r, data)
+                            if is_global := data.get("global", False):
+                                retry_after = retry_after + 0.5
+                                self.global_event.clear()
+                                current = asyncio.current_task()
+                                log.error(f"Ratelimited globally. Task {current}  Retrying in {retry_after:.2f} seconds.")
+                                await asyncio.sleep(retry_after)
+                                self.global_event.set()
+                            else:
+                                log.debug(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
+                                if not retry_after:
+                                    retry_after = 0.3
+                                await asyncio.shield(asyncio.sleep(retry_after))
+                            continue
 
-                    if r.status in {500, 502}:
-                        await asyncio.sleep(random.uniform(0.2, 1))
-                        continue
-                    if r.status == 403:
-                        raise Forbidden(r, data)
-                    elif r.status == 404:
-                        raise NotFound(r, data)
-                    elif r.status == 503:
-                        raise DiscordServerError(r, data)
-                    else:
-                        raise HTTPException(r, data)
+                        if r.status in {500, 502}:
+                            await asyncio.sleep(random.uniform(0.2, 1))
+                            continue
+                        if r.status == 403:
+                            raise Forbidden(r, data)
+                        elif r.status == 404:
+                            raise NotFound(r, data)
+                        elif r.status == 503:
+                            raise DiscordServerError(r, data)
+                        else:
+                            raise HTTPException(r, data)
 
                 except asyncio.CancelledError:
                     raise
                 except Exception:
                     if tries < 5:
+                        await asyncio.sleep(0.1)
                         continue
                     else:
                         raise
