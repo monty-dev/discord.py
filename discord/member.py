@@ -257,7 +257,7 @@ class Member(discord.abc.Messageable, _BaseUser):
 
     def _update_from_message(self, data):
         self.joined_at = utils.parse_time(data.get("joined_at"))
-        self.communication_disabled_until = data.get("communication_disabled_until", None)
+        self.communication_disabled_until = utils.parse_time(data.get("communication_disabled_until"))
         self.premium_since = utils.parse_time(data.get("premium_since"))
         self._update_roles(data)
         self.nick = data.get("nick", None)

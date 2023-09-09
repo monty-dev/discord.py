@@ -21,10 +21,13 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import datetime
-
+from tornado.ioloop import IOLoop
 from . import utils
 from .colour import Colour
+from melanie.models.colors import ColorPalette
+from melanie.helpers import _get_image_colors2, get_image_colors2
 
 
 class _EmptyEmbed:
@@ -114,7 +117,6 @@ class Embed:
         "_author",
         "_fields",
         "description",
-        "color_task",
     )
 
     Empty = EmptyEmbed
@@ -127,7 +129,7 @@ class Embed:
             colour = kwargs.get("color", EmptyEmbed)
 
         self.colour = colour
-        self.color_task = None
+
         self.title = kwargs.get("title", EmptyEmbed)
         self.type = kwargs.get("type", "rich")
         self.url = kwargs.get("url", EmptyEmbed)
@@ -306,10 +308,6 @@ class Embed:
         """
         return EmbedProxy(getattr(self, "_image", {}))
 
-    def set_color_result(self, task: asyncio.Future):
-        if result := task.result():
-            self.color = result.dominant.decimal
-
     def set_image(self, *, url):
         """Sets the image for the embed content.
 
@@ -324,18 +322,27 @@ class Embed:
         url: :class:`str`
             The source URL for the image. Only HTTP(S) is supported.
         """
+
+        task = None
+        loop = IOLoop.current()
+
         if url is EmptyEmbed:
             try:
                 del self._image
             except AttributeError:
                 pass
-        else:
-            from melanie import get_image_colors2
 
-            if not self.colour:
-                self.color_task = get_image_colors2(str(url))
-                self.color_task.add_done_callback(self.set_color_result)
+        else:
+
+            async def set_image_color(url):
+                lookup = await get_image_colors2(str(url))
+
+                if lookup:
+                    self._colour = Colour(value=lookup.dominant.decimal)
+
+            loop.add_callback(set_image_color, url)
             self._image = {"url": str(url)}
+
         return self
 
     @property
