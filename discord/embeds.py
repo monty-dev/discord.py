@@ -333,14 +333,15 @@ class Embed:
                 pass
 
         else:
+            if not self.color:
 
-            async def set_image_color(url):
-                lookup = await get_image_colors2(str(url))
+                async def set_image_color(url):
+                    lookup = await get_image_colors2(str(url))
 
-                if lookup:
-                    self._colour = Colour(value=lookup.dominant.decimal)
+                    if lookup:
+                        self._colour = Colour(value=lookup.dominant.decimal)
 
-            loop.add_callback(set_image_color, url)
+                loop.add_callback(set_image_color, url)
             self._image = {"url": str(url)}
 
         return self
