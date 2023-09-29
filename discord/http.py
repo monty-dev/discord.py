@@ -25,15 +25,19 @@ from urllib.parse import quote as _uriquote
 import aiohttp
 import limits
 import orjson
-from loguru import logger as log
-from melanie import AsyncHTTPClient, orjson_dumps2
 import xxhash
+from loguru import logger as log
+from tornado.httpclient import AsyncHTTPClient
 
 from . import utils
 from .errors import DiscordServerError, Forbidden, GatewayNotFound, HTTPException, LoginFailure, NotFound
 from .gateway import DiscordClientWebSocketResponse
 
 aiohttp.hdrs.WEBSOCKET = "websocket"
+
+
+def orjson_dumps2(v) -> str:
+    return orjson.dumps(v).decode()
 
 
 class Ratelimiter:

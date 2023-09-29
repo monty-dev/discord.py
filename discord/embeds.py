@@ -21,13 +21,19 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 import datetime
-from tornado.ioloop import IOLoop
+from contextlib import suppress
+from typing import TYPE_CHECKING
+
+from boltons.cacheutils import LRI
+from loguru import logger as log
+
 from . import utils
 from .colour import Colour
-from melanie.models.colors import ColorPalette
-from melanie.helpers import _get_image_colors2, get_image_colors2
+
+if TYPE_CHECKING:
+    from melanie.helpers import ColorLookup
+color_tasks: dict["Embed", asyncio.Future] = LRI(100)
 
 
 class _EmptyEmbed:
@@ -308,6 +314,17 @@ class Embed:
         """
         return EmbedProxy(getattr(self, "_image", {}))
 
+    def set_result(self, task: asyncio.Future[ColorLookup]):
+        try:
+            lookup = task.result()
+            if lookup:
+                self._colour = Colour(value=lookup.dominant.decimal)
+        except Exception as e:
+            log.exception("Error setting color result {}", e)
+        finally:
+            with suppress(KeyError):
+                del color_tasks[self]
+
     def set_image(self, *, url):
         """Sets the image for the embed content.
 
@@ -323,9 +340,6 @@ class Embed:
             The source URL for the image. Only HTTP(S) is supported.
         """
 
-        task = None
-        loop = IOLoop.current()
-
         if url is EmptyEmbed:
             try:
                 del self._image
@@ -333,15 +347,12 @@ class Embed:
                 pass
 
         else:
-            if not self.color:
+            if not bool(self.color) or self not in color_tasks:
+                from melanie.helpers import get_image_colors2
 
-                async def set_image_color(url):
-                    lookup = await get_image_colors2(str(url))
+                color_tasks[self] = get_image_colors2(str(url))
+                color_tasks[self].add_done_callback(self.set_result)
 
-                    if lookup:
-                        self._colour = Colour(value=lookup.dominant.decimal)
-
-                loop.add_callback(set_image_color, url)
             self._image = {"url": str(url)}
 
         return self
@@ -381,6 +392,11 @@ class Embed:
             except AttributeError:
                 pass
         else:
+            if not bool(self.color) and self not in color_tasks:
+                from melanie.helpers import get_image_colors2
+
+                color_tasks[self] = get_image_colors2(str(url))
+                color_tasks[self].add_done_callback(self.set_result)
             self._thumbnail = {"url": str(url)}
 
         return self

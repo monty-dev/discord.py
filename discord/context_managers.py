@@ -24,7 +24,6 @@ import asyncio
 import time
 
 from loguru import logger as log
-from melanie.redis import get_redis
 
 
 class Typing:
@@ -34,6 +33,8 @@ class Typing:
         self.typing_deadline: int = 0
 
     async def do_typing(self, channel):
+        from melanie.redis import get_redis
+
         redis = get_redis()
         lock = redis.get_lock(f"typing:{channel.id}:{channel._state.self_id}", timeout=300)
         self.typing_deadline = time.time() + (60 * 3)
