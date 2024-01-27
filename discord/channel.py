@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import TYPE_CHECKING
 
 import discord.abc
 
@@ -31,6 +32,9 @@ from .enums import ChannelType, VoiceRegion, try_enum
 from .errors import ClientException, InvalidArgument, NoMoreItems
 from .mixins import Hashable
 from .permissions import Permissions
+
+if TYPE_CHECKING:
+    from .state import ConnectionState
 
 __all__ = ("TextChannel", "VoiceChannel", "StageChannel", "DMChannel", "CategoryChannel", "StoreChannel", "GroupChannel", "_channel_factory")
 
@@ -89,7 +93,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
     __slots__ = ("name", "id", "guild", "topic", "_state", "nsfw", "category_id", "position", "slowmode_delay", "_overwrites", "_type", "last_message_id")
 
     def __init__(self, *, state, guild, data) -> None:
-        self._state = state
+        self._state: "ConnectionState" = state
         self.id = int(data["id"])
         self._type = data["type"]
         self._update(guild, data)

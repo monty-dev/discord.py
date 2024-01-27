@@ -23,12 +23,16 @@ from __future__ import annotations
 import abc
 import asyncio
 import copy
+from typing import TYPE_CHECKING
 
 from . import utils
 from .context_managers import Typing
 from .enums import ChannelType
 from .errors import ClientException, InvalidArgument
 from .file import File
+if TYPE_CHECKING:
+    
+    from .message import Message
 from .invite import Invite
 from .iterators import HistoryIterator
 from .mentions import AllowedMentions
@@ -929,7 +933,7 @@ class Messageable(metaclass=abc.ABCMeta):
         allowed_mentions=None,
         reference=None,
         mention_author=None,
-    ):
+    ) -> Message:
         """|coro|.
 
         Sends a message to the destination with the content given.

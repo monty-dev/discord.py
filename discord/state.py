@@ -37,6 +37,7 @@ from loguru import logger as log2
 from . import utils
 from .activity import BaseActivity
 from .channel import *
+from .http import HTTPClient
 from .emoji import Emoji
 from .enums import ChannelType, Status, try_enum
 from .flags import Intents, MemberCacheFlags
@@ -107,7 +108,7 @@ async def logging_coroutine(coroutine, *, info):
 class ConnectionState:
     def __init__(self, *, dispatch, handlers, hooks, syncer, http, loop, **options) -> None:
         self.loop = loop
-        self.http = http
+        self.http: HTTPClient = http
         self.max_messages = options.get("max_messages", 1000)
         if self.max_messages is not None and self.max_messages <= 0:
             self.max_messages = 1000

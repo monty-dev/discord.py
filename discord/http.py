@@ -42,9 +42,9 @@ def orjson_dumps2(v) -> str:
 
 class Ratelimiter:
     def __init__(self) -> None:
-        self.backend = limits.storage.storage_from_string("async+redis://melanie.melaniebot.net")
+        self.backend = limits.storage.storage_from_string("async+memory://")
         self.moving_window = limits.aio.strategies.MovingWindowRateLimiter(self.backend)
-        self.default_rate = limits.RateLimitItemPerSecond(60, 1)
+        self.default_rate = limits.RateLimitItemPerSecond(59, 1)
 
     async def hit(self, ident: str):
         return await self.moving_window.hit(self.default_rate, "global", ident)
@@ -211,12 +211,12 @@ class HTTPClient:
                             else:
                                 log.debug(f"Ratelimt for bucket {bucket}. Retrying in {retry_after:.2f} seconds ")
                                 if not retry_after:
-                                    retry_after = 0.3
+                                    retry_after = 0.01
                                 await asyncio.shield(asyncio.sleep(retry_after))
                             continue
 
                         if r.status in {500, 502}:
-                            await asyncio.sleep(random.uniform(0.2, 1))
+                            await asyncio.sleep(random.uniform(0.2, 0.4))
                             continue
                         if r.status == 403:
                             raise Forbidden(r, data)
@@ -231,7 +231,7 @@ class HTTPClient:
                     raise
                 except Exception:
                     if tries < 5:
-                        await asyncio.sleep(0.1)
+                        await asyncio.sleep(0.01)
                         continue
                     else:
                         raise

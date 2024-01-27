@@ -24,6 +24,7 @@ import asyncio
 import datetime
 import io
 import re
+from typing import TYPE_CHECKING
 
 from . import utils
 from .calls import CallMessage
@@ -39,7 +40,9 @@ from .mixins import Hashable
 from .partial_emoji import PartialEmoji
 from .reaction import Reaction
 from .sticker import Sticker
-from .channel import TextChannel
+
+if TYPE_CHECKING:
+    from .channel import TextChannel
 from .utils import escape_mentions
 
 __all__ = ("Attachment", "Message", "PartialMessage", "MessageReference", "DeletedReferencedMessage")
@@ -564,7 +567,7 @@ class Message(Hashable):
         self.embeds = [Embed.from_dict(a) for a in data["embeds"]]
         self.application = data.get("application")
         self.activity = data.get("activity")
-        self.channel: TextChannel = channel
+        self.channel: "TextChannel" = channel
         self.call = None
         self._edited_timestamp = utils.parse_time(data["edited_timestamp"])
         self.type = try_enum(MessageType, data["type"])

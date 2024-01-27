@@ -979,9 +979,7 @@ class Client:
         if not asyncio.iscoroutinefunction(coro):
             msg = "event registered must be a coroutine function"
             raise TypeError(msg)
-
         setattr(self, coro.__name__, coro)
-        log.debug("%s has successfully been registered as an event", coro.__name__)
         return coro
 
     async def change_presence(self, *, activity=None, status=None, afk=False):
