@@ -198,10 +198,10 @@ class HTTPClient:
                         if 300 > r.status >= 200:
                             return data
                         if r.status == 429:
-                            retry_after = data["retry_after"] / 1000.0
+                            retry_after = data["retry_after"]
                             if not r.headers.get("Via"):
                                 raise HTTPException(r, data)
-                            if is_global := data.get("global", False):
+                            if data.get("global", False):
                                 retry_after = retry_after + 0.5
                                 self.global_event.clear()
                                 current = asyncio.current_task()

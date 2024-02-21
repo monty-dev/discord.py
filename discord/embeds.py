@@ -347,7 +347,7 @@ class Embed:
                 pass
 
         else:
-            if not bool(self.color) or self not in color_tasks:
+            if not bool(self.color):
                 from melanie.helpers import get_image_colors2
 
                 color_tasks[self] = get_image_colors2(str(url))
@@ -392,7 +392,7 @@ class Embed:
             except AttributeError:
                 pass
         else:
-            if not bool(self.color) and self not in color_tasks:
+            if not bool(self.color):
                 from melanie.helpers import get_image_colors2
 
                 color_tasks[self] = get_image_colors2(str(url))
