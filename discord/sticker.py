@@ -1,33 +1,30 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-from .mixins import Hashable
 from .asset import Asset
-from .utils import snowflake_time
 from .enums import StickerType, try_enum
+from .mixins import Hashable
+from .utils import snowflake_time
+
 
 class Sticker(Hashable):
     """Represents a sticker.
@@ -54,41 +51,22 @@ class Sticker(Hashable):
         The sticker's name.
     id: :class:`int`
         The id of the sticker.
-    description: :class:`str`
-        The description of the sticker.
-    pack_id: :class:`int`
-        The id of the sticker's pack.
-    format: :class:`StickerType`
-        The format for the sticker's image.
-    image: :class:`str`
-        The sticker's image.
-    tags: List[:class:`str`]
-        A list of tags for the sticker.
-    preview_image: Optional[:class:`str`]
-        The sticker's preview asset hash.
+
     """
-    __slots__ = ('_state', 'id', 'name', 'description', 'pack_id', 'format', 'image', 'tags', 'preview_image')
 
-    def __init__(self, *, state, data):
+    __slots__ = ("_state", "id", "name", "format")
+
+    def __init__(self, *, state, data) -> None:
         self._state = state
-        self.id = int(data['id'])
-        self.name = data['name']
-        self.description = data['description']
-        self.pack_id = int(data.get('pack_id', 0))
-        self.format = try_enum(StickerType, data['format_type'])
-        self.image = data['asset']
+        self.id = int(data["id"])
+        self.name = data["name"]
 
-        try:
-            self.tags = [tag.strip() for tag in data['tags'].split(',')]
-        except KeyError:
-            self.tags = []
+        self.format = try_enum(StickerType, data["format_type"])
 
-        self.preview_image = data.get('preview_asset')
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} id={self.id} name={self.name!r}>"
 
-    def __repr__(self):
-        return '<{0.__class__.__name__} id={0.id} name={0.name!r}>'.format(self)
-
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     @property
@@ -119,7 +97,7 @@ class Sticker(Hashable):
             This will return ``None`` if the format is ``StickerType.lottie``.
 
         Parameters
-        -----------
+        ----------
         size: :class:`int`
             The size of the image to display.
 

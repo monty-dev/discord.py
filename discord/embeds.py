@@ -1,58 +1,68 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
+import asyncio
 import datetime
+from contextlib import suppress
+from typing import TYPE_CHECKING
+
+from boltons.cacheutils import LRI
+from loguru import logger as log
 
 from . import utils
 from .colour import Colour
 
+if TYPE_CHECKING:
+    from melanie.helpers import ColorLookup
+color_tasks: dict["Embed", asyncio.Future] = LRI(100)
+
+
 class _EmptyEmbed:
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return False
 
-    def __repr__(self):
-        return 'Embed.Empty'
+    def __repr__(self) -> str:
+        return "Embed.Empty"
 
-    def __len__(self):
+    def __len__(self) -> int:
         return 0
+
 
 EmptyEmbed = _EmptyEmbed()
 
+
 class EmbedProxy:
-    def __init__(self, layer):
+    def __init__(self, layer) -> None:
         self.__dict__.update(layer)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.__dict__)
 
-    def __repr__(self):
-        return 'EmbedProxy(%s)' % ', '.join(('%s=%r' % (k, v) for k, v in self.__dict__.items() if not k.startswith('_')))
+    def __repr__(self) -> str:
+        return f'EmbedProxy({", ".join("%s=%r" % (k, v) for k, v in self.__dict__.items() if not k.startswith("_"))})'
 
     def __getattr__(self, attr):
         return EmptyEmbed
+
 
 class Embed:
     """Represents a Discord embed.
@@ -74,7 +84,7 @@ class Embed:
     casted to :class:`str` for you.
 
     Attributes
-    -----------
+    ----------
     title: :class:`str`
         The title of the embed.
         This can be set during initialisation.
@@ -99,24 +109,37 @@ class Embed:
         to denote that the value or attribute is empty.
     """
 
-    __slots__ = ('title', 'url', 'type', '_timestamp', '_colour', '_footer',
-                 '_image', '_thumbnail', '_video', '_provider', '_author',
-                 '_fields', 'description')
+    __slots__ = (
+        "title",
+        "url",
+        "type",
+        "_timestamp",
+        "_colour",
+        "_footer",
+        "_image",
+        "_thumbnail",
+        "_video",
+        "_provider",
+        "_author",
+        "_fields",
+        "description",
+    )
 
     Empty = EmptyEmbed
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         # swap the colour/color aliases
         try:
-            colour = kwargs['colour']
+            colour = kwargs["colour"]
         except KeyError:
-            colour = kwargs.get('color', EmptyEmbed)
+            colour = kwargs.get("color", EmptyEmbed)
 
         self.colour = colour
-        self.title = kwargs.get('title', EmptyEmbed)
-        self.type = kwargs.get('type', 'rich')
-        self.url = kwargs.get('url', EmptyEmbed)
-        self.description = kwargs.get('description', EmptyEmbed)
+
+        self.title = kwargs.get("title", EmptyEmbed)
+        self.type = kwargs.get("type", "rich")
+        self.url = kwargs.get("url", EmptyEmbed)
+        self.description = kwargs.get("description", EmptyEmbed)
 
         if self.title is not EmptyEmbed:
             self.title = str(self.title)
@@ -128,7 +151,7 @@ class Embed:
             self.url = str(self.url)
 
         try:
-            timestamp = kwargs['timestamp']
+            timestamp = kwargs["timestamp"]
         except KeyError:
             pass
         else:
@@ -146,7 +169,7 @@ class Embed:
         __ DiscordDocs_
 
         Parameters
-        -----------
+        ----------
         data: :class:`dict`
             The dictionary to convert into an embed.
         """
@@ -155,10 +178,10 @@ class Embed:
 
         # fill in the basic fields
 
-        self.title = data.get('title', EmptyEmbed)
-        self.type = data.get('type', EmptyEmbed)
-        self.description = data.get('description', EmptyEmbed)
-        self.url = data.get('url', EmptyEmbed)
+        self.title = data.get("title", EmptyEmbed)
+        self.type = data.get("type", EmptyEmbed)
+        self.description = data.get("description", EmptyEmbed)
+        self.url = data.get("url", EmptyEmbed)
 
         if self.title is not EmptyEmbed:
             self.title = str(self.title)
@@ -172,22 +195,22 @@ class Embed:
         # try to fill in the more rich fields
 
         try:
-            self._colour = Colour(value=data['color'])
+            self._colour = Colour(value=data["color"])
         except KeyError:
             pass
 
         try:
-            self._timestamp = utils.parse_time(data['timestamp'])
+            self._timestamp = utils.parse_time(data["timestamp"])
         except KeyError:
             pass
 
-        for attr in ('thumbnail', 'video', 'provider', 'author', 'fields', 'image', 'footer'):
+        for attr in ("thumbnail", "video", "provider", "author", "fields", "image", "footer"):
             try:
                 value = data[attr]
             except KeyError:
                 continue
             else:
-                setattr(self, '_' + attr, value)
+                setattr(self, "_" + attr, value)
 
         return self
 
@@ -195,30 +218,30 @@ class Embed:
         """Returns a shallow copy of the embed."""
         return Embed.from_dict(self.to_dict())
 
-    def __len__(self):
+    def __len__(self) -> int:
         total = len(self.title) + len(self.description)
-        for field in getattr(self, '_fields', []):
-            total += len(field['name']) + len(field['value'])
+        for field in getattr(self, "_fields", []):
+            total += len(field["name"]) + len(field["value"])
 
         try:
             footer = self._footer
         except AttributeError:
             pass
         else:
-            total += len(footer['text'])
+            total += len(footer["text"])
 
         try:
             author = self._author
         except AttributeError:
             pass
         else:
-            total += len(author['name'])
+            total += len(author["name"])
 
         return total
 
     @property
     def colour(self):
-        return getattr(self, '_colour', EmptyEmbed)
+        return getattr(self, "_colour", EmptyEmbed)
 
     @colour.setter
     def colour(self, value):
@@ -227,20 +250,22 @@ class Embed:
         elif isinstance(value, int):
             self._colour = Colour(value=value)
         else:
-            raise TypeError('Expected discord.Colour, int, or Embed.Empty but received %s instead.' % value.__class__.__name__)
+            msg = f"Expected discord.Colour, int, or Embed.Empty but received {value.__class__.__name__} instead."
+            raise TypeError(msg)
 
     color = colour
 
     @property
     def timestamp(self):
-        return getattr(self, '_timestamp', EmptyEmbed)
+        return getattr(self, "_timestamp", EmptyEmbed)
 
     @timestamp.setter
     def timestamp(self, value):
         if isinstance(value, (datetime.datetime, _EmptyEmbed)):
             self._timestamp = value
         else:
-            raise TypeError("Expected datetime.datetime or Embed.Empty received %s instead" % value.__class__.__name__)
+            msg = f"Expected datetime.datetime or Embed.Empty received {value.__class__.__name__} instead"
+            raise TypeError(msg)
 
     @property
     def footer(self):
@@ -250,7 +275,7 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_footer', {}))
+        return EmbedProxy(getattr(self, "_footer", {}))
 
     def set_footer(self, *, text=EmptyEmbed, icon_url=EmptyEmbed):
         """Sets the footer for the embed content.
@@ -259,19 +284,18 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         text: :class:`str`
             The footer text.
         icon_url: :class:`str`
             The URL of the footer icon. Only HTTP(S) is supported.
         """
-
         self._footer = {}
         if text is not EmptyEmbed:
-            self._footer['text'] = str(text)
+            self._footer["text"] = str(text)
 
         if icon_url is not EmptyEmbed:
-            self._footer['icon_url'] = str(icon_url)
+            self._footer["icon_url"] = str(icon_url)
 
         return self
 
@@ -288,7 +312,18 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_image', {}))
+        return EmbedProxy(getattr(self, "_image", {}))
+
+    def set_result(self, task: asyncio.Future[ColorLookup]):
+        try:
+            lookup = task.result()
+            if lookup:
+                self._colour = Colour(value=lookup.dominant.decimal)
+        except Exception as e:
+            log.exception("Error setting color result {}", e)
+        finally:
+            with suppress(KeyError):
+                del color_tasks[self]
 
     def set_image(self, *, url):
         """Sets the image for the embed content.
@@ -300,7 +335,7 @@ class Embed:
             Passing :attr:`Empty` removes the image.
 
         Parameters
-        -----------
+        ----------
         url: :class:`str`
             The source URL for the image. Only HTTP(S) is supported.
         """
@@ -310,10 +345,15 @@ class Embed:
                 del self._image
             except AttributeError:
                 pass
+
         else:
-            self._image = {
-                'url': str(url)
-            }
+            if not bool(self.color):
+                from melanie.helpers import get_image_colors2
+
+                color_tasks[self] = get_image_colors2(str(url))
+                color_tasks[self].add_done_callback(self.set_result)
+
+            self._image = {"url": str(url)}
 
         return self
 
@@ -330,7 +370,7 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_thumbnail', {}))
+        return EmbedProxy(getattr(self, "_thumbnail", {}))
 
     def set_thumbnail(self, *, url):
         """Sets the thumbnail for the embed content.
@@ -342,20 +382,22 @@ class Embed:
             Passing :attr:`Empty` removes the thumbnail.
 
         Parameters
-        -----------
+        ----------
         url: :class:`str`
             The source URL for the thumbnail. Only HTTP(S) is supported.
         """
-
         if url is EmptyEmbed:
             try:
                 del self._thumbnail
             except AttributeError:
                 pass
         else:
-            self._thumbnail = {
-                'url': str(url)
-            }
+            if not bool(self.color):
+                from melanie.helpers import get_image_colors2
+
+                color_tasks[self] = get_image_colors2(str(url))
+                color_tasks[self].add_done_callback(self.set_result)
+            self._thumbnail = {"url": str(url)}
 
         return self
 
@@ -371,7 +413,7 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_video', {}))
+        return EmbedProxy(getattr(self, "_video", {}))
 
     @property
     def provider(self):
@@ -381,7 +423,7 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_provider', {}))
+        return EmbedProxy(getattr(self, "_provider", {}))
 
     @property
     def author(self):
@@ -391,7 +433,7 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return EmbedProxy(getattr(self, '_author', {}))
+        return EmbedProxy(getattr(self, "_author", {}))
 
     def set_author(self, *, name, url=EmptyEmbed, icon_url=EmptyEmbed):
         """Sets the author for the embed content.
@@ -400,7 +442,7 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The name of the author.
         url: :class:`str`
@@ -408,16 +450,13 @@ class Embed:
         icon_url: :class:`str`
             The URL of the author icon. Only HTTP(S) is supported.
         """
-
-        self._author = {
-            'name': str(name)
-        }
+        self._author = {"name": str(name)}
 
         if url is not EmptyEmbed:
-            self._author['url'] = str(url)
+            self._author["url"] = str(url)
 
         if icon_url is not EmptyEmbed:
-            self._author['icon_url'] = str(icon_url)
+            self._author["icon_url"] = str(icon_url)
 
         return self
 
@@ -444,7 +483,7 @@ class Embed:
 
         If the attribute has no value then :attr:`Empty` is returned.
         """
-        return [EmbedProxy(d) for d in getattr(self, '_fields', [])]
+        return [EmbedProxy(d) for d in getattr(self, "_fields", [])]
 
     def add_field(self, *, name, value, inline=True):
         """Adds a field to the embed object.
@@ -453,7 +492,7 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The name of the field.
         value: :class:`str`
@@ -461,12 +500,7 @@ class Embed:
         inline: :class:`bool`
             Whether the field should be displayed inline.
         """
-
-        field = {
-            'inline': inline,
-            'name': str(name),
-            'value': str(value)
-        }
+        field = {"inline": inline, "name": str(name), "value": str(value)}
 
         try:
             self._fields.append(field)
@@ -484,7 +518,7 @@ class Embed:
         .. versionadded:: 1.2
 
         Parameters
-        -----------
+        ----------
         index: :class:`int`
             The index of where to insert the field.
         name: :class:`str`
@@ -494,12 +528,7 @@ class Embed:
         inline: :class:`bool`
             Whether the field should be displayed inline.
         """
-
-        field = {
-            'inline': inline,
-            'name': str(name),
-            'value': str(value)
-        }
+        field = {"inline": inline, "name": str(name), "value": str(value)}
 
         try:
             self._fields.insert(index, field)
@@ -527,7 +556,7 @@ class Embed:
             shift to fill the gap just like a regular list.
 
         Parameters
-        -----------
+        ----------
         index: :class:`int`
             The index of the field to remove.
         """
@@ -545,7 +574,7 @@ class Embed:
         chaining.
 
         Parameters
-        -----------
+        ----------
         index: :class:`int`
             The index of the field to modify.
         name: :class:`str`
@@ -556,63 +585,58 @@ class Embed:
             Whether the field should be displayed inline.
 
         Raises
-        -------
+        ------
         IndexError
             An invalid index was provided.
         """
-
         try:
             field = self._fields[index]
-        except (TypeError, IndexError, AttributeError):
-            raise IndexError('field index out of range')
+        except (TypeError, IndexError, AttributeError) as e:
+            msg = "field index out of range"
+            raise IndexError(msg) from e
 
-        field['name'] = str(name)
-        field['value'] = str(value)
-        field['inline'] = inline
+        field["name"] = str(name)
+        field["value"] = str(value)
+        field["inline"] = inline
         return self
 
     def to_dict(self):
         """Converts this embed object into a dict."""
-
         # add in the raw data into the dict
-        result = {
-            key[1:]: getattr(self, key)
-            for key in self.__slots__
-            if key[0] == '_' and hasattr(self, key)
-        }
+        result = {key[1:]: getattr(self, key) for key in self.__slots__ if key[0] == "_" and hasattr(self, key)}
 
         # deal with basic convenience wrappers
 
         try:
-            colour = result.pop('colour')
+            colour = result.pop("colour")
         except KeyError:
             pass
         else:
             if colour:
-                result['color'] = colour.value
+                result["color"] = colour.value
 
         try:
-            timestamp = result.pop('timestamp')
+            timestamp = result.pop("timestamp")
         except KeyError:
             pass
         else:
             if timestamp:
                 if timestamp.tzinfo:
-                    result['timestamp'] = timestamp.astimezone(tz=datetime.timezone.utc).isoformat()
+                    result["timestamp"] = timestamp.astimezone(tz=datetime.timezone.utc).isoformat()
                 else:
-                    result['timestamp'] = timestamp.replace(tzinfo=datetime.timezone.utc).isoformat()
+                    result["timestamp"] = timestamp.replace(tzinfo=datetime.timezone.utc).isoformat()
 
         # add in the non raw attribute ones
         if self.type:
-            result['type'] = self.type
+            result["type"] = self.type
 
         if self.description:
-            result['description'] = self.description
+            result["description"] = self.description
 
         if self.url:
-            result['url'] = self.url
+            result["url"] = self.url
 
         if self.title:
-            result['title'] = self.title
+            result["title"] = self.title
 
         return result

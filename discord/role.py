@@ -1,34 +1,31 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+from __future__ import annotations
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
-
-from .permissions import Permissions
-from .errors import InvalidArgument
 from .colour import Colour
+from .errors import InvalidArgument
 from .mixins import Hashable
-from .utils import snowflake_time, _get_as_snowflake
+from .permissions import Permissions
+from .utils import _get_as_snowflake, snowflake_time
+
 
 class RoleTags:
     """Represents tags on a role.
@@ -42,23 +39,23 @@ class RoleTags:
     .. versionadded:: 1.6
 
     Attributes
-    ------------
+    ----------
     bot_id: Optional[:class:`int`]
         The bot's user ID that manages this role.
     integration_id: Optional[:class:`int`]
         The integration ID that manages the role.
     """
 
-    __slots__ = ('bot_id', 'integration_id', '_premium_subscriber',)
+    __slots__ = ("bot_id", "integration_id", "_premium_subscriber")
 
-    def __init__(self, data):
-        self.bot_id = _get_as_snowflake(data, 'bot_id')
-        self.integration_id = _get_as_snowflake(data, 'integration_id')
+    def __init__(self, data) -> None:
+        self.bot_id = _get_as_snowflake(data, "bot_id")
+        self.integration_id = _get_as_snowflake(data, "integration_id")
         # NOTE: The API returns "null" for this if it's valid, which corresponds to None.
         # This is different from other fields where "null" means "not there".
         # So in this case, a value of None is the same as True.
         # Which means we would need a different sentinel. For this purpose I used ellipsis.
-        self._premium_subscriber = data.get('premium_subscriber', ...)
+        self._premium_subscriber = data.get("premium_subscriber", ...)
 
     def is_bot_managed(self):
         """:class:`bool`: Whether the role is associated with a bot."""
@@ -72,9 +69,9 @@ class RoleTags:
         """:class:`bool`: Whether the role is managed by an integration."""
         return self.integration_id is not None
 
-    def __repr__(self):
-        return '<RoleTags bot_id={0.bot_id} integration_id={0.integration_id} ' \
-               'premium_subscriber={1}>'.format(self, self.is_premium_subscriber())
+    def __repr__(self) -> str:
+        return f"<RoleTags bot_id={self.bot_id} integration_id={self.integration_id} premium_subscriber={self.is_premium_subscriber()}>"
+
 
 class Role(Hashable):
     """Represents a Discord role in a :class:`Guild`.
@@ -135,27 +132,27 @@ class Role(Hashable):
         The role tags associated with this role.
     """
 
-    __slots__ = ('id', 'name', '_permissions', '_colour', 'position',
-                 'managed', 'mentionable', 'hoist', 'guild', 'tags', '_state')
+    __slots__ = ("id", "name", "_permissions", "_colour", "position", "managed", "mentionable", "hoist", "guild", "tags", "_state")
 
-    def __init__(self, *, guild, state, data):
+    def __init__(self, *, guild, state, data) -> None:
         self.guild = guild
         self._state = state
-        self.id = int(data['id'])
+        self.id = int(data["id"])
         self._update(data)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __repr__(self):
-        return '<Role id={0.id} name={0.name!r}>'.format(self)
+    def __repr__(self) -> str:
+        return f"<Role id={self.id} name={self.name!r}>"
 
     def __lt__(self, other):
         if not isinstance(other, Role) or not isinstance(self, Role):
             return NotImplemented
 
         if self.guild != other.guild:
-            raise RuntimeError('cannot compare roles from two different guilds.')
+            msg = "cannot compare roles from two different guilds."
+            raise RuntimeError(msg)
 
         # the @everyone role is always the lowest role in hierarchy
         guild_id = self.guild.id
@@ -173,30 +170,26 @@ class Role(Hashable):
 
     def __le__(self, other):
         r = Role.__lt__(other, self)
-        if r is NotImplemented:
-            return NotImplemented
-        return not r
+        return NotImplemented if r is NotImplemented else not r
 
     def __gt__(self, other):
         return Role.__lt__(other, self)
 
     def __ge__(self, other):
         r = Role.__lt__(self, other)
-        if r is NotImplemented:
-            return NotImplemented
-        return not r
+        return NotImplemented if r is NotImplemented else not r
 
     def _update(self, data):
-        self.name = data['name']
-        self._permissions = int(data.get('permissions_new', 0))
-        self.position = data.get('position', 0)
-        self._colour = data.get('color', 0)
-        self.hoist = data.get('hoist', False)
-        self.managed = data.get('managed', False)
-        self.mentionable = data.get('mentionable', False)
+        self.name = data["name"]
+        self._permissions = int(data.get("permissions_new", 0))
+        self.position = data.get("position", 0)
+        self._colour = data.get("color", 0)
+        self.hoist = data.get("hoist", False)
+        self.managed = data.get("managed", False)
+        self.mentionable = data.get("mentionable", False)
 
         try:
-            self.tags = RoleTags(data['tags'])
+            self.tags = RoleTags(data["tags"])
         except KeyError:
             self.tags = None
 
@@ -248,7 +241,7 @@ class Role(Hashable):
     @property
     def mention(self):
         """:class:`str`: Returns a string that allows you to mention a role."""
-        return '<@&%s>' % self.id
+        return f"<@&{self.id}>"
 
     @property
     def members(self):
@@ -262,10 +255,12 @@ class Role(Hashable):
 
     async def _move(self, position, reason):
         if position <= 0:
-            raise InvalidArgument("Cannot move role to position 0 or below")
+            msg = "Cannot move role to position 0 or below"
+            raise InvalidArgument(msg)
 
         if self.is_default():
-            raise InvalidArgument("Cannot move default role")
+            msg = "Cannot move default role"
+            raise InvalidArgument(msg)
 
         if self.position == position:
             return  # Save discord the extra request.
@@ -284,7 +279,7 @@ class Role(Hashable):
         await http.move_role_position(self.guild.id, payload, reason=reason)
 
     async def edit(self, *, reason=None, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the role.
 
@@ -297,7 +292,7 @@ class Role(Hashable):
             Can now pass ``int`` to ``colour`` keyword-only parameter.
 
         Parameters
-        -----------
+        ----------
         name: :class:`str`
             The new role name to change to.
         permissions: :class:`Permissions`
@@ -315,7 +310,7 @@ class Role(Hashable):
             The reason for editing this role. Shows up on the audit log.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to change the role.
         HTTPException
@@ -324,33 +319,32 @@ class Role(Hashable):
             An invalid position was given or the default
             role was asked to be moved.
         """
-
-        position = fields.get('position')
+        position = fields.get("position")
         if position is not None:
             await self._move(position, reason=reason)
             self.position = position
 
         try:
-            colour = fields['colour']
+            colour = fields["colour"]
         except KeyError:
-            colour = fields.get('color', self.colour)
+            colour = fields.get("color", self.colour)
 
         if isinstance(colour, int):
             colour = Colour(value=colour)
 
         payload = {
-            'name': fields.get('name', self.name),
-            'permissions': str(fields.get('permissions', self.permissions).value),
-            'color': colour.value,
-            'hoist': fields.get('hoist', self.hoist),
-            'mentionable': fields.get('mentionable', self.mentionable)
+            "name": fields.get("name", self.name),
+            "permissions": str(fields.get("permissions", self.permissions).value),
+            "color": colour.value,
+            "hoist": fields.get("hoist", self.hoist),
+            "mentionable": fields.get("mentionable", self.mentionable),
         }
 
         data = await self._state.http.edit_role(self.guild.id, self.id, reason=reason, **payload)
         self._update(data)
 
     async def delete(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Deletes the role.
 
@@ -358,16 +352,15 @@ class Role(Hashable):
         use this.
 
         Parameters
-        -----------
+        ----------
         reason: Optional[:class:`str`]
             The reason for deleting this role. Shows up on the audit log.
 
         Raises
-        --------
+        ------
         Forbidden
             You do not have permissions to delete the role.
         HTTPException
             Deleting the role failed.
         """
-
         await self._state.http.delete_role(self.guild.id, self.id, reason=reason)

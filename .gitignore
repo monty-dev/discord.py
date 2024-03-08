@@ -14,3 +14,5 @@ docs/crowdin.py
 *.jpg
 *.flac
 *.mo
+discord/a
+.DS_Store

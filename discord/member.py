@@ -1,51 +1,45 @@
-# -*- coding: utf-8 -*-
+# The MIT License (MIT)
 
-"""
-The MIT License (MIT)
+# Copyright (c) 2015-present Rapptz
 
-Copyright (c) 2015-present Rapptz
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-"""
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.tter
 
 import datetime
 import inspect
 import itertools
-import sys
 from operator import attrgetter
 
 import discord.abc
 
 from . import utils
-from .errors import ClientException
-from .user import BaseUser, User
 from .activity import create_activity
-from .permissions import Permissions
-from .enums import Status, try_enum
 from .colour import Colour
+from .enums import Status, try_enum
 from .object import Object
+from .permissions import Permissions
+from .user import BaseUser, User
+
 
 class VoiceState:
     """Represents a Discord user's voice state.
 
     Attributes
-    ------------
+    ----------
     deaf: :class:`bool`
         Indicates if the user is currently deafened by the guild.
     mute: :class:`bool`
@@ -84,41 +78,40 @@ class VoiceState:
         is not currently in a voice channel.
     """
 
-    __slots__ = ('session_id', 'deaf', 'mute', 'self_mute',
-                 'self_stream', 'self_video', 'self_deaf', 'afk', 'channel',
-                 'requested_to_speak_at', 'suppress')
+    __slots__ = ("session_id", "deaf", "mute", "self_mute", "self_stream", "self_video", "self_deaf", "afk", "channel", "requested_to_speak_at", "suppress")
 
-    def __init__(self, *, data, channel=None):
-        self.session_id = data.get('session_id')
+    def __init__(self, *, data, channel=None) -> None:
+        self.session_id = data.get("session_id")
         self._update(data, channel)
 
     def _update(self, data, channel):
-        self.self_mute = data.get('self_mute', False)
-        self.self_deaf = data.get('self_deaf', False)
-        self.self_stream = data.get('self_stream', False)
-        self.self_video = data.get('self_video', False)
-        self.afk = data.get('suppress', False)
-        self.mute = data.get('mute', False)
-        self.deaf = data.get('deaf', False)
-        self.suppress = data.get('suppress', False)
-        self.requested_to_speak_at = utils.parse_time(data.get('request_to_speak_timestamp'))
+        self.self_mute = data.get("self_mute", False)
+        self.self_deaf = data.get("self_deaf", False)
+        self.self_stream = data.get("self_stream", False)
+        self.self_video = data.get("self_video", False)
+        self.afk = data.get("suppress", False)
+        self.mute = data.get("mute", False)
+        self.deaf = data.get("deaf", False)
+        self.suppress = data.get("suppress", False)
+        self.requested_to_speak_at = utils.parse_time(data.get("request_to_speak_timestamp"))
         self.channel = channel
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         attrs = [
-            ('self_mute', self.self_mute),
-            ('self_deaf', self.self_deaf),
-            ('self_stream', self.self_stream),
-            ('suppress', self.suppress),
-            ('requested_to_speak_at', self.requested_to_speak_at),
-            ('channel', self.channel)
+            ("self_mute", self.self_mute),
+            ("self_deaf", self.self_deaf),
+            ("self_stream", self.self_stream),
+            ("suppress", self.suppress),
+            ("requested_to_speak_at", self.requested_to_speak_at),
+            ("channel", self.channel),
         ]
-        return '<%s %s>' % (self.__class__.__name__, ' '.join('%s=%r' % t for t in attrs))
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
+
 
 def flatten_user(cls):
     for attr, value in itertools.chain(BaseUser.__dict__.items(), User.__dict__.items()):
         # ignore private/special methods
-        if attr.startswith('_'):
+        if attr.startswith("_"):
             continue
 
         # don't override what we already have
@@ -127,9 +120,9 @@ def flatten_user(cls):
 
         # if it's a slotted attribute or a property, redirect it
         # slotted members are implemented as member_descriptors in Type.__dict__
-        if not hasattr(value, '__annotations__'):
-            getter = attrgetter('_user.' + attr)
-            setattr(cls, attr, property(getter, doc='Equivalent to :attr:`User.%s`' % attr))
+        if not hasattr(value, "__annotations__"):
+            getter = attrgetter("_user." + attr)
+            setattr(cls, attr, property(getter, doc=f"Equivalent to :attr:`User.{attr}`"))
         else:
             # Technically, this can also use attrgetter
             # However I'm not sure how I feel about "functions" returning properties
@@ -138,9 +131,12 @@ def flatten_user(cls):
             def generate_function(x):
                 # We want sphinx to properly show coroutine functions as coroutines
                 if inspect.iscoroutinefunction(value):
+
                     async def general(self, *args, **kwargs):
                         return await getattr(self._user, x)(*args, **kwargs)
+
                 else:
+
                     def general(self, *args, **kwargs):
                         return getattr(self._user, x)(*args, **kwargs)
 
@@ -153,7 +149,9 @@ def flatten_user(cls):
 
     return cls
 
+
 _BaseUser = discord.abc.User
+
 
 @flatten_user
 class Member(discord.abc.Messageable, _BaseUser):
@@ -208,29 +206,39 @@ class Member(discord.abc.Messageable, _BaseUser):
         Nitro boost on the guild, if available. This could be ``None``.
     """
 
-    __slots__ = ('_roles', 'joined_at', 'premium_since', '_client_status',
-                 'activities', 'guild', 'pending', 'nick', '_user', '_state')
+    __slots__ = (
+        "_roles",
+        "joined_at",
+        "premium_since",
+        "_client_status",
+        "activities",
+        "guild",
+        "pending",
+        "nick",
+        "_user",
+        "_state",
+        "communication_disabled_until",
+    )
 
-    def __init__(self, *, data, guild, state):
+    def __init__(self, *, data, guild, state) -> None:
         self._state = state
-        self._user = state.store_user(data['user'])
+        self._user = state.store_user(data["user"])
         self.guild = guild
-        self.joined_at = utils.parse_time(data.get('joined_at'))
-        self.premium_since = utils.parse_time(data.get('premium_since'))
+        self.joined_at = utils.parse_time(data.get("joined_at"))
+        self.premium_since = utils.parse_time(data.get("premium_since"))
         self._update_roles(data)
-        self._client_status = {
-            None: 'offline'
-        }
-        self.activities = tuple(map(create_activity, data.get('activities', [])))
-        self.nick = data.get('nick', None)
-        self.pending = data.get('pending', False)
+        self._client_status = {None: "offline"}
 
-    def __str__(self):
+        self.activities = tuple(map(create_activity, data.get("activities", [])))
+        self.nick = data.get("nick", None)
+        self.communication_disabled_until = data.get("communication_disabled_until", None)
+        self.pending = data.get("pending", False)
+
+    def __str__(self) -> str:
         return str(self._user)
 
-    def __repr__(self):
-        return '<Member id={1.id} name={1.name!r} discriminator={1.discriminator!r}' \
-               ' bot={1.bot} nick={0.nick!r} guild={0.guild!r}>'.format(self, self._user)
+    def __repr__(self) -> str:
+        return f"<Member id={self._user.id} name={self._user.name!r} discriminator={self._user.discriminator!r} bot={self._user.bot} nick={self.nick!r} guild={self.guild!r}>"
 
     def __eq__(self, other):
         return isinstance(other, _BaseUser) and other.id == self.id
@@ -244,41 +252,39 @@ class Member(discord.abc.Messageable, _BaseUser):
     @classmethod
     def _from_message(cls, *, message, data):
         author = message.author
-        data['user'] = author._to_minimal_user_json()
+        data["user"] = author._to_minimal_user_json()
         return cls(data=data, guild=message.guild, state=message._state)
 
     def _update_from_message(self, data):
-        self.joined_at = utils.parse_time(data.get('joined_at'))
-        self.premium_since = utils.parse_time(data.get('premium_since'))
+        self.joined_at = utils.parse_time(data.get("joined_at"))
+        self.communication_disabled_until = utils.parse_time(data.get("communication_disabled_until"))
+        self.premium_since = utils.parse_time(data.get("premium_since"))
         self._update_roles(data)
-        self.nick = data.get('nick', None)
-        self.pending = data.get('pending', False)
+        self.nick = data.get("nick", None)
+        self.pending = data.get("pending", False)
 
     @classmethod
-    def _try_upgrade(cls, *,  data, guild, state):
+    def _try_upgrade(cls, *, data, guild, state):
         # A User object with a 'member' key
         try:
-            member_data = data.pop('member')
+            member_data = data.pop("member")
         except KeyError:
             return state.store_user(data)
         else:
-            member_data['user'] = data
+            member_data["user"] = data
             return cls(data=member_data, guild=guild, state=state)
 
     @classmethod
     def _from_presence_update(cls, *, data, guild, state):
         clone = cls(data=data, guild=guild, state=state)
         to_return = cls(data=data, guild=guild, state=state)
-        to_return._client_status = {
-            sys.intern(key): sys.intern(value)
-            for key, value in data.get('client_status', {}).items()
-        }
-        to_return._client_status[None] = sys.intern(data['status'])
+        to_return._client_status = dict(data.get("client_status", {}).items())
+        to_return._client_status[None] = data["status"]
         return to_return, clone
 
     @classmethod
     def _copy(cls, member):
-        self = cls.__new__(cls) # to bypass __init__
+        self = cls.__new__(cls)  # to bypass __init__
 
         self._roles = utils.SnowflakeList(member._roles, is_sorted=True)
         self.joined_at = member.joined_at
@@ -289,6 +295,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         self.pending = member.pending
         self.activities = member.activities
         self._state = member._state
+        self.communication_disabled_until = member.communication_disabled_until
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -296,45 +303,40 @@ class Member(discord.abc.Messageable, _BaseUser):
         return self
 
     async def _get_channel(self):
-        ch = await self.create_dm()
-        return ch
+        return await self.create_dm()
 
     def _update_roles(self, data):
-        self._roles = utils.SnowflakeList(map(int, data['roles']))
+        self._roles = utils.SnowflakeList(map(int, data["roles"]))
 
     def _update(self, data):
         # the nickname change is optional,
         # if it isn't in the payload then it didn't change
         try:
-            self.nick = data['nick']
+            self.nick = data["nick"]
         except KeyError:
             pass
 
         try:
-            self.pending = data['pending']
+            self.pending = data["pending"]
         except KeyError:
             pass
 
-        self.premium_since = utils.parse_time(data.get('premium_since'))
+        self.premium_since = utils.parse_time(data.get("premium_since"))
+        self.communication_disabled_until = data.get("communication_disabled_until", None)
         self._update_roles(data)
 
     def _presence_update(self, data, user):
-        self.activities = tuple(map(create_activity, data.get('activities', [])))
-        self._client_status = {
-            sys.intern(key): sys.intern(value)
-            for key, value in data.get('client_status', {}).items()
-        }
-        self._client_status[None] = sys.intern(data['status'])
+        self.activities = tuple(map(create_activity, data.get("activities", [])))
+        self._client_status = dict(data.get("client_status", {}).items())
+        self._client_status[None] = data["status"]
 
-        if len(user) > 1:
-            return self._update_inner_user(user)
-        return False
+        return self._update_inner_user(user) if len(user) > 1 else False
 
     def _update_inner_user(self, user):
         u = self._user
         original = (u.name, u.avatar, u.discriminator, u._public_flags)
         # These keys seem to always be available
-        modified = (user['username'], user['avatar'], user['discriminator'], user.get('public_flags', 0))
+        modified = (user["username"], user["avatar"], user["discriminator"], user.get("public_flags", 0))
         if original != modified:
             to_return = User._copy(self._user)
             u.name, u.avatar, u.discriminator, u._public_flags = modified
@@ -362,21 +364,21 @@ class Member(discord.abc.Messageable, _BaseUser):
     @property
     def mobile_status(self):
         """:class:`Status`: The member's status on a mobile device, if applicable."""
-        return try_enum(Status, self._client_status.get('mobile', 'offline'))
+        return try_enum(Status, self._client_status.get("mobile", "offline"))
 
     @property
     def desktop_status(self):
         """:class:`Status`: The member's status on the desktop client, if applicable."""
-        return try_enum(Status, self._client_status.get('desktop', 'offline'))
+        return try_enum(Status, self._client_status.get("desktop", "offline"))
 
     @property
     def web_status(self):
         """:class:`Status`: The member's status on the web client, if applicable."""
-        return try_enum(Status, self._client_status.get('web', 'offline'))
+        return try_enum(Status, self._client_status.get("web", "offline"))
 
     def is_on_mobile(self):
         """:class:`bool`: A helper function that determines if a member is active on a mobile device."""
-        return 'mobile' in self._client_status
+        return "mobile" in self._client_status
 
     @property
     def colour(self):
@@ -386,8 +388,7 @@ class Member(discord.abc.Messageable, _BaseUser):
 
         There is an alias for this named :attr:`color`.
         """
-
-        roles = self.roles[1:] # remove @everyone
+        roles = self.roles[1:]  # remove @everyone
 
         # highest order of the colour is the one that gets rendered.
         # if the highest is the default colour then the next one with a colour
@@ -418,8 +419,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         result = []
         g = self.guild
         for role_id in self._roles:
-            role = g.get_role(role_id)
-            if role:
+            if role := g.get_role(role_id):
                 result.append(role)
         result.append(g.default_role)
         result.sort()
@@ -428,9 +428,7 @@ class Member(discord.abc.Messageable, _BaseUser):
     @property
     def mention(self):
         """:class:`str`: Returns a string that allows you to mention the member."""
-        if self.nick:
-            return '<@!%s>' % self.id
-        return '<@%s>' % self.id
+        return f"<@!{self.id}>" if self.nick else f"<@{self.id}>"
 
     @property
     def display_name(self):
@@ -440,7 +438,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         if they have a guild specific nickname then that
         is returned instead.
         """
-        return self.nick or self.name
+        return self.nick or self.global_name or self.name
 
     @property
     def activity(self):
@@ -449,7 +447,7 @@ class Member(discord.abc.Messageable, _BaseUser):
 
         .. note::
 
-            Due to a Discord API limitation, this may be ``None`` if 
+            Due to a Discord API limitation, this may be ``None`` if
             the user is listening to a song on Spotify with a title longer
             than 128 characters. See :issue:`1738` for more information.
 
@@ -464,7 +462,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         """Checks if the member is mentioned in the specified message.
 
         Parameters
-        -----------
+        ----------
         message: :class:`Message`
             The message to check if you're mentioned in.
 
@@ -491,7 +489,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             channel.permissions_for(self)
 
         Parameters
-        -----------
+        ----------
         channel: :class:`abc.GuildChannel`
             The channel to check your permissions for.
 
@@ -528,7 +526,6 @@ class Member(discord.abc.Messageable, _BaseUser):
         This does take into consideration guild ownership and the
         administrator implication.
         """
-
         if self.guild.owner_id == self.id:
             return Permissions.all()
 
@@ -536,10 +533,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         for r in self.roles:
             base.value |= r.permissions.value
 
-        if base.administrator:
-            return Permissions.all()
-
-        return base
+        return Permissions.all() if base.administrator else base
 
     @property
     def voice(self):
@@ -547,28 +541,28 @@ class Member(discord.abc.Messageable, _BaseUser):
         return self.guild._voice_state_for(self._user.id)
 
     async def ban(self, **kwargs):
-        """|coro|
+        """|coro|.
 
         Bans this member. Equivalent to :meth:`Guild.ban`.
         """
         await self.guild.ban(self, **kwargs)
 
     async def unban(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Unbans this member. Equivalent to :meth:`Guild.unban`.
         """
         await self.guild.unban(self, reason=reason)
 
     async def kick(self, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Kicks this member. Equivalent to :meth:`Guild.kick`.
         """
         await self.guild.kick(self, reason=reason)
 
     async def edit(self, *, reason=None, **fields):
-        """|coro|
+        """|coro|.
 
         Edits the member's data.
 
@@ -594,7 +588,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             Can now pass ``None`` to ``voice_channel`` to kick a member from voice.
 
         Parameters
-        -----------
+        ----------
         nick: Optional[:class:`str`]
             The member's new nickname. Use ``None`` to remove the nickname.
         mute: :class:`bool`
@@ -615,7 +609,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             The reason for editing this member. Shows up on the audit log.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have the proper permissions to the action requested.
         HTTPException
@@ -627,55 +621,52 @@ class Member(discord.abc.Messageable, _BaseUser):
         payload = {}
 
         try:
-            nick = fields['nick']
+            nick = fields["nick"]
         except KeyError:
             # nick not present so...
             pass
         else:
-            nick = nick or ''
+            nick = nick or ""
             if me:
                 await http.change_my_nickname(guild_id, nick, reason=reason)
             else:
-                payload['nick'] = nick
+                payload["nick"] = nick
 
-        deafen = fields.get('deafen')
+        deafen = fields.get("deafen")
         if deafen is not None:
-            payload['deaf'] = deafen
+            payload["deaf"] = deafen
 
-        mute = fields.get('mute')
+        mute = fields.get("mute")
         if mute is not None:
-            payload['mute'] = mute
+            payload["mute"] = mute
 
-        suppress = fields.get('suppress')
+        suppress = fields.get("suppress")
         if suppress is not None:
-            voice_state_payload = {
-                'channel_id': self.voice.channel.id,
-                'suppress': suppress,
-            }
+            voice_state_payload = {"channel_id": self.voice.channel.id, "suppress": suppress}
 
             if suppress or self.bot:
-                voice_state_payload['request_to_speak_timestamp'] = None
+                voice_state_payload["request_to_speak_timestamp"] = None
 
             if me:
                 await http.edit_my_voice_state(guild_id, voice_state_payload)
             else:
                 if not suppress:
-                    voice_state_payload['request_to_speak_timestamp'] = datetime.datetime.utcnow().isoformat()
+                    voice_state_payload["request_to_speak_timestamp"] = datetime.datetime.utcnow().isoformat()
                 await http.edit_voice_state(guild_id, self.id, voice_state_payload)
 
         try:
-            vc = fields['voice_channel']
+            vc = fields["voice_channel"]
         except KeyError:
             pass
         else:
-            payload['channel_id'] = vc and vc.id
+            payload["channel_id"] = vc and vc.id
 
         try:
-            roles = fields['roles']
+            roles = fields["roles"]
         except KeyError:
             pass
         else:
-            payload['roles'] = tuple(r.id for r in roles)
+            payload["roles"] = tuple(r.id for r in roles)
 
         if payload:
             await http.edit_member(guild_id, self.id, reason=reason, **payload)
@@ -683,7 +674,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         # TODO: wait for WS event for modify-in-place behaviour
 
     async def request_to_speak(self):
-        """|coro|
+        """|coro|.
 
         Request to speak in the connected channel.
 
@@ -697,25 +688,22 @@ class Member(discord.abc.Messageable, _BaseUser):
         .. versionadded:: 1.7
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have the proper permissions to the action requested.
         HTTPException
             The operation failed.
         """
-        payload = {
-            'channel_id': self.voice.channel.id,
-            'request_to_speak_timestamp': datetime.datetime.utcnow().isoformat(),
-        }
+        payload = {"channel_id": self.voice.channel.id, "request_to_speak_timestamp": datetime.datetime.utcnow().isoformat()}
 
         if self._state.self_id != self.id:
-            payload['suppress'] = False
+            payload["suppress"] = False
             await self._state.http.edit_voice_state(self.guild.id, self.id, payload)
         else:
             await self._state.http.edit_my_voice_state(self.guild.id, payload)
 
     async def move_to(self, channel, *, reason=None):
-        """|coro|
+        """|coro|.
 
         Moves a member to a new voice channel (they must be connected first).
 
@@ -728,7 +716,7 @@ class Member(discord.abc.Messageable, _BaseUser):
             Can now pass ``None`` to kick a member from voice.
 
         Parameters
-        -----------
+        ----------
         channel: Optional[:class:`VoiceChannel`]
             The new voice channel to move the member to.
             Pass ``None`` to kick them from voice.
@@ -738,7 +726,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         await self.edit(voice_channel=channel, reason=reason)
 
     async def add_roles(self, *roles, reason=None, atomic=True):
-        r"""|coro|
+        r"""|coro|.
 
         Gives the member a number of :class:`Role`\s.
 
@@ -747,7 +735,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         of roles than the highest role of the member.
 
         Parameters
-        -----------
+        ----------
         \*roles: :class:`abc.Snowflake`
             An argument list of :class:`abc.Snowflake` representing a :class:`Role`
             to give to the member.
@@ -759,13 +747,12 @@ class Member(discord.abc.Messageable, _BaseUser):
             state of the cache.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to add these roles.
         HTTPException
             Adding roles failed.
         """
-
         if not atomic:
             new_roles = utils._unique(Object(id=r.id) for s in (self.roles[1:], roles) for r in s)
             await self.edit(roles=new_roles, reason=reason)
@@ -777,7 +764,7 @@ class Member(discord.abc.Messageable, _BaseUser):
                 await req(guild_id, user_id, role.id, reason=reason)
 
     async def remove_roles(self, *roles, reason=None, atomic=True):
-        r"""|coro|
+        r"""|coro|.
 
         Removes :class:`Role`\s from this member.
 
@@ -786,7 +773,7 @@ class Member(discord.abc.Messageable, _BaseUser):
         of roles than the highest role of the member.
 
         Parameters
-        -----------
+        ----------
         \*roles: :class:`abc.Snowflake`
             An argument list of :class:`abc.Snowflake` representing a :class:`Role`
             to remove from the member.
@@ -798,15 +785,14 @@ class Member(discord.abc.Messageable, _BaseUser):
             state of the cache.
 
         Raises
-        -------
+        ------
         Forbidden
             You do not have permissions to remove these roles.
         HTTPException
             Removing the roles failed.
         """
-
         if not atomic:
-            new_roles = [Object(id=r.id) for r in self.roles[1:]] # remove @everyone
+            new_roles = [Object(id=r.id) for r in self.roles[1:]]  # remove @everyone
             for role in roles:
                 try:
                     new_roles.remove(Object(id=role.id))
